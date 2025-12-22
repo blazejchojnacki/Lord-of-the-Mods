@@ -7,7 +7,7 @@ from tkinter.filedialog import askdirectory
 from tkinter.messagebox import askyesnocancel, showerror, showwarning
 from sys import exit
 
-from source.constants import PROGRAM_NAME, InternalError, load_delimiters
+from source.shared import PROGRAM_NAME, InternalError, load_delimiters
 from source.settings import settings_read, settings_save_to_file, SETTINGS_PATH
 from source.module_control import definition_write, SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARISON_DIRECTORY
 

@@ -7,7 +7,7 @@ from tkinter.ttk import Treeview
 from tklinenums import TkLineNumbers
 from ctypes import windll, byref, create_unicode_buffer, sizeof, c_int
 
-from source.constants import INI_COMMENTS, INI_ENDS, LEVEL_INDENT, PROGRAM_NAME, InternalError
+from source.shared import INI_COMMENTS, INI_ENDS, LEVEL_INDENT, PROGRAM_NAME, InternalError
 from source.initiator import initiate
 from source.settings import settings_read, settings_save_to_file, current, MODULES_LIBRARY, INSTALL_PATH
 from source.file_editor import convert_string, find_replace_text, move_file, duplicates_commenter, load_file, \

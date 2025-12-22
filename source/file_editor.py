@@ -3,7 +3,7 @@ import os
 import shutil
 
 from source.file_interpreter import load_items, load_items_part, print_items, print_items_part, comment_out, recognize_item_class
-from source.constants import INI_PATH_PART, INI_COMMENTS, INI_PARAMETERS, LEVEL_INDENT, LOG_PATH, InternalError
+from source.shared import INI_PATH_PART, INI_COMMENTS, INI_PARAMETERS, LEVEL_INDENT, LOG_PATH, InternalError
 from source.settings import current, MODULES_LIBRARY
 
 # TODO later: reference checker

@@ -1,7 +1,7 @@
 import os.path
 import json
 
-from source.constants import InternalError
+from source.shared import InternalError
 
 SETTINGS_PATH = './_settings.json'
 
@@ -26,7 +26,7 @@ def settings_get_format():
         with open('./initial/_settings_format.json') as settings_buffer:
             settings_format = json.load(settings_buffer)
     else:
-        raise InternalError('settings initial file', 'missing')
+        raise InternalError('missing settings initial file')
 
 
 settings_get_format()
@@ -71,18 +71,18 @@ def settings_read(return_type='dict', settings_dict=None):
                     for path in settings_dict[key]:
                         if path and not os.path.isdir(path):
                             if return_type == 'check':
-                                raise InternalError(path, 'missing')
+                                raise InternalError(f"missing {path}")
                             elif return_type == 'initiate':
                                 os.mkdir(path)
                 elif isinstance(settings_dict[key], str):
                     if not os.path.isdir(settings_dict[key]):
                         if return_type == 'check':
-                            raise InternalError(settings_dict[key], 'missing')
+                            raise InternalError(f"missing {settings_dict[key]}")
                         elif return_type == 'initiate':
                             os.mkdir(settings_dict[key])
                 else:
                     if return_type == 'check':
-                        raise InternalError(settings_dict[key], 'missing')
+                        raise InternalError(f"missing {settings_dict[key]}")
             else:
                 # print(f'missing value for key: {key}')
                 pass

@@ -9,7 +9,7 @@ from glob import glob
 
 from source.settings import settings_read, settings_save_to_file, current, INSTALL_PATH, MODULES_LIBRARY, BACKUP_FOLDER, \
     MODULE_TEMPLATE
-from source.constants import PROGRAM_NAME, InternalError, LOG_PATH
+from source.shared import PROGRAM_NAME, InternalError, LOG_PATH
 
 
 SNAPSHOT_DIRECTORY = './snapshots'

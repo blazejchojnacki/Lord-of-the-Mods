@@ -1,4 +1,4 @@
-from source.constants import INI_COMMENTS, INI_ENDS, LEVEL_INDENT, InternalError, INI_DELIMITERS, STR_DELIMITERS
+from source.shared import INI_COMMENTS, INI_ENDS, LEVEL_INDENT, InternalError, INI_DELIMITERS, STR_DELIMITERS
 from source.module_control import DEFINITION_NAME
 
 
