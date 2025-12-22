@@ -7,12 +7,13 @@ from tkinter.ttk import Treeview
 from tklinenums import TkLineNumbers
 from ctypes import windll, byref, create_unicode_buffer, sizeof, c_int
 
-from source.shared import INI_COMMENTS, INI_ENDS, LEVEL_INDENT, PROGRAM_NAME, InternalError
+import source.shared as s
+# from source.shared import s.INI_COMMENTS, s.INI_ENDS, s.LEVEL_INDENT, s.PROGRAM_NAME, s.InternalError
 from source.initiator import initiate
-from source.settings import settings_read, settings_save_to_file, current, MODULES_LIBRARY, INSTALL_PATH
+# from source.settings import settings_read, settings_save_to_file, current, MODULES_LIBRARY, INSTALL_PATH
 from source.file_editor import convert_string, find_replace_text, move_file, duplicates_commenter, load_file, \
     load_directories
-from source.module_control import modules_filter, modules_sort, snapshot_take, snapshot_compare, game_names, \
+from source.module_control import modules_filter, modules_sort, snapshot_take, snapshot_compare, \
     module_detect_changes, module_copy, detect_new_modules, \
     definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES
 
@@ -41,7 +42,7 @@ class NewModuleDialog(tkinter.Toplevel):
     """ a Tk/TCl Toplevel-based class """
     def __init__(self, **kw):
         super().__init__(**kw)
-        self.title = f'{PROGRAM_NAME}: new module initiator'
+        self.title = f'{s.PROGRAM_NAME}: new module initiator'
         self.iconbitmap('aesthetic/icon.ico')
         self.geometry('320x360')
         self.resizable(False, False)
@@ -232,7 +233,7 @@ def warning_file_save():
     file_named = text_scope_select.get('1.0', 'end').replace('/', '\\').strip('\n\t {}')
     if file_named and current_file_content_backup:
         if text_file_content.get('1.0', 'end').strip() != current_file_content_backup.strip():
-            save_file = tkinter.messagebox.askquestion(f'{PROGRAM_NAME}:', 'Do you want to save the file?')
+            save_file = tkinter.messagebox.askquestion(f'{s.PROGRAM_NAME}:', 'Do you want to save the file?')
             if save_file == 'yes':
                 command_file_save()
     current_file_content_backup = ''
@@ -474,7 +475,7 @@ def command_snapshot_take():
     set_log_update('generating snapshot - please wait')
     try:
         result_path = snapshot_take()
-    except InternalError:
+    except s.InternalError:
         set_log_update(f'snapshot not generated. path not selected')
     else:
         set_log_update(f'snapshot generated. path: {result_path}')
@@ -485,7 +486,7 @@ def command_snapshot_compare():
     set_log_update('generating snapshot comparison - please wait')
     try:
         result_path = snapshot_compare(return_type='path')
-    except InternalError:
+    except s.InternalError:
         set_log_update(f'snapshot comparison not generated. Snapshots not selected.')
     else:
         set_log_update(f'snapshot comparison generated. path: {result_path}')
@@ -518,9 +519,10 @@ def command_settings_save():
         counter += 1
     if new_settings:
         try:
-            output = settings_save_to_file(new_settings)
+            # output = settings_save_to_file(new_settings)
+            output = s.settings_set(new_settings) 
             set_log_update(output)
-        except InternalError as error:
+        except s.InternalError as error:
             set_log_update(error.message)
             command_settings_reload()
 
@@ -528,7 +530,8 @@ def command_settings_save():
 def command_settings_reload():
     """ Reads the settings from the SETTINGS_FILE and inserts them into the settings text fields. """
     global settings
-    settings = settings_read()
+    # settings = settings_read()
+    settings = s.settings_get()
     counter = 0
     for setting_key in settings:
         if setting_key == 'comment':
@@ -544,7 +547,7 @@ def command_settings_reload():
 def command_select_folder(text_widget):
     """ Launches a window for selecting a folder and pastes it into the folder text field. """
     selected_folder = askdirectory(
-        title=f'{PROGRAM_NAME}: select a folder',
+        title=f'{s.PROGRAM_NAME}: select a folder',
         initialdir=current_path if os.path.isdir(current_path) else current_path[:current_path.rfind('/')])
     # text_select_folder.delete('1.0', 'end')
     if len(text_widget.get('1.0', 'end')) > 1:
@@ -557,7 +560,7 @@ def command_select_folder(text_widget):
 def command_select_file(text_widget):
     """ Launches a window for selecting one or more file(s) and pastes it into the file text field. """
     selected_files = askopenfilenames(
-        title=f'{PROGRAM_NAME}: select one or multiple files',
+        title=f'{s.PROGRAM_NAME}: select one or multiple files',
         initialdir=current_path if os.path.isdir(current_path) else current_path[:current_path.rfind('/')])
     if selected_files:
         # text_select_file.delete('1.0', 'end')
@@ -581,23 +584,23 @@ def set_text_color(event=None):
         rest_of_line = line
         if line.strip() == '':
             continue
-        elif line.strip()[0] in INI_COMMENTS:
+        elif line.strip()[0] in s.INI_COMMENTS:
             text_file_content.tag_add('comment', f'{line_index}.0', f'{line_index}.end')
             rest_of_line = ''
-        elif INI_COMMENTS[0] in line:
-            text_file_content.tag_add('comment', f'{line_index}.{line.index(INI_COMMENTS[0])}', f'{line_index}.end')
-            rest_of_line = line[:line.index(INI_COMMENTS[0])]
-        elif INI_COMMENTS[1]*2 in line:
-            text_file_content.tag_add('comment', f'{line_index}.{line.index(INI_COMMENTS[1]*2)}', f'{line_index}.end')
-            rest_of_line = line[:line.index(INI_COMMENTS[1]*2)]
+        elif s.INI_COMMENTS[0] in line:
+            text_file_content.tag_add('comment', f'{line_index}.{line.index(s.INI_COMMENTS[0])}', f'{line_index}.end')
+            rest_of_line = line[:line.index(s.INI_COMMENTS[0])]
+        elif s.INI_COMMENTS[1]*2 in line:
+            text_file_content.tag_add('comment', f'{line_index}.{line.index(s.INI_COMMENTS[1]*2)}', f'{line_index}.end')
+            rest_of_line = line[:line.index(s.INI_COMMENTS[1]*2)]
         text_file_content.tag_config('comment', foreground='grey')
         if rest_of_line:
-            level = rest_of_line.rstrip().count(LEVEL_INDENT)
+            level = rest_of_line.rstrip().count(s.LEVEL_INDENT)
             text_file_content.tag_config(f'level{level}', foreground=INI_LEVEL_COLORS[level])
             if rest_of_line.split()[0].strip() in current_levels[level]:
                 text_file_content.tag_add(f'level{level}', f'{line_index}.0',
                                           f'{line_index}.{len(rest_of_line)}')
-            elif rest_of_line.strip() in INI_ENDS:
+            elif rest_of_line.strip() in s.INI_ENDS:
                 text_file_content.tag_add(f'level{level}', f'{line_index}.0',
                                           f'{line_index}.{len(rest_of_line)}')
     # return True
@@ -615,8 +618,8 @@ def command_text_comment():
     text_commented = ''
     for line in lines_to_comment:
         for level in range(7):
-            if line.startswith(LEVEL_INDENT * (6 - level)):
-                text_commented += f'{LEVEL_INDENT * (6 - level)}; {line.strip()}\n'
+            if line.startswith(s.LEVEL_INDENT * (6 - level)):
+                text_commented += f'{s.LEVEL_INDENT * (6 - level)}; {line.strip()}\n'
                 break
     if text_commented:
         text_file_content.replace('sel.first linestart', 'sel.last lineend + 1 chars', text_commented)
@@ -636,11 +639,11 @@ def command_text_uncomment():
     text_commented = ''
     for line in lines_to_comment:
         for level in range(7):
-            if line.startswith(LEVEL_INDENT * (6 - level)):
+            if line.startswith(s.LEVEL_INDENT * (6 - level)):
                 if '; ' in line:
-                    text_commented += f"{LEVEL_INDENT * (6 - level)}{line.strip()[len('; '):]}\n"
+                    text_commented += f"{s.LEVEL_INDENT * (6 - level)}{line.strip()[len('; '):]}\n"
                 elif '//' in line:
-                    text_commented += f"{LEVEL_INDENT * (6 - level)}{line.strip()[len('//'):]}\n"
+                    text_commented += f"{s.LEVEL_INDENT * (6 - level)}{line.strip()[len('//'):]}\n"
                 break
     if text_commented:
         text_file_content.replace('sel.first linestart', 'sel.last lineend + 1 chars', text_commented)
@@ -667,7 +670,7 @@ def command_file_load():  # not a command anymore
     except TypeError:
         command_browser_back()
         set_log_update('cannot open this type of file')
-    except InternalError as error:
+    except s.InternalError as error:
         command_browser_back()
         set_log_update(error.message)
     return False
@@ -724,17 +727,17 @@ def command_run_move():
         file_named = file_named.replace('{', '').replace('}', '')
         try:
             output += move_file(file_named, to_folder)
-        except InternalError as error:
+        except s.InternalError as error:
             output += error.message
         else:
-            module_index_start = current_path.find(current(MODULES_LIBRARY)) + len(current(MODULES_LIBRARY)) + 1
+            module_index_start = current_path.find(s.LIBRARY) + len(s.LIBRARY) + 1
             module_index_end = current_path.replace('\\', '/').find('/', module_index_start)
             current_module_name = current_path[module_index_start: module_index_end]
             current_module_list = modules_filter(name=current_module_name)
             if current_module_list:
                 current_module = current_module_list[0]
             else:
-                module_index_start = current_path.find(current(INSTALL_PATH)) + len(current(INSTALL_PATH)) + 1
+                module_index_start = current_path.find(s.MAIN_DIRECTORY) + len(s.MAIN_DIRECTORY) + 1
                 module_index_end = current_path.replace('\\', '/').find('/', module_index_start)
                 current_module_name = current_path[module_index_start: module_index_end]
                 current_module_list = modules_filter(name=current_module_name)
@@ -792,7 +795,7 @@ def command_definition_save():
                 if 'class' in edited_parameters and module['active'] is True:
                     module.reload_after_class_change()
                 break
-            except InternalError as error:
+            except s.InternalError as error:
                 output = error.message
     set_log_update(output)
 
@@ -803,7 +806,7 @@ def on_select_module_idle(event):
     if event:
         pass
     try:
-        current_path = (f"{current(MODULES_LIBRARY)}/"
+        current_path = (f"{s.LIBRARY}/"
                         f"{treeview_modules_idle.item(treeview_modules_idle.selection()[0], 'values')[0]}")
         treeview_modules_active.selection_remove(treeview_modules_active.selection()[0])
         # selection_remove is a selection event steeling focus to the other list
@@ -822,7 +825,7 @@ def on_select_module_active(event):
     if event:
         pass
     try:
-        current_path = (f"{current(MODULES_LIBRARY)}/"
+        current_path = (f"{s.LIBRARY}/"
                         f"{treeview_modules_active.item(treeview_modules_active.selection()[0], 'values')[0]}")
         treeview_modules_idle.selection_remove(treeview_modules_idle.selection()[0])
         treeview_modules_active.selection_set(treeview_modules_active.selection()[0])
@@ -871,7 +874,7 @@ def refresh_definitions():
             except KeyError:
                 pass
         treeview_modules_idle.open_children()
-    except InternalError:
+    except s.InternalError:
         set_log_update('definitions not loaded - settings not loaded.')
         return
     retrieve(button_module_retrieve, button_module_attach)
@@ -916,7 +919,7 @@ def command_module_attach():
         set_log_update(f'command_module_attach error: module {module_selected} not found')
     except _tkinter.TclError:
         set_log_update('command_module_attach warning: TclError')
-    except InternalError as err:
+    except s.InternalError as err:
         set_log_update(err.message)
 
 
@@ -930,11 +933,11 @@ def command_module_retrieve():
         set_log_update(f'unloading mod {module_selected} ...')
         for module in global_modules:
             if module['name'] == module_selected:
-                changes = module_detect_changes(module_directory=f"{current(MODULES_LIBRARY)}/{module['name']}")
+                changes = module_detect_changes(module_directory=f"{s.LIBRARY}/{module['name']}")
                 # TODO: test changes
                 if changes:
                     do_proceed = tkinter.messagebox.askokcancel(
-                        title=f'{PROGRAM_NAME}: module retrieval:',
+                        title=f'{s.PROGRAM_NAME}: module retrieval:',
                         message='Files have been changed since the module have been attached.\n'
                                 f'They will be deleted if the module is a {DEFINITION_CLASSES[1]}'
                                 f' or incorporated if it is a {DEFINITION_CLASSES[0]}'
@@ -953,7 +956,7 @@ def command_module_retrieve():
         set_log_update(f'command_module_retrieve error: module {module_selected} not found')
     except _tkinter.TclError:
         set_log_update('command_module_retrieve error: module not selected')
-    except InternalError as err:
+    except s.InternalError as err:
         set_log_update(err.message)
 
 
@@ -984,7 +987,7 @@ def command_module_browse(event=None):
     if event:
         pass
     current_module = modules_filter(name=current_path.split('/')[-1])[0]
-    game_paths = game_names()
+    game_paths = s.current[s.KEY_GAMES]
     if current_module['class'] == DEFINITION_CLASSES[0] and current_module['active']:
         if not current_module['game']:
             for change_key in current_module['changes']:
@@ -1031,14 +1034,14 @@ def command_browser_back():
     #     warning_file_save()
     if current_window == 'text_find' or current_window == 'text_replace':
         set_window_file()
-    # if len(current_path) > len(current(MODULES_LIBRARY)):
+    # if len(current_path) > len(s.LIBRARY):
     if os.path.isdir(current_path[:current_path.rfind('/')]):
         current_path = current_path[:current_path.rfind('/')]
         if main_window.focus_get() == listbox_browser:
             open_browser_item()
         else:
             set_window_browser()
-    # if len(current_path) <= len(current(MODULES_LIBRARY)):
+    # if len(current_path) <= len(s.LIBRARY):
     if len(current_path) <= len('..'):
         retrieve(button_menu_back)
         key_to_command_current['<BackSpace>'] = set_window_modules
@@ -1055,7 +1058,7 @@ def on_select_browser_item(event=None):
         try:
             file_name = listbox_browser.selection_get()
             if file_name == DEFINITION_NAME or file_name.endswith('.big'):
-                raise InternalError
+                raise s.InternalError
             elif os.path.isfile(f'{current_path}/{listbox_browser.selection_get()}'):
                 key_to_command_current = key_to_command_browser.copy()
                 button_run.configure(text='open file'.upper())
@@ -1066,7 +1069,7 @@ def on_select_browser_item(event=None):
             position(button_run)
             button_run.configure(text='open folder'.upper())
             retrieve(button_execute)
-        except InternalError:
+        except s.InternalError:
             retrieve(button_run, button_execute)
             try:
                 key_to_command_current.pop('<Return>')
@@ -1122,7 +1125,7 @@ def open_browser_item():
                 retrieve(button_execute)
             listbox_browser.select_set(0)
             set_log_update(f'opened {os.path.abspath(current_path)}')
-        except InternalError as error:
+        except s.InternalError as error:
             set_log_update(error.message)
     elif os.path.isfile(current_path):
         text_scope_select.delete('1.0', 'end')
@@ -1208,7 +1211,7 @@ def press_key_in_current_mode(event=None):
 
 def settings_select_new_directory(index_funct):
     """ Prompts to select a directory and replaces the old one with it in a settings entry field. """
-    added = askdirectory(title=f'{PROGRAM_NAME}: select a new directory', initialdir='../')
+    added = askdirectory(title=f'{s.PROGRAM_NAME}: select a new directory', initialdir='../')
     if added:
         list_entry_settings[index_funct].delete(0, 'end')
         if '/' == added[-1]:
@@ -1223,7 +1226,7 @@ def settings_select_new_directory(index_funct):
 def settings_select_add_directory(index_funct):
     """ Prompts to select a directory and adds it to a settings entry field. """
     present = list_entry_settings[index_funct].get()
-    added = f"{askdirectory(title=f'{PROGRAM_NAME}: select a new directory', initialdir='../')}"
+    added = f"{askdirectory(title=f'{s.PROGRAM_NAME}: select a new directory', initialdir='../')}"
     if added:
         new_path = os.path.relpath(added).replace('\\', '/')
         if not present:
@@ -1276,11 +1279,12 @@ key_to_command_current = {
 
 load_colors()
 initiate()
-settings = settings_read()
+# settings = settings_read()
+settings = s.settings_get()
 
 main_window = tkinter.Tk()
 main_window.iconbitmap('aesthetic/icon.ico')
-main_window.title(PROGRAM_NAME)
+main_window.title(s.PROGRAM_NAME)
 main_window.minsize(width=1100, height=400)
 main_window.maxsize(width=1600, height=900)
 main_window.geometry('1250x650')

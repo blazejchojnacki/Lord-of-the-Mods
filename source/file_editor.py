@@ -3,19 +3,20 @@ import os
 import shutil
 
 from source.file_interpreter import load_items, load_items_part, print_items, print_items_part, comment_out, recognize_item_class
-from source.shared import INI_PATH_PART, INI_COMMENTS, INI_PARAMETERS, LEVEL_INDENT, LOG_PATH, InternalError
-from source.settings import current, MODULES_LIBRARY
+# from source.shared import INI_PATH_PART, INI_COMMENTS, LOG_PATH, InternalError, LIBRARY
+import source.shared as s
+# from source.settings import current, MODULES_LIBRARY
 
 # TODO later: reference checker
 # TODO later: automated proposition of #include creation or child adopting
 
 
 def log(output):
-    if os.path.isfile(f'{LOG_PATH}/file_changes.txt'):
-        with open(f'{LOG_PATH}/file_changes.txt', 'a') as log_file:
+    if os.path.isfile(f'{s.LOG_PATH}/file_changes.txt'):
+        with open(f'{s.LOG_PATH}/file_changes.txt', 'a') as log_file:
             log_file.write(output + '\n')
     else:
-        with open(f'{LOG_PATH}/file_changes.txt', 'w') as log_file:
+        with open(f'{s.LOG_PATH}/file_changes.txt', 'w') as log_file:
             log_file.write(output + '\n')
 
 
@@ -241,7 +242,7 @@ def update_reference(new_path, in_file_or_folder, inc_file=None, mode=0):
         line_counter = 0
         for line in lines:
             line_counter += 1
-            if "#include" in line and line.strip()[0] not in INI_COMMENTS and inc_file.lower() in line.lower():
+            if "#include" in line and line.strip()[0] not in s.INI_COMMENTS and inc_file.lower() in line.lower():
                 path_old_include, path_new_include = '', ''
                 if line_include in line:
                     path_old_include = line_include.strip()[len('#include "'):line_include.strip().rfind('"')]
@@ -284,7 +285,7 @@ def update_single_reference(old_path, new_path, mode=0):
     line_counter = 0
     for line in lines:
         line_counter += 1
-        if "#include" in line and line.strip()[0] not in INI_COMMENTS:
+        if "#include" in line and line.strip()[0] not in s.INI_COMMENTS:
             path_old_include = line.strip()[len('#include "'):line.strip().rfind('"')]
             path_absolute_include = os.path.normpath(os.path.join(os.path.dirname(old_path), path_old_include))
             path_new_include = os.path.relpath(path_absolute_include, '/'.join(new_path.split('/')[:-1]))
@@ -308,7 +309,7 @@ def move_file(full_path, to_folder, mode=0):
     output = ''
     file_name = full_path.replace('\\', '/').split('/')[-1]
     to_folder = to_folder.replace('\\', '/')
-    if current(MODULES_LIBRARY).replace('\\', '/') not in to_folder:
+    if s.LIBRARY.replace('\\', '/') not in to_folder:
         # raise InternalError('file_editor.move_file aborted - destination path not in MODS_FOLDER')
         pass
     try:
@@ -317,12 +318,12 @@ def move_file(full_path, to_folder, mode=0):
             output += f' command: move {full_path}\n\tto {to_folder}\n'
             shutil.move(full_path, f'{to_folder}/{file_name}')
         if file_name.endswith('.inc'):
-            ini_folder = to_folder[:to_folder.find(INI_PATH_PART) + len(INI_PATH_PART)]
+            ini_folder = to_folder[:to_folder.find(s.INI_PATH_PART) + len(s.INI_PATH_PART)]
             output += update_reference(new_path=f'{to_folder}/{file_name}', in_file_or_folder=ini_folder, inc_file=file_name)
         elif file_name.endswith('.ini'):
             output += update_single_reference(old_path=full_path, new_path=f'{to_folder}/{file_name}', mode=mode)
     except shutil.Error:
-        raise InternalError('file_editor.move_file error: erroneous path')
+        raise s.InternalError('file_editor.move_file error: erroneous path')
     log(output)
     return output
 
@@ -359,10 +360,10 @@ def duplicates_commenter(in_file):
     if not last_result:
         output += 'no duplicate definition found'
     try:
-        with open(f'{LOG_PATH}/file_changes.txt', 'a') as log_file:
+        with open(f'{s.LOG_PATH}/file_changes.txt', 'a') as log_file:
             log_file.write(output + '\n')
     except FileNotFoundError:
-        with open(f'{LOG_PATH}/file_changes.txt', 'w') as log_file:
+        with open(f'{s.LOG_PATH}/file_changes.txt', 'w') as log_file:
             log_file.write(output + '\n')
     with open(in_file, 'w') as new_file:
         new_file.write(new_content)
@@ -379,14 +380,14 @@ def load_file(full_path):
         file_content = print_items(file=full_path)
         try:
             file_levels = recognize_item_class(from_file=full_path)
-        except InternalError as error:
+        except s.InternalError as error:
             return error.message, []
         return file_content, file_levels
     elif full_path.endswith('.inc'):
         file_content = print_items_part(load_items_part(from_file=full_path))
         try:
             file_levels = recognize_item_class(from_file=full_path)
-        except InternalError as error:
+        except s.InternalError as error:
             return error.message, []
         return file_content, file_levels
     elif full_path.endswith('.txt'):
@@ -410,7 +411,7 @@ def load_directories(full_path, mode=0):
     try:
         items = os.listdir(full_path)
     except PermissionError as error:
-        raise InternalError(error.strerror)
+        raise s.InternalError(error.strerror)
     for item in items:
         if os.path.isdir(f'{full_path}/{item}'):
             output_folders.append(f'{(full_path + "/") * mode}{item}')
@@ -425,13 +426,13 @@ def load_directories(full_path, mode=0):
     return output_folders, output_files
 
 
-_all_defined = [
-    convert_string,
-    find_replace_text,
-    update_reference,
-    update_single_reference,
-    move_file,
-    duplicates_commenter,
-    load_file,
-    load_directories,
-]
+# _all_defined = [
+#     convert_string,
+#     find_replace_text,
+#     update_reference,
+#     update_single_reference,
+#     move_file,
+#     duplicates_commenter,
+#     load_file,
+#     load_directories,
+# ]

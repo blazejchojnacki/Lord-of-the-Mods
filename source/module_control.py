@@ -7,9 +7,10 @@ from datetime import datetime
 import xxhash
 from glob import glob
 
-from source.settings import settings_read, settings_save_to_file, current, INSTALL_PATH, MODULES_LIBRARY, BACKUP_FOLDER, \
-    MODULE_TEMPLATE
-from source.shared import PROGRAM_NAME, InternalError, LOG_PATH
+# from source.settings import settings_read, settings_save_to_file, current, INSTALL_PATH, MODULES_LIBRARY, BACKUP_FOLDER, \
+#     MODULE_TEMPLATE
+# from source.shared import PROGRAM_NAME, InternalError, LOG_PATH
+import source.shared as s
 
 
 SNAPSHOT_DIRECTORY = './snapshots'
@@ -57,18 +58,18 @@ class Definition(dict):
         try:
             module_reverse(module_object=self, transfer='remove')
             return True
-        except InternalError:
+        except s.InternalError:
             return False
 
     def attach(self):
         try:
             module_attach(self)
             return True
-        except InternalError:
+        except s.InternalError:
             try:
-                module_attach(module_directory=f"{current(MODULES_LIBRARY)}/{self['name']}")
+                module_attach(module_directory=f"{s.LIBRARY}/{self['name']}")
                 return True
-            except InternalError:
+            except s.InternalError:
                 module_attach(module_directory=self['path'])
                 return True
 
@@ -118,43 +119,43 @@ def log(output):
             print(output)
     else:
         date = str(datetime.now()) + '\t'
-        if not os.path.isdir(LOG_PATH):
-            os.mkdir(LOG_PATH)
+        if not os.path.isdir(s.LOG_PATH):
+            os.mkdir(s.LOG_PATH)
         try:
-            with open(f'{LOG_PATH}/main_change_log.txt', 'a') as log_buffer:
+            with open(f'{s.LOG_PATH}/main_change_log.txt', 'a') as log_buffer:
                 log_buffer.write(date + output + '\n')
         except FileNotFoundError:
-            with open(f'{LOG_PATH}/main_change_log.txt', 'w') as log_buffer:
+            with open(f'{s.LOG_PATH}/main_change_log.txt', 'w') as log_buffer:
                 log_buffer.write(date + output + '\n')
     return output
 
 
-def library_exceptions():
-    """ Reads the library exceptions from the settings and returns a list of them. """
-    settings = settings_read()
-    exception_folders = []
-    for folder in settings['LibraryExceptions']:
-        if isinstance(folder, dict):
-            exception_folders.append(folder['LibraryException'].replace('\\', '/'))
-        elif isinstance(folder, str):
-            exception_folders.append(folder.replace('\\', '/'))
-    try:
-        exception_folders.append(current(MODULE_TEMPLATE))
-    except InternalError:
-        pass
-    return exception_folders
+# def library_exceptions():
+#     """ Reads the library exceptions from the settings and returns a list of them. """
+#     settings = settings_read()
+#     exception_folders = []
+#     for folder in settings['LibraryExceptions']:
+#         if isinstance(folder, dict):
+#             exception_folders.append(folder['LibraryException'].replace('\\', '/'))
+#         elif isinstance(folder, str):
+#             exception_folders.append(folder.replace('\\', '/'))
+#     try:
+#         exception_folders.append(current(MODULE_TEMPLATE))
+#     except InternalError:
+#         pass
+#     return exception_folders
 
 
-def game_names():
-    """ Reads the game paths from the settings and returns a list of them. """
-    settings = settings_read()
-    game_names_list = []
-    for directory in settings['GamePaths']:
-        if 'aotr'.upper() in directory.upper():
-            game_names_list.append('/'.join(directory.replace('\\', '/').split('/')[-2:]))
-        else:
-            game_names_list.append(directory.replace('\\', '/').split('/')[-1])
-    return game_names_list
+# def game_names():
+#     """ Reads the game paths from the settings and returns a list of them. """
+#     settings = settings_read()
+#     game_names_list = []
+#     for directory in settings['GamePaths']:
+#         if 'aotr'.upper() in directory.upper():
+#             game_names_list.append('/'.join(directory.replace('\\', '/').split('/')[-2:]))
+#         else:
+#             game_names_list.append(directory.replace('\\', '/').split('/')[-1])
+#     return game_names_list
 
 
 # 024-08-06
@@ -173,12 +174,12 @@ def definition_write(definition_object=None, module_directory=None, return_type=
     """
     if module_directory is None:
         if definition_object is None:
-            module_directory = askdirectory(title=f'{PROGRAM_NAME}: select the directory to define as a module',
-                                            initialdir=current(MODULES_LIBRARY))
+            module_directory = askdirectory(title=f'{s.PROGRAM_NAME}: select the directory to define as a module',
+                                            initialdir=s.LIBRARY)
             if not module_directory:
-                raise InternalError('write_definition: directory not selected')
-        elif os.path.isdir(f"{current(MODULES_LIBRARY)}/{definition_object['name']}"):
-            module_directory = f"{current(MODULES_LIBRARY)}/{definition_object['name']}"
+                raise s.InternalError('write_definition: directory not selected')
+        elif os.path.isdir(f"{s.LIBRARY}/{definition_object['name']}"):
+            module_directory = f"{s.LIBRARY}/{definition_object['name']}"
     if definition_object is not None:
         module_name = definition_object['name']
     elif module_directory is not None:
@@ -228,7 +229,7 @@ def definition_write(definition_object=None, module_directory=None, return_type=
                 changes_source = 'directory'
             definition_object['active'], initial_changes = initiate_comparison(module_directory, start_module=None,
                                                                                changes_source=changes_source)
-        except InternalError:
+        except s.InternalError:
             initial_changes = ''
     for key in DEFINITION_EXAMPLE:
         if key == 'comment' or key == 'class':
@@ -266,20 +267,20 @@ def definition_read(definition_object=None, definition_text=None, module_name=No
     :return: a definition dictionary-like class
     """
     definition_lines = None
-    if not module_path and module_name and os.path.isdir(f'{current(MODULES_LIBRARY)}/{module_name}'):
-        module_path = f'{current(MODULES_LIBRARY)}/{module_name}'
+    if not module_path and module_name and os.path.isdir(f'{s.LIBRARY}/{module_name}'):
+        module_path = f'{s.LIBRARY}/{module_name}'
     if module_path is not None:
-        if module_path in library_exceptions():
+        if module_path in s.current[s.KEY_EXCEPTIONS]:
             return DEFINITION_EXAMPLE
     if definition_text is None:
         if definition_object is Definition:
             module_path = definition_object['path']
         elif module_path is None or not module_path:
             definition_object = Definition()
-            module_path = askdirectory(title=f'{PROGRAM_NAME}: select the module directory',
-                                       initialdir=current(MODULES_LIBRARY))
+            module_path = askdirectory(title=f'{s.PROGRAM_NAME}: select the module directory',
+                                       initialdir=s.LIBRARY)
             if not module_path:
-                raise InternalError('read_definition: directory not selected')
+                raise s.InternalError('read_definition: directory not selected')
         if definition_object is not None and os.path.exists(f'{module_path}/{DEFINITION_NAME}'):
             definition_object['path'] = os.path.relpath(module_path).replace('\\', '/')
         if os.path.exists(f'{module_path}/{DEFINITION_NAME}'):
@@ -312,18 +313,18 @@ def definition_read(definition_object=None, definition_text=None, module_name=No
                 definition_object['class'] = line.split()[0]
     else:
         do_initiate = tkinter.messagebox.askokcancel(
-            title=PROGRAM_NAME,
+            title=s.PROGRAM_NAME,
             message=f'The potential module {module_path}\n seems to have no definition.\n'
                     'Do you wish for an automatic definition to be created?\n'
         )
         if do_initiate:
             try:
                 definition_object = definition_write(module_directory=module_path, return_type='object save')
-            except InternalError:
-                raise InternalError('Settings not loaded, saving aborted')
+            except s.InternalError:
+                raise s.InternalError('Settings not loaded, saving aborted')
         else:
-            # EXCEPTION_FOLDERS.append(module_path)
-            settings_save_to_file(LibraryExceptions=module_path)
+            # settings_save_to_file(LibraryExceptions=module_path)
+            pass
     return definition_object
 
 
@@ -338,24 +339,24 @@ def definition_edit(definition_object=None, module_path=None, **key_args):
     """
     if definition_object is None:
         if module_path is None:
-            module_path = askdirectory(title=f'{PROGRAM_NAME}: select the module directory',
-                                       initialdir=current(MODULES_LIBRARY))
+            module_path = askdirectory(title=f'{s.PROGRAM_NAME}: select the module directory',
+                                       initialdir=s.LIBRARY)
         if module_path:
             definition_object = definition_read(module_path=module_path)
         if not definition_object:
-            raise InternalError('definition_edit: definition missing')
+            raise s.InternalError('definition_edit: definition missing')
     else:
         if module_path is None:
-            module_path = f"{current(MODULES_LIBRARY)}/{definition_object['name']}"
+            module_path = f"{s.LIBRARY}/{definition_object['name']}"
     for key in key_args:
         if key in DEFINITION_EXAMPLE:
             if key == 'name':
                 list_modules = modules_filter(return_type='names')
                 for module_name in list_modules:
                     if key_args['name'] == module_name:
-                        raise InternalError('definition_edit: name already in use')
+                        raise s.InternalError('definition_edit: name already in use')
                 for module_name in list_modules:
-                    module_definition = definition_read(module_path=f'{current(MODULES_LIBRARY)}/{module_name}')
+                    module_definition = definition_read(module_path=f'{s.LIBRARY}/{module_name}')
                     if definition_object['name'] in module_definition['ancestor']:
                         definition_edit(
                             module_definition,
@@ -377,9 +378,9 @@ def definition_edit(definition_object=None, module_path=None, **key_args):
 # 024-10-08
 def detect_new_modules():
     output = ''
-    library_folders = [_ for _ in os.listdir(current(MODULES_LIBRARY)) if _ not in library_exceptions()]
+    library_folders = [_ for _ in os.listdir(s.LIBRARY) if _ not in s.current[s.KEY_EXCEPTIONS]]
     for folder in library_folders:
-        if not os.path.isfile(f'{current(MODULES_LIBRARY)}/{folder}/{DEFINITION_NAME}'):
+        if not os.path.isfile(f'{s.LIBRARY}/{folder}/{DEFINITION_NAME}'):
             output += f'Registering a definition-less folder in the library - {folder}\n'
     return output
 
@@ -406,7 +407,7 @@ def hash_directory(file_or_folder, path_to_omit=''):
     elif os.path.isdir(file_or_folder):
         next_directory = os.listdir(file_or_folder)
         for next_folder in next_directory:
-            if next_folder in game_names():
+            if next_folder in s.current[s.KEY_GAMES]:
                 next_directory = [next_folder]
                 break
         for next_file_or_folder in next_directory:
@@ -429,7 +430,7 @@ def get_available_name(snapshot_directory, prefix='file_snapshot_'):
             suffix = last_snapshot[last_snapshot.index(prefix) + len(prefix):last_snapshot.index('.txt')]
         counter = str(int(suffix) + 1)
     except ValueError:
-        counter = askstring(title=f'{PROGRAM_NAME}', prompt='Please give a name to the new file')
+        counter = askstring(title=f'{s.PROGRAM_NAME}', prompt='Please give a name to the new file')
     except NameError:
         pass
     return f'{snapshot_directory}/{prefix}{counter}.txt'
@@ -452,28 +453,28 @@ def snapshot_take(game_paths=None, add_paths=False, return_type='path', name=Non
     path_to_omit = ''
     for game_path in game_paths:
         if game_path == '>no_path<':
-            game_full_path = askdirectory(initialdir=f'{current(INSTALL_PATH)}',
-                                          title=f'{PROGRAM_NAME}: select game directory to take a snapshot of')
+            game_full_path = askdirectory(initialdir=f'{s.MAIN_DIRECTORY}',
+                                          title=f'{s.PROGRAM_NAME}: select game directory to take a snapshot of')
             if game_full_path:
-                if current(MODULES_LIBRARY) in game_full_path:
-                    path_to_omit += '/'.join(game_full_path.split('/')[:current(MODULES_LIBRARY).count('/') + 2])
-                path_to_omit_locally = current(INSTALL_PATH)
+                if s.LIBRARY in game_full_path:
+                    path_to_omit += '/'.join(game_full_path.split('/')[:s.LIBRARY.count('/') + 2])
+                path_to_omit_locally = s.MAIN_DIRECTORY
                 # game_path = game_full_path[game_full_path.index(path_to_omit_locally) + len(path_to_omit_locally) +1:]
                 game_path = game_full_path[len(path_to_omit_locally):]
                 game_paths[game_paths.index('>no_path<')] = game_path
                 if add_paths:
                     game_paths.append('>no_path<')
             elif len(game_paths) == 0:
-                raise InternalError('snapshot_take: directory not selected')
-        mod_dir = f'{current(INSTALL_PATH)}/{game_path}'
+                raise s.InternalError('snapshot_take: directory not selected')
+        mod_dir = f'{s.MAIN_DIRECTORY}/{game_path}'
         if not os.path.isdir(mod_dir):
             game_paths.remove(game_path)
     for game_path in game_paths:
         if not game_path:
-            raise InternalError('snapshot_take: directory not selected')
-        game_snapshot += hash_directory(f'{current(INSTALL_PATH)}/{game_path}', path_to_omit=path_to_omit)
+            raise s.InternalError('snapshot_take: directory not selected')
+        game_snapshot += hash_directory(f'{s.MAIN_DIRECTORY}/{game_path}', path_to_omit=path_to_omit)
     if game_snapshot.count('\n') <= 1:
-        raise InternalError('snapshot_take: directory not selected')
+        raise s.InternalError('snapshot_take: directory not selected')
     if return_type == 'text':
         log('snapshot_take successful')
         return game_snapshot
@@ -506,10 +507,10 @@ def snapshot_compare(snap_anterior=None, snap_posterior=None, return_type='path'
     content_posterior = []
     lines = []
     if snap_anterior is None:
-        snap_anterior = askopenfilename(title=f'{PROGRAM_NAME}: choose the base snapshot to compare with',
+        snap_anterior = askopenfilename(title=f'{s.PROGRAM_NAME}: choose the base snapshot to compare with',
                                         initialdir='./snapshots')
         if not snap_anterior:
-            raise InternalError('snapshot_compare: no snapshot selected')
+            raise s.InternalError('snapshot_compare: no snapshot selected')
     if isinstance(snap_anterior, list):
         content_anterior = snap_anterior.copy()
         snap_anterior = 'unsaved output'
@@ -517,10 +518,10 @@ def snapshot_compare(snap_anterior=None, snap_posterior=None, return_type='path'
         with open(snap_anterior) as file_anterior:
             content_anterior = file_anterior.readlines()
     if snap_posterior is None:
-        snap_posterior = askopenfilename(title=f'{PROGRAM_NAME}: choose the second snapshot to compare',
+        snap_posterior = askopenfilename(title=f'{s.PROGRAM_NAME}: choose the second snapshot to compare',
                                          initialdir='./snapshots')
         if not snap_posterior:
-            raise InternalError('snapshot_compare: no snapshot selected')
+            raise s.InternalError('snapshot_compare: no snapshot selected')
     if isinstance(snap_posterior, list):
         content_posterior = snap_posterior.copy()
         snap_posterior = 'unsaved output'
@@ -575,7 +576,7 @@ def initiate_comparison(module_directory, start_module=None, changes_source='dir
     """
     # if start_module is None and changes_source != 'comparison' and not os.path.isdir(changes_source):
     if start_module is None and changes_source == 'directory':
-        start_module = askdirectory(title=f'{PROGRAM_NAME}: select the game directory to define the mod',
+        start_module = askdirectory(title=f'{s.PROGRAM_NAME}: select the game directory to define the mod',
                                     initialdir='../')
     if os.path.isdir(module_directory):
         changes = ''
@@ -620,14 +621,14 @@ def initiate_comparison(module_directory, start_module=None, changes_source='dir
                     if len(new_file) > 0:
                         file_path, value = new_file.strip().split('\t')
                         changes += f'\t\t{file_path}\tnew\n'
-            files_to_remove = askopenfilenames(title=f'{PROGRAM_NAME}: select files to remove', initialdir='../')
+            files_to_remove = askopenfilenames(title=f'{s.PROGRAM_NAME}: select files to remove', initialdir='../')
             for file_path in files_to_remove:
                 changes += f'\t\t../{file_path}\tremove\n'
             snapshot_take(
                     game_paths=[module_directory], name=module_directory.split('/')[-1])
         elif changes_source == 'comparison':
             selected_comparison = askopenfilename(
-                title=f'{PROGRAM_NAME}: select the snapshot comparison to define the mod',
+                title=f'{s.PROGRAM_NAME}: select the snapshot comparison to define the mod',
                 initialdir=f'./{SNAPSHOT_COMPARISON_DIRECTORY}')
             if os.path.isfile(selected_comparison):
                 with open(selected_comparison) as comparison_buffer:
@@ -638,10 +639,10 @@ def initiate_comparison(module_directory, start_module=None, changes_source='dir
                             changes += f'\t\t{line.strip()}\n'
                 active = True
             else:
-                raise InternalError('comparison not selected')
+                raise s.InternalError('comparison not selected')
         elif changes_source == 'snapshot':
             selected_snapshot = askopenfilename(
-                title=f'{PROGRAM_NAME}: select the snapshot taken before the changes',
+                title=f'{s.PROGRAM_NAME}: select the snapshot taken before the changes',
                 initialdir=f'./{SNAPSHOT_DIRECTORY}')
             if os.path.isfile(selected_snapshot):
                 with open(selected_snapshot) as snapshot_buffer:
@@ -663,12 +664,12 @@ def initiate_comparison(module_directory, start_module=None, changes_source='dir
                             changes += f'\t\t{line.strip()}\n'
                 active = True
             else:
-                raise InternalError('snapshot not selected')
+                raise s.InternalError('snapshot not selected')
         # if changes_source == 'directory':
         log(f'comparison generated for {module_directory}')
         return active, changes
     else:
-        raise InternalError('provided directory is not correct')
+        raise s.InternalError('provided directory is not correct')
 
 
 test_previous_src = ''
@@ -735,7 +736,7 @@ def test_transfer(src, dst='', transfer='copy', error_sensitive=True):
             if error_sensitive:
                 # TODO later: own message box - a self-explanatory one
                 do_proceed = tkinter.messagebox.askyesnocancel(
-                    title=f'{PROGRAM_NAME}: error',
+                    title=f'{s.PROGRAM_NAME}: error',
                     # message=f'{err}\nDo you want to proceed or to cancel the module transfer'
                     message=f'{err}\n Click "Yes" to continue displaying each error and to proceed.\n'
                     'Click "No" to skip all errors and to proceed.\n Click "Cancel" to stop and revert the changes made'
@@ -745,7 +746,7 @@ def test_transfer(src, dst='', transfer='copy', error_sensitive=True):
                 elif do_proceed is False:
                     error_sensitivity = False
                 elif do_proceed is None:
-                    raise InternalError(err)
+                    raise s.InternalError(err)
     return output
 
 
@@ -769,7 +770,7 @@ def check_library(module_object):
     changes = module_object['changes']
     library_missing = False
     for file in changes:
-        if not os.path.isfile(file.replace('../', f"{current(MODULES_LIBRARY)}/{module_object['name']}/")):
+        if not os.path.isfile(file.replace('../', f"{s.LIBRARY}/{module_object['name']}/")):
             library_missing = True
     return library_missing
 
@@ -798,19 +799,19 @@ def module_reverse(module_object=None, module_name='', transfer='copy', comparis
         changes = module_object['changes']
         for change_file in changes:
             comparison_lines.append(change_file.replace('\\', '/') + f'\t{changes[change_file]}\n')
-    if not os.path.isdir(f'{current(MODULES_LIBRARY)}/{module_name}'):
-        os.mkdir(f'{current(MODULES_LIBRARY)}/{module_name}')
-    module_directory = f'{current(MODULES_LIBRARY)}/{module_name}'
+    if not os.path.isdir(f'{s.LIBRARY}/{module_name}'):
+        os.mkdir(f'{s.LIBRARY}/{module_name}')
+    module_directory = f'{s.LIBRARY}/{module_name}'
     if os.path.isfile(f"{module_directory}/{COMPARISON_NAME}{module_name}.txt"):
         comparison_path = f"{module_directory}/{COMPARISON_NAME}{module_name}.txt"
     if transfer == 'remove':
         try:
             if module_object is None:
                 module_object = definition_read(module_path=module_directory)
-        except InternalError as error:
+        except s.InternalError as error:
             raise error
         if module_object['active'] is False and check_type != 'pass':
-            raise InternalError('deactivation of inactive module aborted')
+            raise s.InternalError('deactivation of inactive module aborted')
         if module_object['class'] == DEFINITION_CLASSES[0]:
             transfer = 'move'
         elif module_object['class'] == DEFINITION_CLASSES[1] and check_library(module_object):
@@ -820,14 +821,14 @@ def module_reverse(module_object=None, module_name='', transfer='copy', comparis
     if transfer == 'move' or transfer == 'delete':
         try:
             override = module_detect_changes(module_directory=module_directory)
-        except InternalError as error:
+        except s.InternalError as error:
             raise error
         if override:
-            raise InternalError('module_reverse: changes have been made to the module file')
+            raise s.InternalError('module_reverse: changes have been made to the module file')
             # TODO later: if changes, propose to save them
     if not comparison_path and not comparison_lines:
         if last_snapshot is None:
-            selected_file = askopenfilename(title=f'{PROGRAM_NAME}: select a snapshot or a comparison file',
+            selected_file = askopenfilename(title=f'{s.PROGRAM_NAME}: select a snapshot or a comparison file',
                                             initialdir=SNAPSHOT_DIRECTORY)
             if selected_file.split('/')[-1].startswith(COMPARISON_NAME):
                 comparison_path = selected_file
@@ -837,12 +838,12 @@ def module_reverse(module_object=None, module_name='', transfer='copy', comparis
             new_snapshot = snapshot_take(return_type='text')
             comparison_lines = snapshot_compare(last_snapshot, new_snapshot, return_type='lines')
         if not comparison_path:
-            raise InternalError('module_reverse: comparison missing')
+            raise s.InternalError('module_reverse: comparison missing')
     if os.path.isfile(comparison_path) and not comparison_lines:
         with open(comparison_path) as comparison_file:
             comparison_lines = comparison_file.readlines()
     if not comparison_lines:
-        raise InternalError('module_reverse: comparison missing')
+        raise s.InternalError('module_reverse: comparison missing')
 
     error_sensitivity = True
     if check_type == 'snapshot':
@@ -863,37 +864,37 @@ def module_reverse(module_object=None, module_name='', transfer='copy', comparis
     output = ''
     try:
         for line in comparison_lines:
-            path_start = current(INSTALL_PATH).replace('\\', '/').count('/')
+            path_start = s.MAIN_DIRECTORY.replace('\\', '/').count('/')
             file_path, value = line.strip().split('\t')
             file_path_game = '/'.join(file_path.split('/')[:-1])
-            file_path_module = (f"{current(MODULES_LIBRARY)}/{module_name}/"
+            file_path_module = (f"{s.LIBRARY}/{module_name}/"
                                 f"{'/'.join(file_path.split('/')[path_start:-1])}")
-            file_path_archive = f"{current(BACKUP_FOLDER)}/{module_name}/{'/'.join(file_path.split('/')[path_start:])}"
+            file_path_archive = f"{s.ARCHIVE}/{module_name}/{'/'.join(file_path.split('/')[path_start:])}"
             if value == 'unchanged':
                 pass
             elif value == 'different':
                 if transfer in TRANSFER_TYPES:  # transfer == 'copy' or transfer == 'move':
-                    ensure_path_exists(file_path, f'{current(MODULES_LIBRARY)}/{module_name}')
+                    ensure_path_exists(file_path, f'{s.LIBRARY}/{module_name}')
                     output += test_transfer(file_path, file_path_module, transfer, error_sensitivity)
                 if transfer == 'move' or transfer == 'delete':
-                    ensure_path_exists(file_path, f'{current(BACKUP_FOLDER)}/{module_name}')
+                    ensure_path_exists(file_path, f'{s.ARCHIVE}/{module_name}')
                     output += test_transfer(file_path_archive, file_path_game, 'move', error_sensitivity)
             elif value == 'new':
-                ensure_path_exists(file_path, f'{current(MODULES_LIBRARY)}/{module_name}')
+                ensure_path_exists(file_path, f'{s.LIBRARY}/{module_name}')
                 try:
                     output += test_transfer(file_path, file_path_module, transfer, error_sensitivity)
                 except FileExistsError:
                     pass
             elif value == 'removed':
                 if transfer == 'move' or transfer == 'delete':
-                    ensure_path_exists(file_path, f'{current(BACKUP_FOLDER)}/{module_name}')
+                    ensure_path_exists(file_path, f'{s.ARCHIVE}/{module_name}')
                     output += test_transfer(file_path_archive, file_path_game, 'move', error_sensitivity)
                 else:
                     pass
-    except InternalError:
+    except s.InternalError:
         return module_attach(module_directory=module_directory, check_type='pass')
     if TEST:
-        raise InternalError('under TEST phase: module_reverse not applied')
+        raise s.InternalError('under TEST phase: module_reverse not applied')
     definition_edit(definition_object=module_object, active=False)
     return log(f'module_reverse {module_name}\n{output}')
 
@@ -915,10 +916,10 @@ def module_attach(module_object=None, module_directory=None, check_type='definit
     transfer = 'move'
     if module_object is None:
         if module_directory is None:
-            module_directory = askdirectory(title=f'{PROGRAM_NAME}: select module directory',
-                                            initialdir=current(MODULES_LIBRARY))
+            module_directory = askdirectory(title=f'{s.PROGRAM_NAME}: select module directory',
+                                            initialdir=s.LIBRARY)
             if not module_directory:
-                raise InternalError('module_attach: module directory missing')
+                raise s.InternalError('module_attach: module directory missing')
         if os.path.isfile(f'{module_directory}/{DEFINITION_NAME}'):
             module_object = definition_read(module_path=module_directory)
     error_sensitivity = True
@@ -928,12 +929,12 @@ def module_attach(module_object=None, module_directory=None, check_type='definit
     elif check_type == 'definition':
         if os.path.isdir(module_object['path']):
             module_directory = module_object['path']
-        elif os.path.isdir(f"{current(MODULES_LIBRARY)}/{module_object['name']}"):
-            module_directory = f"{current(MODULES_LIBRARY)}/{module_object['name']}"
+        elif os.path.isdir(f"{s.LIBRARY}/{module_object['name']}"):
+            module_directory = f"{s.LIBRARY}/{module_object['name']}"
         else:
-            raise InternalError('path not recognized')
+            raise s.InternalError('path not recognized')
         if module_object['active'] is True and check_type != 'pass':
-            raise InternalError('activation of active module aborted')
+            raise s.InternalError('activation of active module aborted')
         if module_object['class'] == DEFINITION_CLASSES[0]:
             transfer = 'move'
         elif module_object['class'] == DEFINITION_CLASSES[1]:
@@ -947,15 +948,15 @@ def module_attach(module_object=None, module_directory=None, check_type='definit
     elif check_type == 'pass':
         error_sensitivity = False
     module_name = module_directory.split('/')[-1]
-    if not os.path.isdir(f'{current(BACKUP_FOLDER)}/{module_name}'):
-        os.mkdir(f'{current(BACKUP_FOLDER)}/{module_name}')
+    if not os.path.isdir(f'{s.ARCHIVE}/{module_name}'):
+        os.mkdir(f'{s.ARCHIVE}/{module_name}')
     comparison_lines = []
     try:
         # changes = definition_read(module_path=module_directory)['changes']
         changes = module_object['changes']
         for change_file in changes:
             comparison_lines.append(change_file.replace('\\', '/') + f'\t{changes[change_file]}\n')
-    except InternalError:
+    except s.InternalError:
         pass
     if not comparison_lines and os.path.isfile(f"{module_directory}/{COMPARISON_NAME}{module_name}.txt"):
         with open(f"{module_directory}/{COMPARISON_NAME}{module_name}.txt") as comparison_buffer:
@@ -963,22 +964,22 @@ def module_attach(module_object=None, module_directory=None, check_type='definit
     if comparison_lines:
         try:
             output = ''
-            path_start = current(INSTALL_PATH).count('/')
+            path_start = s.MAIN_DIRECTORY.count('/')
             for line in comparison_lines:
                 try:
                     file_path, value = line.strip().split('\t')
                 except ValueError:
-                    raise InternalError('module_attach: valueError')
+                    raise s.InternalError('module_attach: valueError')
                 file_path_game = '/'.join(file_path.split('/')[:-1])
-                file_path_archive = (f"{current(BACKUP_FOLDER)}/{module_name}/"
+                file_path_archive = (f"{s.ARCHIVE}/{module_name}/"
                                      f"{'/'.join(file_path.split('/')[path_start:-1])}")
-                file_path_module = (f"{current(MODULES_LIBRARY)}/{module_name}/"
+                file_path_module = (f"{s.LIBRARY}/{module_name}/"
                                     f"{'/'.join(file_path.split('/')[path_start:])}")
                 if value == 'unchanged':
                     pass
                 elif value == 'different':
                     ensure_path_exists(file_path)
-                    ensure_path_exists(file_path, f'{current(BACKUP_FOLDER)}/{module_name}')
+                    ensure_path_exists(file_path, f'{s.ARCHIVE}/{module_name}')
                     output += test_transfer(file_path, file_path_archive, transfer, error_sensitivity)
                     output += test_transfer(file_path_module, file_path_game, transfer, error_sensitivity)
                 elif value == 'new':
@@ -987,12 +988,12 @@ def module_attach(module_object=None, module_directory=None, check_type='definit
                 elif value == 'removed':
                     ensure_path_exists(file_path)
                     output += test_transfer(file_path, file_path_archive, transfer, error_sensitivity)
-        except InternalError:
+        except s.InternalError:
             return module_reverse(module_object=module_object, transfer='remove', check_type='pass')
     else:
-        raise InternalError('module_attach: comparison missing')
+        raise s.InternalError('module_attach: comparison missing')
     if TEST:
-        raise InternalError('Test phase: module_attach not applied')
+        raise s.InternalError('Test phase: module_attach not applied')
     definition_edit(definition_object=module_object, active=True)
     return log(f'module_attach {module_name}\n{output}')
 
@@ -1005,20 +1006,20 @@ def module_copy(new_name, template_directory=None, changes_source=None):
     :param changes_source: 'snapshot' | 'comparison' | 'directory' - passes the value to definition_write
     :return: logs about the details of the transfer
     """
-    try:
-        if template_directory is None and current(MODULE_TEMPLATE):
-            template_directory = current(MODULE_TEMPLATE)
-    except InternalError:
-        try:
-            template_directory = askdirectory(
-                title=f'{PROGRAM_NAME}: choose a module template to copy',
-                initialdir=current(MODULES_LIBRARY)
-            )
-        except InternalError:
-            template_directory = askdirectory(
-                title=f'{PROGRAM_NAME}: choose a module template to copy',
-                initialdir='../'
-            )
+    # try:
+    #     if template_directory is None and current(MODULE_TEMPLATE):
+    #         template_directory = current(MODULE_TEMPLATE)
+    # except s.InternalError:
+    #     try:
+    #         template_directory = askdirectory(
+    #             title=f'{s.PROGRAM_NAME}: choose a module template to copy',
+    #             initialdir=s.LIBRARY
+    #         )
+    #     except s.InternalError:
+    #         template_directory = askdirectory(
+    #             title=f'{s.PROGRAM_NAME}: choose a module template to copy',
+    #             initialdir='../'
+    #         )
     if not template_directory:
         # raise InternalError('template not selected')
         return 'module_copy error: template not selected'
@@ -1027,24 +1028,24 @@ def module_copy(new_name, template_directory=None, changes_source=None):
         # raise InternalError('module_copy: name already in use')
         return 'module_copy error: name already in use'
     # output = f'module_copy: {template_directory} to {new_name}'
-    os.mkdir(f'{current(MODULES_LIBRARY)}/{new_name}')
+    os.mkdir(f'{s.LIBRARY}/{new_name}')
     output = f'{new_name} created. \n'
     folders = []
     files = []
     items_list = os.listdir(template_directory)
     for item in items_list:
         if os.path.isdir(f'{template_directory}/{item}'):
-            folders.append(f'{current(MODULES_LIBRARY)}/{new_name}/{item}')
+            folders.append(f'{s.LIBRARY}/{new_name}/{item}')
             for next_item in os.listdir(f'{template_directory}/{item}'):
                 items_list.append(f'{item}/{next_item}')
                 if os.path.isdir(f'{template_directory}/{item}/{next_item}'):
-                    folders.append(f'{current(MODULES_LIBRARY)}/{new_name}/{item}/{next_item}')
+                    folders.append(f'{s.LIBRARY}/{new_name}/{item}/{next_item}')
         elif os.path.isfile(f'{template_directory}/{item}'):
             files.append(item)
         else:
             output += f'warning: item {item} is neither a file nor folder \n'
     if not folders and not files:
-        # copy_default(current(MODULES_LIBRARY))
+        # copy_default(s.LIBRARY)
         # return module_copy(new_name, template_directory)
         pass
     for folder in folders:
@@ -1053,13 +1054,13 @@ def module_copy(new_name, template_directory=None, changes_source=None):
             output += folder + '\n'
     for file in files:
         if file == DEFINITION_NAME:
-            definition_write(module_directory=f'{current(MODULES_LIBRARY)}/{new_name}', return_type='save',
+            definition_write(module_directory=f'{s.LIBRARY}/{new_name}', return_type='save',
                              changes_source=changes_source)
             continue
         copied_file = f'{template_directory}/{file}'
         try:
-            test_transfer(copied_file, f'{current(MODULES_LIBRARY)}/{new_name}/{file}', 'copy')
-            output += f'{current(MODULES_LIBRARY)}/{new_name}/{file}\n'
+            test_transfer(copied_file, f'{s.LIBRARY}/{new_name}/{file}', 'copy')
+            output += f'{s.LIBRARY}/{new_name}/{file}\n'
         except FileNotFoundError:
             output += f'warning: {file} permission denied'
         except FileExistsError:
@@ -1075,26 +1076,26 @@ def module_detect_changes(module_directory=None):
     if module_directory is None:
         # selected_file = askopenfilename(title='Lord of the mods: select a snapshot or a comparison file',
         #                                 initialdir=module_directory)
-        module_directory = askdirectory(title=f'{PROGRAM_NAME}: select a module directory',
-                                        initialdir=current(MODULES_LIBRARY))
+        module_directory = askdirectory(title=f'{s.PROGRAM_NAME}: select a module directory',
+                                        initialdir=s.LIBRARY)
         # TODO: lower the above code an indentation level when snapshot verification is working
         if not module_directory:
-            raise InternalError('module_detect_changes error: no module selected')
+            raise s.InternalError('module_detect_changes error: no module selected')
         module_name = module_directory.split('/')[-1]
         if os.path.isfile(f"{module_directory}/file_snapshot_{module_name}"):
             last_snapshot_path = f"{module_directory}/file_snapshot_{module_name}"
         elif os.path.isfile(f"{SNAPSHOT_DIRECTORY}/file_snapshot_{module_name}"):
             last_snapshot_path = f"{SNAPSHOT_DIRECTORY}/file_snapshot_{module_name}"
         else:
-            last_snapshot_path = askopenfilename(title=f"{PROGRAM_NAME}: please select the snapshot of {module_name}",
+            last_snapshot_path = askopenfilename(title=f"{s.PROGRAM_NAME}: please select the snapshot of {module_name}",
                                                  initialdir=SNAPSHOT_DIRECTORY)
         if os.path.isfile(last_snapshot_path):
             new_snapshot = snapshot_take(return_type='text')
             comparison_lines = snapshot_compare(last_snapshot_path, new_snapshot, return_type='lines')
         else:
-            raise InternalError('no initial snapshot selected')
+            raise s.InternalError('no initial snapshot selected')
         if not comparison_lines:
-            raise InternalError('module_detect_changes: no comparison')
+            raise s.InternalError('module_detect_changes: no comparison')
     # TODO later: check if files inside the module have changed
     for line in comparison_lines:
         if '\t' in line:
@@ -1121,9 +1122,9 @@ def modules_filter(return_type='definitions', **criteria):
     """
     game_modules_list = []
     try:
-        modules_names = [_ for _ in os.listdir(current(MODULES_LIBRARY)) if _ not in library_exceptions()]
+        modules_names = [_ for _ in os.listdir(s.LIBRARY) if _ not in s.current[s.KEY_EXCEPTIONS]]
         for module_name in modules_names:
-            module_definition = definition_read(module_path=f'{current(MODULES_LIBRARY)}/{module_name}')
+            module_definition = definition_read(module_path=f'{s.LIBRARY}/{module_name}')
             if (module_definition['class'] == DEFINITION_CLASSES[0]
                     or module_definition['class'] == DEFINITION_CLASSES[1]):
                 if criteria:
@@ -1139,8 +1140,8 @@ def modules_filter(return_type='definitions', **criteria):
                         game_modules_list.append(module_name)
                     elif return_type == 'definitions':
                         game_modules_list.append(module_definition)
-    except InternalError:
-        raise InternalError('module_control.modules_filter(): settings not loaded')
+    except s.InternalError:
+        raise s.InternalError('module_control.modules_filter(): settings not loaded')
     return game_modules_list
 
 
@@ -1163,7 +1164,7 @@ def modules_sort(criteria='ancestor', modules=None):
                     break
         return sorted_dict
     else:
-        raise InternalError(message='modules_sort: unrecognized criteria')
+        raise s.InternalError(message='modules_sort: unrecognized criteria')
 
 
 TEST = False
@@ -1180,8 +1181,8 @@ _all_defined = [
     Definition,
     DEFINITION_EXAMPLE,
     log,
-    library_exceptions,
-    game_names,
+    # library_exceptions,
+    # game_names,
 
     definition_write,
     definition_read,
