@@ -2,10 +2,9 @@ from datetime import datetime
 import os
 import shutil
 
-from source.file_interpreter import load_items, load_items_part, print_items, print_items_part, comment_out, recognize_item_class
-# from source.shared import INI_PATH_PART, INI_COMMENTS, LOG_PATH, InternalError, LIBRARY
+from source.file_interpreter import load_items, load_items_part, print_items, print_items_part, comment_out, \
+    recognize_item_class
 import source.shared as s
-# from source.settings import current, MODULES_LIBRARY
 
 # TODO later: reference checker
 # TODO later: automated proposition of #include creation or child adopting
@@ -46,97 +45,6 @@ def convert_string(string, direction='automatic'):
             return string
 
 
-# def find_text(find, in_file_or_folder, exception='', mode=0):
-#     """
-#      finds a given string in a given file or folder of files.
-#     :param find:
-#     :param in_file_or_folder:
-#     :param exception:
-#     :param mode: mode 2 returns the first line where the string was found. It returns an empty string if not found
-#     :return:
-#     """
-#     output = ''
-#     if not find:
-#         return 'file_editor.find_text() aborted - empty string to find'
-#     # if current(MODULES_LIBRARY) not in in_file_or_folder.replace('\\', '/'):
-#     #     return 'file_editor.replace_text() aborted - item not in MODS_FOLDER'
-#     if mode == 0:
-#         output += f' command: find "{convert_string(find, direction="display")}"\n\tin {in_file_or_folder}.\nresult:'
-#     find = convert_string(find, direction='process')
-#     if in_file_or_folder in exception:
-#         return output
-#     if os.path.isdir(in_file_or_folder):
-#         file_paths = os.listdir(in_file_or_folder)
-#         for file_path in file_paths:
-#             output += find_text(find, f'{in_file_or_folder}/{file_path}', mode=1)
-#     elif os.path.isfile(in_file_or_folder):
-#         try:
-#             # with open(in_file_or_folder, 'r') as file:
-#             #     file_content = file.read()
-#             file_content = print_items(file=in_file_or_folder)
-#             if file_content.count(find) > 0:
-#                 if mode < 2:
-#                     output += f'\tin {in_file_or_folder} found {file_content.count(find)}:\n'
-#                     file_content_split = file_content.split(find)
-#                     index_line = 1
-#                     for content_part in file_content_split[:-1]:
-#                         index_line += content_part.count('\n')
-#                         text_line = file_content.split('\n')[index_line - 1]
-#                         output += f'\t\tin line {index_line} "{text_line}"\n'
-#                 else:
-#                     output = file_content[file_content.rfind('#include', 0, file_content.find(find)):
-#                                           file_content.find('\n', file_content.find(find))]
-#                     # output = in_file_or_folder
-#             elif mode == 0:
-#                 output += f'\tfound none\n'  # {file_content.count(find)}
-#         except UnicodeDecodeError:
-#             output += f'file_editor.find_text() error: file {in_file_or_folder} unreadable'
-#         except ValueError:
-#             output += f'file_editor.find_text() error: ValueError'
-#     return output
-
-
-# def replace_text(find, replace_with=None, in_file_or_folder='', exception='', mode=0):
-#     """ replaces a given string by another in a given file or folder of files """
-#     output = ''
-#     if not find:
-#         return 'file_editor.replace_text() aborted - empty string to find'
-#     # if current(MODULES_LIBRARY) not in in_file_or_folder.replace('\\', '/'):
-#     #     return 'file_editor.replace_text() aborted - item not in MODS_FOLDER'
-#     if mode == 0:
-#         output += f'{datetime.now()}'
-#         output += f' command: replace "{convert_string(find, direction="display")}"\n'
-#         output += f'\twith "{replace_with}"\n\tin {in_file_or_folder}.\n'
-#         if exception:
-#             output += f'\texcept in "{exception}"'
-#         output += 'result: '
-#     find = convert_string(find, direction='process')
-#     if ', ' in in_file_or_folder and mode == 0:
-#         for scope_element in in_file_or_folder.split(', '):
-#             output += replace_text(find, replace_with, scope_element, exception, mode=1)
-#     if in_file_or_folder in exception:
-#         return output
-#     if os.path.isfile(in_file_or_folder):
-#         try:
-#             # with open(in_file_or_folder, 'r') as file:
-#             #     file_content = file.read()
-#             file_content = print_items(load_items(in_file_or_folder))[0]
-#             if file_content.count(find) > 0:
-#                 new_file_content = file_content.replace(find, replace_with)
-#                 with open(in_file_or_folder, 'w') as file:
-#                     file.write(new_file_content)
-#                 output += f'\t{file_content.count(find)} replaced in {in_file_or_folder}\n'
-#         except UnicodeDecodeError:
-#             print(f'file_editor.replace_text() error: file {in_file_or_folder} unreadable')
-#     elif os.path.isdir(in_file_or_folder):
-#         file_paths = os.listdir(in_file_or_folder)
-#         for file_path in file_paths:
-#             output += replace_text(find, replace_with, f'{in_file_or_folder}/{file_path}', mode=1)  # mode=0
-#         # if mode == 0:
-#     log(output)
-#     return output
-
-
 def find_replace_text(find, replace_with=None, scope='', exceptions=None, mode='initiate'):
     """ replaces a given string by another in a given file or folder of files """
     output = ''
@@ -172,7 +80,7 @@ def find_replace_text(find, replace_with=None, scope='', exceptions=None, mode='
                              file_content.rfind('#include', 0, file_content.lower().find(find.lower())):
                              file_content.find('\n', file_content.lower().find(find.lower()))]
                 elif replace_with is not None:
-                    new_file_content = ''  # file_content.replace(find, replace_with)
+                    new_file_content = ''
                     output += f'\t{file_content.lower().count(find.lower())} replaced in {scope}\n'
                     index_line = 1
                     content_parts = file_content.lower().split(find.lower())
@@ -424,15 +332,3 @@ def load_directories(full_path, mode=0):
         elif os.path.isfile(f'{full_path}/{item}'):
             output_files.append(f'{(full_path + "/") * mode}{item}')
     return output_folders, output_files
-
-
-# _all_defined = [
-#     convert_string,
-#     find_replace_text,
-#     update_reference,
-#     update_single_reference,
-#     move_file,
-#     duplicates_commenter,
-#     load_file,
-#     load_directories,
-# ]

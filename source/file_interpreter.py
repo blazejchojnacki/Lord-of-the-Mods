@@ -10,8 +10,6 @@ def recognize_item_class(from_file):
         file_item_type = STR_DELIMITERS
     elif from_file.endswith('.ini'):
         with open(from_file) as loaded_file:
-            # while not file_item_type:
-            #     word = loaded_file.readline().split()
             file_lines = loaded_file.readlines()
             for file_line in file_lines:
                 if file_item_type:
@@ -24,8 +22,6 @@ def recognize_item_class(from_file):
                             break
     elif from_file.endswith('.inc'):
         with open(from_file) as loaded_file:
-            # while not file_item_type:
-            #     words = loaded_file.readline().split()
             for file_line in loaded_file.readlines():
                 words = file_line.split()
                 if len(words) > 0:
@@ -68,7 +64,7 @@ def load_items(from_file, mode=0):
             if file_line.strip() == '':
                 continue
             elif file_line.strip()[0] in INI_COMMENTS:
-                if not is_definition_open:  # not is_level_open
+                if not is_definition_open:
                     initial_comment += ' '.join(file_line.split()) + '\n'
                 elif current_level == 1:
                     items[-1].append({'comment': f"{LEVEL_INDENT * current_level}{' '.join(file_line.split())}\n"})
@@ -76,7 +72,6 @@ def load_items(from_file, mode=0):
                     items[-1][-1].append(
                         {'comment': f"{LEVEL_INDENT * current_level}{' '.join(file_line.split())}\n"}
                     )
-            # elif words[0].rstrip(';/') in file_item_type[current_level]:
             elif words[0].replace('/', ' ').replace(';', ' ').split()[0].strip() in file_item_type[current_level]:
                 if current_level == 0:
                     items.append([{}, {'class': 'words[0]'}])
@@ -113,7 +108,6 @@ def load_items(from_file, mode=0):
                                             f'{file_line[file_line.index(words[3]):]}'
                                         )
                                 elif words[2][0] in INI_COMMENTS:
-                                    # items[-1][-1]['comment'] = ' '.join(words[2:])
                                     if isinstance(items[-1], list):
                                         if isinstance(items[-1][-1], list):
                                             items[-1][-1][-1]['comment'] = ' '.join(words[2:])
@@ -150,7 +144,7 @@ def load_items(from_file, mode=0):
                             items[-1][-1].append(
                                 {'assignation': f"{LEVEL_INDENT * current_level}{' '.join(file_line.split())}\n"}
                             )
-                    except AttributeError:  # IndexError:
+                    except AttributeError:
                         items[-1].append(
                             {'assignation': f"{LEVEL_INDENT * current_level}{' '.join(file_line.split())}\n"}
                         )
@@ -169,7 +163,6 @@ def load_items(from_file, mode=0):
                         {'assignation': f"{LEVEL_INDENT}{' '.join(file_line.split())}\n"}
                     )
             elif words[0] == '#define':
-                # if items[0][0]['defines']:
                 if 'defines' in items[0][0]:
                     items[0][0]['defines'] += file_line.strip() + '\n'
                 else:
@@ -207,7 +200,6 @@ def load_items_part(from_file, mode=0):
 
     start_level = 0
     initial_comment = ''
-    # line_counter = 0
     is_level_open = False
     is_definition_open = False
     with open(from_file) as loaded_file:
@@ -229,21 +221,17 @@ def load_items_part(from_file, mode=0):
     items[0].append({'structure': file_item_type})
     current_level = start_level
     for file_line in file_lines:
-        # line_counter += 1
         words = file_line.replace('=', ' ').replace(':', ' ').split()
         if file_line.strip() == '':
             continue
         elif file_line.strip()[0] in INI_COMMENTS:
-            if not is_definition_open:  # not is_level_open
-                initial_comment += f'{LEVEL_INDENT * current_level}' + ' '.join(file_line.split()) + '\n'  #
+            if not is_definition_open:
+                initial_comment += f'{LEVEL_INDENT * current_level}' + ' '.join(file_line.split()) + '\n'
             elif current_level - start_level >= 1:
-                items[-1].append({'comment': f"{LEVEL_INDENT * current_level}{' '.join(file_line.split())}\n"})  #
-            # elif current_level - start_level > 1:
-            #     items[-1][-1]['comment'] = f"{' '.join(file_line.split())}\n"  # {LEVEL_INDENT * current_level}
+                items[-1].append({'comment': f"{LEVEL_INDENT * current_level}{' '.join(file_line.split())}\n"})
         elif words[0].rstrip(';/') in file_item_type[current_level]:
             if current_level - start_level == 0:
-                items.append([{}, {'indent': LEVEL_INDENT * current_level, 'class': words[0]}])  # 'indent': f'{LEVEL_INDENT * current_level}'
-                # items[-1][1]['class'] = words[0]
+                items.append([{}, {'indent': LEVEL_INDENT * current_level, 'class': words[0]}])
                 is_definition_open = True
                 if len(words) >= 2:
                     if words[1][0] not in INI_COMMENTS:
@@ -261,33 +249,6 @@ def load_items_part(from_file, mode=0):
                     elif words[1][0] in INI_COMMENTS:
                         items[-1][-1]['comment'] = ' '.join(words[1:])
                 is_level_open = True
-            # elif current_level - start_level == 1:
-            #     items[-1].append([])
-            #     items[-1][-1].append({'class': words[0]})
-            #     if len(words) >= 2:
-            #         if words[1][0] not in INI_COMMENTS:
-            #             items[-1][-1][0]['name'] = words[1]
-            #             if len(words) >= 3:
-            #                 if words[2][0] not in INI_COMMENTS:
-            #                     items[-1][-1][0]['identifier'] = words[2]
-            #                     if len(words) > 3 and words[3][0] in INI_COMMENTS:
-            #                         items[-1][-1][0]['comment'] = (
-            #                             f'{LEVEL_INDENT * current_level}'
-            #                             f'{file_line[file_line.index(words[3]):]}'
-            #                         )
-            #                 elif words[2][0] in INI_COMMENTS:
-            #                     # items[-1][-1]['comment'] = ' '.join(words[2:])
-            #                     if isinstance(items[-1], list):
-            #                         if isinstance(items[-1][-1], list):
-            #                             items[-1][-1][-1]['comment'] = ' '.join(words[2:])
-            #                         else:
-            #                             items[-1][-1]['comment'] = ' '.join(words[2:])
-            #         elif words[1][0] in INI_COMMENTS:
-            #             if isinstance(items[-1], list):
-            #                 if isinstance(items[-1][-1], list):
-            #                     items[-1][-1][-1]['comment'] = ' '.join(words[1:])
-            #                 else:
-            #                     items[-1][-1]['comment'] = ' '.join(words[1:])
             elif current_level - start_level >= 1:
                 try:
                     if is_level_open:
@@ -307,14 +268,13 @@ def load_items_part(from_file, mode=0):
                 is_definition_open = False
                 is_level_open = False
                 items[-1].append({'end': f"{LEVEL_INDENT * current_level}{' '.join(file_line.split())}\n"})
-            # elif current_level - start_level == 1:
             elif current_level - start_level >= 1:
                 try:
                     if is_level_open:
                         items[-1][-1].append(
                             {'assignation': f"{LEVEL_INDENT * current_level}{' '.join(file_line.split())}\n"}
                         )
-                except AttributeError:  # IndexError:
+                except AttributeError:
                     items[-1].append(
                         {'assignation': f"{LEVEL_INDENT * current_level}{' '.join(file_line.split())}\n"}
                     )
@@ -367,7 +327,7 @@ def print_items(items=None, file=None):
                     if type(item[index]) is list:
                         for level_index in range(len(item[index])):
                             if type(item[index][level_index]) is dict:
-                                line = ''  # LEVEL_INDENT
+                                line = ''
                                 for key in item[index][level_index]:
                                     line += ' ' + item[index][level_index][key]
                                 if line[0:len(LEVEL_INDENT)] != LEVEL_INDENT:
@@ -406,9 +366,6 @@ def print_items_part(items=None, file=None):
         except InternalError as error:
             raise error
     output = ''
-    # levels_list = []
-    # if items[0][0]['class'] == 'file':
-    #     levels_list = items[0][1]['structure']
     for item in items[1:]:
         current_level = output.rstrip().split('\n')[-1].count(LEVEL_INDENT)
         for index in range(len(item)):
@@ -439,13 +396,3 @@ def comment_out(lines):
     for line in lines.split('\n'):
         output += f';;;{line}\n'
     return output
-
-
-_all_defined = [
-    recognize_item_class,
-    load_items,
-    load_items_part,
-    print_items,
-    print_items_part,
-    comment_out,
-]

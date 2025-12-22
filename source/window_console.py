@@ -8,9 +8,7 @@ from tklinenums import TkLineNumbers
 from ctypes import windll, byref, create_unicode_buffer, sizeof, c_int
 
 import source.shared as s
-# from source.shared import s.INI_COMMENTS, s.INI_ENDS, s.LEVEL_INDENT, s.PROGRAM_NAME, s.InternalError
 from source.initiator import initiate
-# from source.settings import settings_read, settings_save_to_file, current, MODULES_LIBRARY, INSTALL_PATH
 from source.file_editor import convert_string, find_replace_text, move_file, duplicates_commenter, load_file, \
     load_directories
 from source.module_control import modules_filter, modules_sort, snapshot_take, snapshot_compare, \
@@ -204,7 +202,6 @@ TEXT_COLORS = ['black', 'blue', 'purple', 'violet']
 INI_LEVEL_COLORS = ['red', 'orange', 'yellow', 'green', 'turquoise']
 
 
-# 024-08-28
 def load_colors():
     """ Loads colors from colors.ini into application constants. """
     global APP_BACKGROUND_COLOR, ENTRY_BACKGROUND_COLOR, TEXT_COLORS, INI_LEVEL_COLORS
@@ -367,7 +364,6 @@ def set_window_file():
         text_file_content.focus()
         button_menu_back.configure(command=command_browser_back)
         button_run.configure(text='save file'.upper(), command=command_file_save, state='normal')
-        # button_execute.configure(text='reload file'.upper(), command=command_file_load)
         current_window = 'file_editor'
         set_log_update(f'file editor loaded. file {current_path}')
         return True
@@ -382,8 +378,7 @@ def set_window_modules():
     clear_window()
     container_current.place_configure(height=UNIT_HEIGHT * 13)
     position(container_modules, button_module_new, container_command, button_run, button_execute,
-             button_menu_settings, container_command_buttons, text_result)  #
-    # text_result.place_configure(height=UNIT_HEIGHT * 1)
+             button_menu_settings, container_command_buttons, text_result)
     button_run.configure(text='take snapshot'.upper(), command=command_snapshot_take)
     button_execute.configure(text='compare snapshots'.upper(), command=command_snapshot_compare)
     button_menu_settings.configure(text='edit settings'.upper(), command=set_window_settings)
@@ -505,7 +500,6 @@ def command_settings_save():
         if settings[setting_key] != setting_value[counter]:
             # TODO later: check for empty settings list
             if isinstance(settings[setting_key], list):
-                # for setting_container_index in range(len(setting_value[counter].split(', '))):
                 setting_dict_list = setting_value[counter].split(', ')
                 if settings[setting_key] and setting_dict_list:
                     if settings[setting_key] != setting_dict_list:
@@ -519,7 +513,6 @@ def command_settings_save():
         counter += 1
     if new_settings:
         try:
-            # output = settings_save_to_file(new_settings)
             output = s.settings_set(new_settings) 
             set_log_update(output)
         except s.InternalError as error:
@@ -530,7 +523,6 @@ def command_settings_save():
 def command_settings_reload():
     """ Reads the settings from the SETTINGS_FILE and inserts them into the settings text fields. """
     global settings
-    # settings = settings_read()
     settings = s.settings_get()
     counter = 0
     for setting_key in settings:
@@ -549,7 +541,6 @@ def command_select_folder(text_widget):
     selected_folder = askdirectory(
         title=f'{s.PROGRAM_NAME}: select a folder',
         initialdir=current_path if os.path.isdir(current_path) else current_path[:current_path.rfind('/')])
-    # text_select_folder.delete('1.0', 'end')
     if len(text_widget.get('1.0', 'end')) > 1:
         text_widget.insert('end', f', {selected_folder}')
     else:
@@ -563,7 +554,6 @@ def command_select_file(text_widget):
         title=f'{s.PROGRAM_NAME}: select one or multiple files',
         initialdir=current_path if os.path.isdir(current_path) else current_path[:current_path.rfind('/')])
     if selected_files:
-        # text_select_file.delete('1.0', 'end')
         strip_chars = "(),'"
         if len(text_widget.get('1.0', 'end')) > 1:
             text_widget.insert('end', f', {str(selected_files).strip(strip_chars)}')
@@ -603,7 +593,6 @@ def set_text_color(event=None):
             elif rest_of_line.strip() in s.INI_ENDS:
                 text_file_content.tag_add(f'level{level}', f'{line_index}.0',
                                           f'{line_index}.{len(rest_of_line)}')
-    # return True
 
 
 def command_text_comment():
@@ -657,7 +646,6 @@ def command_file_load():  # not a command anymore
     :return: True if the file is readable | False if the file could not be read
     """
     global current_levels, current_file_content_backup, current_path
-    # warning_file_save()
     text_file_content.delete('1.0', 'end')
     file_loaded = text_scope_select.get('1.0', 'end').replace('\\', '/').strip('\n\t {}')
     current_path = file_loaded
@@ -709,7 +697,6 @@ def command_run_replace():
     replace_with = convert_string(text_replace.get('1.0', 'end').strip(), direction='display')
     scope = text_scope_select.get('1.0', 'end').replace('/', '\\').strip()
     exception_string = text_scope_except.get('1.0', 'end').replace('/', '\\').strip()
-    # if ', ' in exception_string:
     exceptions = exception_string.split(', ')
     output = find_replace_text(find=find, replace_with=replace_with, scope=scope, exceptions=exceptions)
     set_log_update(output)
@@ -814,7 +801,7 @@ def on_select_module_idle(event):
     except IndexError:
         pass
     key_to_command_current['<Return>'] = command_module_browse
-    position(button_module_attach, button_module_browse, button_definition_edit)  # , button_module_copy
+    position(button_module_attach, button_module_browse, button_definition_edit)
     retrieve(button_module_retrieve, button_module_reload)
     treeview_modules_idle.focus()
 
@@ -838,7 +825,6 @@ def on_select_module_active(event):
 
 def refresh_definitions():
     """ Refreshes the lists of active and non-active modules. """
-    # set_log_update('refreshing definitions...')
     global global_modules
     try:
         set_log_update(detect_new_modules())
@@ -887,7 +873,6 @@ def command_module_new():
     if new_module_name:
         set_log_update(f'command_module_new: creating module {new_module_name}. Please wait ...')
         set_log_update(module_copy(new_module_name, changes_source=new_module_source))
-        # snapshot_take([])
         refresh_definitions()
     else:
         set_log_update('command_module_new error: a correct unique name was not provided')
@@ -991,8 +976,6 @@ def command_module_browse(event=None):
     if current_module['class'] == DEFINITION_CLASSES[0] and current_module['active']:
         if not current_module['game']:
             for change_key in current_module['changes']:
-                # if os.path.isdir(change_key.split('/')[0]):
-                #     current_path = change_key.split('/')[0]
                 change_split = change_key.split('/')
                 if os.path.isdir('/'.join(change_split[:2])) and '/'.join(change_split[1:-1]) in game_paths:
                     current_path = '/'.join((change_split[0], game_paths[game_paths.index(change_split[1])]))
@@ -1007,14 +990,6 @@ def command_module_browse(event=None):
                 current_path = f"../{current_module['game']}/aotr/data/ini/object"
             elif os.path.isdir(f"../{current_module['game']}/aotr"):
                 current_path = f"../{current_module['game']}/aotr"
-        # else:
-        #     for game_name in game_paths:
-        #         if os.path.isdir(f'../{game_name}/data/ini/object'):
-        #             current_path = f'../{game_name}/data/ini/object'
-        #             break
-        #         # elif os.path.isdir(f'../{game_name}'):
-        #         #     current_path = f'../{game_name}'
-        #         #     break
     else:
         for game_name in game_paths:
             if os.path.isdir(f'{current_path}/{game_name}/data/ini/object'):
@@ -1030,18 +1005,14 @@ def command_module_browse(event=None):
 def command_browser_back():
     """ Browses back a level in the directory hierarchy or returns to browser from file screen. """
     global current_path, key_to_command_current
-    # if current_window == 'file_editor':
-    #     warning_file_save()
     if current_window == 'text_find' or current_window == 'text_replace':
         set_window_file()
-    # if len(current_path) > len(s.LIBRARY):
     if os.path.isdir(current_path[:current_path.rfind('/')]):
         current_path = current_path[:current_path.rfind('/')]
         if main_window.focus_get() == listbox_browser:
             open_browser_item()
         else:
             set_window_browser()
-    # if len(current_path) <= len(s.LIBRARY):
     if len(current_path) <= len('..'):
         retrieve(button_menu_back)
         key_to_command_current['<BackSpace>'] = set_window_modules
@@ -1131,7 +1102,6 @@ def open_browser_item():
         text_scope_select.delete('1.0', 'end')
         text_scope_select.insert('end', current_path)
         if set_window_file():
-            # command_file_load()
             listbox_browser.selection_clear(listbox_browser.curselection())
             position(button_execute)
             set_log_update(f'opened {os.path.abspath(current_path)}')
@@ -1205,7 +1175,6 @@ def press_key_in_current_mode(event=None):
     if f'<{event.keysym}>' in key_to_command_current:
         key_to_command_current[f'<{event.keysym}>']()
     else:
-        # print(f'<{event.keysym}>')
         pass
 
 
@@ -1279,8 +1248,7 @@ key_to_command_current = {
 
 load_colors()
 initiate()
-# settings = settings_read()
-settings = s.settings_get()
+# settings = s.settings_get()
 
 main_window = tkinter.Tk()
 main_window.iconbitmap('aesthetic/icon.ico')
@@ -1303,12 +1271,10 @@ button_execute = tkinter.Button(master=container_command_buttons, text='clear lo
 text_result = tkinter.Text(master=container_command, state='disabled')
 button_menu_modules = tkinter.Button(
     master=container_command_buttons, text='modules'.upper(), command=set_window_modules)
-button_menu_back = tkinter.Button(master=container_command_buttons, text='back'.upper())  # , state='disabled'
+button_menu_back = tkinter.Button(master=container_command_buttons, text='back'.upper())
 button_menu_settings = tkinter.Button(
     master=container_command_buttons, text='edit settings'.upper(), command=set_window_settings)
 
-# button_function_duplicate = tkinter.Button(
-#     master=container_command_buttons, text='remove duplicates'.upper(), command=set_window_duplicates)
 button_function_find = tkinter.Button(
     master=container_command_buttons, text='find text'.upper(), command=set_window_find)
 button_function_replace = tkinter.Button(
@@ -1337,8 +1303,6 @@ for setting in settings:
     list_buttons_settings.append(tkinter.Button(master=container_settings, text='select'.upper()))
 
 try:
-    # list_buttons_settings[0].configure(command=lambda: settings_select_new_directory(0))
-    # list_buttons_settings[1].configure(command=lambda: settings_select_new_directory(1))
     list_buttons_settings[2].configure(command=lambda: settings_select_new_directory(2))
     list_buttons_settings[3].configure(command=lambda: settings_select_new_directory(3))
     list_buttons_settings[4].configure(command=lambda: settings_select_add_directory(4))
@@ -1386,18 +1350,6 @@ listbox_browser = tkinter.Listbox(master=container_browser, width=LIST_WIDTH, he
 listbox_browser.bind('<<ListboxSelect>>', on_select_browser_item)
 listbox_browser.bind('<Double-1>', command_browser_forward)
 
-# container_select_file = tkinter.Frame(master=container_current)
-# label_file_select = tkinter.Label(master=container_select_file, text='in file(s):')
-# button_file_select = tkinter.Button(
-#     master=container_select_file, text='select a file'.upper(), command=command_select_file)
-# text_file_select = tkinter.Text(master=container_select_file, width=TEXT_WIDTH, height=3)
-
-# container_folder_select = tkinter.Frame(master=container_current)
-# label_folder_select = tkinter.Label(master=container_folder_select, text='in folder(s):')
-# button_folder_select = tkinter.Button(
-#     master=container_folder_select, text='select a folder'.upper(), command=command_select_folder)
-# text_folder_select = tkinter.Text(master=container_folder_select, height=3)
-
 container_scope_select = tkinter.Frame(master=container_current)
 label_scope_select = tkinter.Label(master=container_scope_select, text='in file(s) or folder(s):')
 text_scope_select = tkinter.Text(master=container_scope_select)
@@ -1432,8 +1384,6 @@ containers = [
     container_browser,
     container_file_content,
     container_scope_select,
-    # container_select_file,
-    # container_folder_select,
     container_find,
     container_replace,
     container_command,
@@ -1651,76 +1601,3 @@ position(
 set_window_modules()
 main_window.protocol("WM_DELETE_WINDOW", on_app_close)
 main_window.mainloop()
-
-_all_defined = [
-    # local constants
-    UNIT_WIDTH,
-    UNIT_HEIGHT,
-    TEXT_WIDTH,
-    FULL_WIDTH,
-    LIST_WIDTH,
-    MODULE_COLUMNS,
-    # global variables
-    global_modules,
-    current_path,
-    current_levels,
-    current_file_content_backup,
-    current_window,
-    new_module_name,
-    new_module_source,
-    # constant initiating functions
-    load_font,
-    load_colors,
-    # closing handlers
-    warning_file_save,
-    on_app_close,
-    # display functions
-    clear_window,
-    # set_window_controller,
-    set_window_settings,
-    set_window_modules,
-    set_window_definition,
-    set_window_browser,
-    set_window_file,
-    set_window_move,
-    set_window_find,
-    set_window_replace,
-    # snapshot functions
-    command_snapshot_take,
-    command_snapshot_compare,
-    # settings functions
-    command_settings_save,
-    command_settings_reload,
-    # module functions
-    on_select_module_idle,
-    on_select_module_active,
-    command_module_new,
-    command_module_copy,
-    command_module_attach,
-    command_module_retrieve,
-    command_module_reload,
-    command_module_browse,
-    # definition functions
-    refresh_definitions,
-    command_definition_save,
-    # browser functions
-    command_browser_forward,
-    command_browser_back,
-    open_browser_item,
-    # text editor functions
-    command_file_load,
-    command_file_save,
-    command_text_comment,
-    command_text_uncomment,
-    set_text_color,
-    # file editor functions
-    command_run_move,
-    command_run_duplicate,
-    command_run_find,
-    command_run_replace,
-
-    dict_position,
-    coordinate,
-    position,
-    retrieve,
-]

@@ -7,9 +7,6 @@ from datetime import datetime
 import xxhash
 from glob import glob
 
-# from source.settings import settings_read, settings_save_to_file, current, INSTALL_PATH, MODULES_LIBRARY, BACKUP_FOLDER, \
-#     MODULE_TEMPLATE
-# from source.shared import PROGRAM_NAME, InternalError, LOG_PATH
 import source.shared as s
 
 
@@ -39,7 +36,6 @@ DEFINITION_CLASS_TEMPLATE = {
 }
 
 
-# 024-08-06
 class Definition(dict):
     """ A dictionary-based class with predefined keys and functions that manipulate modules. """
     def __init__(self):
@@ -54,7 +50,6 @@ class Definition(dict):
         return definition_edit(self, **key_args)
 
     def retrieve(self):
-        # if self['class'] == DEFINITION_CLASSES[0]:
         try:
             module_reverse(module_object=self, transfer='remove')
             return True
@@ -74,7 +69,6 @@ class Definition(dict):
                 return True
 
     def reload(self):
-        # if self['class'] == DEFINITION_CLASSES[0]:
         if self.retrieve():
             if self.attach():
                 return True
@@ -104,7 +98,6 @@ print_colors = {
 }
 
 
-# 024-08-30
 def log(output):
     """ Saves the given text into the main change log. """
     text = ''
@@ -130,35 +123,6 @@ def log(output):
     return output
 
 
-# def library_exceptions():
-#     """ Reads the library exceptions from the settings and returns a list of them. """
-#     settings = settings_read()
-#     exception_folders = []
-#     for folder in settings['LibraryExceptions']:
-#         if isinstance(folder, dict):
-#             exception_folders.append(folder['LibraryException'].replace('\\', '/'))
-#         elif isinstance(folder, str):
-#             exception_folders.append(folder.replace('\\', '/'))
-#     try:
-#         exception_folders.append(current(MODULE_TEMPLATE))
-#     except InternalError:
-#         pass
-#     return exception_folders
-
-
-# def game_names():
-#     """ Reads the game paths from the settings and returns a list of them. """
-#     settings = settings_read()
-#     game_names_list = []
-#     for directory in settings['GamePaths']:
-#         if 'aotr'.upper() in directory.upper():
-#             game_names_list.append('/'.join(directory.replace('\\', '/').split('/')[-2:]))
-#         else:
-#             game_names_list.append(directory.replace('\\', '/').split('/')[-1])
-#     return game_names_list
-
-
-# 024-08-06
 def definition_write(definition_object=None, module_directory=None, return_type='object', changes_source=None,
                      **key_args):
     """
@@ -256,7 +220,6 @@ def definition_write(definition_object=None, module_directory=None, return_type=
         return definition_object
 
 
-# 024-08-06
 def definition_read(definition_object=None, definition_text=None, module_name=None, module_path=None):
     """
     Reads the definition of an object and loads it into a dictionary.
@@ -304,11 +267,8 @@ def definition_read(definition_object=None, definition_text=None, module_name=No
                     else:
                         definition_object[parameter] = value
             elif '\t' in line.strip():
-                # try:
                 file_path, vector = line.strip().split('\t')
                 definition_object['changes'][file_path] = vector
-                # except:
-                #     pass
             elif line.split()[0] in DEFINITION_CLASSES:
                 definition_object['class'] = line.split()[0]
     else:
@@ -323,12 +283,10 @@ def definition_read(definition_object=None, definition_text=None, module_name=No
             except s.InternalError:
                 raise s.InternalError('Settings not loaded, saving aborted')
         else:
-            # settings_save_to_file(LibraryExceptions=module_path)
             pass
     return definition_object
 
 
-# 024-08-06
 def definition_edit(definition_object=None, module_path=None, **key_args):
     """
     Edits parameters of a Definition object
@@ -371,11 +329,9 @@ def definition_edit(definition_object=None, module_path=None, **key_args):
             definition_object[key] = key_args[key]
         else:
             print(f'key {key} not recognized')
-    # log(f'definition edited in {module_path}')
     return definition_write(definition_object, return_type='object save')
 
 
-# 024-10-08
 def detect_new_modules():
     output = ''
     library_folders = [_ for _ in os.listdir(s.LIBRARY) if _ not in s.current[s.KEY_EXCEPTIONS]]
@@ -385,7 +341,6 @@ def detect_new_modules():
     return output
 
 
-# 024-07-30
 def hash_file(file_path):
     """ Returns the hash value of a file. Non-cryptographic 128 hexadecimal hash value. """
     with open(file_path, 'rb') as file_buffer:
@@ -394,7 +349,6 @@ def hash_file(file_path):
     return hash_value
 
 
-# 024-07-29
 def hash_directory(file_or_folder, path_to_omit=''):
     """ Composes a text where every file of a given directory is listed with its hash value. """
     output = ''
@@ -436,7 +390,6 @@ def get_available_name(snapshot_directory, prefix='file_snapshot_'):
     return f'{snapshot_directory}/{prefix}{counter}.txt'
 
 
-# 024-07-30
 def snapshot_take(game_paths=None, add_paths=False, return_type='path', name=None):
     """
     Takes a snapshot of a selected directory.
@@ -459,7 +412,6 @@ def snapshot_take(game_paths=None, add_paths=False, return_type='path', name=Non
                 if s.LIBRARY in game_full_path:
                     path_to_omit += '/'.join(game_full_path.split('/')[:s.LIBRARY.count('/') + 2])
                 path_to_omit_locally = s.MAIN_DIRECTORY
-                # game_path = game_full_path[game_full_path.index(path_to_omit_locally) + len(path_to_omit_locally) +1:]
                 game_path = game_full_path[len(path_to_omit_locally):]
                 game_paths[game_paths.index('>no_path<')] = game_path
                 if add_paths:
@@ -493,7 +445,6 @@ def snapshot_take(game_paths=None, add_paths=False, return_type='path', name=Non
         return snapshot_path
 
 
-# 024-07-30
 def snapshot_compare(snap_anterior=None, snap_posterior=None, return_type='path'):
     """
     Compares two snapshots, determining which files are different, unchanged, new or removed.
@@ -574,7 +525,6 @@ def initiate_comparison(module_directory, start_module=None, changes_source='dir
     If 'snapshot', bases the changes on the difference between present files and files in the snapshot.
     :return: tuple(active, changes)
     """
-    # if start_module is None and changes_source != 'comparison' and not os.path.isdir(changes_source):
     if start_module is None and changes_source == 'directory':
         start_module = askdirectory(title=f'{s.PROGRAM_NAME}: select the game directory to define the mod',
                                     initialdir='../')
@@ -583,12 +533,8 @@ def initiate_comparison(module_directory, start_module=None, changes_source='dir
         active = False
         if os.path.isdir(changes_source):
             active = True
-            snapshot_take(  # snap_path =
+            snapshot_take(
                 game_paths=[changes_source.split('/')[-1]], return_type='path', name=changes_source.split('/')[-1])
-            # try:
-            #     os.rename(snap_path, f"{snap_path[:snap_path.rfind('_')]}_{module_directory.split('/')[-1]}.txt")
-            # except FileExistsError:
-            #     pass
             current_files = hash_directory(changes_source).split('\n')
             for new_file in current_files:
                 if len(new_file) > 0:
@@ -665,7 +611,6 @@ def initiate_comparison(module_directory, start_module=None, changes_source='dir
                 active = True
             else:
                 raise s.InternalError('snapshot not selected')
-        # if changes_source == 'directory':
         log(f'comparison generated for {module_directory}')
         return active, changes
     else:
@@ -732,12 +677,10 @@ def test_transfer(src, dst='', transfer='copy', error_sensitive=True):
                 new_src = f'{src}.bak'
                 if os.path.isfile(new_src):
                     return test_transfer(new_src, dst, transfer, error_sensitive)
-            # output += f'{err.strerror} as {err.filename}'
             if error_sensitive:
                 # TODO later: own message box - a self-explanatory one
                 do_proceed = tkinter.messagebox.askyesnocancel(
                     title=f'{s.PROGRAM_NAME}: error',
-                    # message=f'{err}\nDo you want to proceed or to cancel the module transfer'
                     message=f'{err}\n Click "Yes" to continue displaying each error and to proceed.\n'
                     'Click "No" to skip all errors and to proceed.\n Click "Cancel" to stop and revert the changes made'
                 )
@@ -765,7 +708,6 @@ def ensure_path_exists(file_path, check_path='..'):
             os.mkdir(f'{check_path}{file_path_part}')
 
 
-# 024-09-22
 def check_library(module_object):
     changes = module_object['changes']
     library_missing = False
@@ -775,7 +717,6 @@ def check_library(module_object):
     return library_missing
 
 
-# 024-07-30
 def module_reverse(module_object=None, module_name='', transfer='copy', comparison_path='', last_snapshot=None,
                    check_type='definition'):
     """
@@ -873,7 +814,7 @@ def module_reverse(module_object=None, module_name='', transfer='copy', comparis
             if value == 'unchanged':
                 pass
             elif value == 'different':
-                if transfer in TRANSFER_TYPES:  # transfer == 'copy' or transfer == 'move':
+                if transfer in TRANSFER_TYPES:
                     ensure_path_exists(file_path, f'{s.LIBRARY}/{module_name}')
                     output += test_transfer(file_path, file_path_module, transfer, error_sensitivity)
                 if transfer == 'move' or transfer == 'delete':
@@ -952,7 +893,6 @@ def module_attach(module_object=None, module_directory=None, check_type='definit
         os.mkdir(f'{s.ARCHIVE}/{module_name}')
     comparison_lines = []
     try:
-        # changes = definition_read(module_path=module_directory)['changes']
         changes = module_object['changes']
         for change_file in changes:
             comparison_lines.append(change_file.replace('\\', '/') + f'\t{changes[change_file]}\n')
@@ -1021,13 +961,10 @@ def module_copy(new_name, template_directory=None, changes_source=None):
     #             initialdir='../'
     #         )
     if not template_directory:
-        # raise InternalError('template not selected')
         return 'module_copy error: template not selected'
-    all_modules_names = modules_filter(return_type='names')  # game='all'
+    all_modules_names = modules_filter(return_type='names')
     if new_name in all_modules_names:
-        # raise InternalError('module_copy: name already in use')
         return 'module_copy error: name already in use'
-    # output = f'module_copy: {template_directory} to {new_name}'
     os.mkdir(f'{s.LIBRARY}/{new_name}')
     output = f'{new_name} created. \n'
     folders = []
@@ -1045,8 +982,6 @@ def module_copy(new_name, template_directory=None, changes_source=None):
         else:
             output += f'warning: item {item} is neither a file nor folder \n'
     if not folders and not files:
-        # copy_default(s.LIBRARY)
-        # return module_copy(new_name, template_directory)
         pass
     for folder in folders:
         if not os.path.isdir(folder):
@@ -1068,14 +1003,11 @@ def module_copy(new_name, template_directory=None, changes_source=None):
     return log(output)
 
 
-# 024-08-06
 def module_detect_changes(module_directory=None):
     """ Inspects if the files of a module have been changed and returns a text where the changes are listed. """
     changes = ''
     comparison_lines = []
     if module_directory is None:
-        # selected_file = askopenfilename(title='Lord of the mods: select a snapshot or a comparison file',
-        #                                 initialdir=module_directory)
         module_directory = askdirectory(title=f'{s.PROGRAM_NAME}: select a module directory',
                                         initialdir=s.LIBRARY)
         # TODO: lower the above code an indentation level when snapshot verification is working
@@ -1145,7 +1077,6 @@ def modules_filter(return_type='definitions', **criteria):
     return game_modules_list
 
 
-# 024-08-14
 def modules_sort(criteria='ancestor', modules=None):
     """
     Sorts the modules into a dictionary of modules names as keys and their parent as value
@@ -1169,41 +1100,3 @@ def modules_sort(criteria='ancestor', modules=None):
 
 TEST = False
 # TEST = True
-
-
-_all_defined = [
-    SNAPSHOT_DIRECTORY,
-    SNAPSHOT_COMPARISON_DIRECTORY,
-    COMPARISON_NAME,
-    DEFINITION_NAME,
-    DEFINITION_CLASSES,
-    DEFINITION_CLASS_TEMPLATE,
-    Definition,
-    DEFINITION_EXAMPLE,
-    log,
-    # library_exceptions,
-    # game_names,
-
-    definition_write,
-    definition_read,
-    definition_edit,
-
-    hash_file,
-    hash_directory,
-    get_available_name,
-    snapshot_take,
-    snapshot_compare,
-    initiate_comparison,
-
-    test_transfer,
-    ensure_path_exists,
-    check_library,
-    module_reverse,
-    module_attach,
-    module_copy,
-    module_detect_changes,
-    modules_filter,
-    modules_sort,
-
-    TEST,
-]

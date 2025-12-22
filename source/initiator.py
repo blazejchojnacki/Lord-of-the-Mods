@@ -7,8 +7,6 @@ from tkinter.filedialog import askdirectory
 from tkinter.messagebox import askyesnocancel, showerror, showwarning
 
 import source.shared
-# from source.shared import PROGRAM_NAME, InternalError, load_delimiters
-# from source.settings import settings_read, settings_save_to_file, SETTINGS_PATH
 from source.module_control import definition_write, SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARISON_DIRECTORY
 
 
@@ -21,7 +19,6 @@ if os.path.isfile('./initial/_games.json'):
     with open('./initial/_games.json') as games_buffer:
         game_list = json.load(games_buffer)
 else:
-    # raise InternalError('initial games data', 'missing')
     pass
 
 
@@ -59,9 +56,6 @@ def get_game_directory():
             try:
                 game_directories.append(search_reg(game_key['Registry'], game_key['Name']))
             except FileNotFoundError:
-                # try:
-                #     game_directories.append(search_reg('SOFTWARE', game_key['Name']))
-                # except FileNotFoundError:
                 provided_directory = askdirectory(
                     title=f"{source.shared.PROGRAM_NAME}: please select {game_key['Name']} directory (or create one)",
                     initialdir='../')
@@ -171,7 +165,6 @@ def initiate():
         elif use_default_paths is None:
             cancel_initiation()
         copy_default(directories_dict['library'])
-        # settings_save_to_file(
         source.shared.settings_set(
             do_initiate=True,
             settings_dict={
@@ -188,11 +181,6 @@ def initiate():
             os.mkdir(SNAPSHOT_COMPARISON_DIRECTORY)
         for game_path in game_paths_list:
             try:
-                # module_copy(new_name=game_path.split('/')[-1],
-                #             template_directory=f"{directories_dict['library']}/__empty template",
-                #             changes_source=game_path)
-                # definition_edit(module_path=f"{directories_dict['library']}/{game_path.split('/')[-1]}",
-                #                 description=f"Initial {game_path.split('/')[-1]} - created automatically")
                 if not os.path.isdir(f"{directories_dict['library']}/{game_path.split('/')[-1]}"):
                     os.mkdir(f"{directories_dict['library']}/{game_path.split('/')[-1]}")
                 definition_write(module_directory=f"{directories_dict['library']}/{game_path.split('/')[-1]}",
@@ -201,18 +189,6 @@ def initiate():
             except source.shared.InternalError:
                 pass
     else:
-        # settings_read('initiate')
         source.shared.settings_get('initiate')
     ensure_game_options()
-    # source.shared.load_delimiters()
     initiator.destroy()
-
-
-# _all_defined = [
-#     # initiate_game_data,
-#     search_reg,
-#     get_game_directory,
-#     ensure_game_options,
-#     cancel_initiation,
-#     initiate,
-# ]
