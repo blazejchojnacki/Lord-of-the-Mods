@@ -1,0 +1,22 @@
+{
+  "APP_BACKGROUND_COLOR": "#303840",
+  "ENTRY_BACKGROUND_COLOR": "#292F36",
+  "TEXT_COLORS": [
+    "#C9AB69",
+    "#757364",
+    "#ABA298",
+    "#484D43"
+  ],
+  "INI_LEVEL_COLORS":[
+    "#81B895",
+    "#7B9AAB",
+    "#8C7EAB",
+    "#AB7D8C",
+    "#7DAB9B"
+  ],
+  "FONT_FILE_NAME": "Albertus MT Light.ttf",
+  "FONT_NAME": "Albertus MT Light",
+  "FONT_SIZE_TEXT": 11,
+  "FONT_SIZE_BUTTON": 10,
+  "FONT_TYPE": "normal"
+}

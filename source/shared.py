@@ -3,7 +3,7 @@ import json
 import inspect
 import tkinter
 import _tkinter
-
+from ctypes import windll, byref, sizeof, c_int, create_unicode_buffer
 
 PROGRAM_NAME = 'Lord of the Mods'
 MAIN_DIRECTORY = os.path.abspath('..').replace('\\', '/')
@@ -91,7 +91,7 @@ class InternalWarning(Warning):
 
 # # # load delimiters
 for delimiter_path in ['./_delimiters_ini.json', './_delimiters_str.json']:
-    if os.path.isfile(delimiter_path or f".{delimiter_path}"):
+    if os.path.isfile(delimiter_path) or os.path.isfile(f".{delimiter_path}"):
         if os.path.isfile(f".{delimiter_path}"):
             delimiter_path = f".{delimiter_path}"
         with open(delimiter_path) as delimiters_buffer:
@@ -261,3 +261,45 @@ class ReactiveButton(tkinter.Button):
                     self.configure(**{setting: settings[setting]})
                 except _tkinter.TclError:
                     print(f'button.set: unrecognized key {setting}')
+
+
+def set_title_bar_color(window):
+    """based on https://stackoverflow.com/questions/67444141/how-to-change-the-title-bar-in-tkinter"""
+    window.update()
+    hwnd = windll.user32.GetParent(window.winfo_id())
+    dwmwa_caption_color = 35
+    color_r = int(APP_BACKGROUND_COLOR[1:3], base=16)
+    color_g = int(APP_BACKGROUND_COLOR[3:5], base=16)
+    color_b = int(APP_BACKGROUND_COLOR[5:7], base=16)
+    reformatted_color = color_b * 16 ** 4 + color_g * 16 ** 2 + color_r
+    windll.dwmapi.DwmSetWindowAttribute(hwnd, dwmwa_caption_color, byref(c_int(reformatted_color)), sizeof(c_int))
+
+
+def load_aesthetic():
+    """
+    Loads the aesthetic variables from the .json file into the application.
+    """
+    global APP_BACKGROUND_COLOR, ENTRY_BACKGROUND_COLOR, TEXT_COLORS, INI_LEVEL_COLORS, FONT_TEXT, FONT_BUTTON, \
+        BUTTON_SMALL_IDLE, BUTTON_SMALL_HOVER, BUTTON_LARGE_IDLE, BUTTON_LARGE_HOVER
+    if os.path.isfile('./aesthetic/aesthetic.json'):
+        with open('./aesthetic/aesthetic.json') as aesthetic_buffer:
+            aesthetic_json = json.load(aesthetic_buffer)
+        APP_BACKGROUND_COLOR = aesthetic_json["APP_BACKGROUND_COLOR"]
+        ENTRY_BACKGROUND_COLOR = aesthetic_json["ENTRY_BACKGROUND_COLOR"]
+        TEXT_COLORS = aesthetic_json["TEXT_COLORS"]
+        INI_LEVEL_COLORS = aesthetic_json["INI_LEVEL_COLORS"]
+        BUTTON_SMALL_IDLE = tkinter.PhotoImage(file='./aesthetic/button_small_idle.png')
+        BUTTON_SMALL_HOVER = tkinter.PhotoImage(file='./aesthetic/button_small_hover.png')
+        BUTTON_LARGE_IDLE = tkinter.PhotoImage(file='./aesthetic/button_large_idle.png')
+        BUTTON_LARGE_HOVER = tkinter.PhotoImage(file='./aesthetic/button_large_hover.png')
+        font_path = f'./aesthetic/{aesthetic_json["FONT_FILE_NAME"]}'
+        '''based on https://stackoverflow.com/questions/11993290/truly-custom-font-in-tkinter'''
+        # https://github.com/ifwe/digsby/blob/f5fe00244744aa131e07f09348d10563f3d8fa99/digsby/src/gui/native/win/winfonts.py#L15
+        if os.path.isfile(font_path):
+            path_buf = create_unicode_buffer(font_path)
+            flags = (0x10 | 0)
+            num_fonts_added = windll.gdi32.AddFontResourceExW(byref(path_buf), flags, 0)
+            if num_fonts_added:
+                FONT_TEXT = (aesthetic_json["FONT_NAME"], aesthetic_json["FONT_SIZE_TEXT"], aesthetic_json["FONT_TYPE"])
+                FONT_BUTTON = (aesthetic_json["FONT_NAME"], aesthetic_json["FONT_SIZE_BUTTON"],
+                               aesthetic_json["FONT_TYPE"])

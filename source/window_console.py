@@ -5,7 +5,6 @@ from tkinter.messagebox import askquestion
 from tkinter.filedialog import askopenfilenames, askdirectory
 from tkinter.ttk import Treeview
 from tklinenums import TkLineNumbers
-from ctypes import windll, byref, create_unicode_buffer, sizeof, c_int
 
 import source.shared as s
 from source.initiator import initiate
@@ -39,56 +38,56 @@ class NewModuleDialog(tkinter.Toplevel):
         self.iconbitmap('aesthetic/icon.ico')
         self.geometry('320x360')
         self.resizable(False, False)
-        self.configure(background=APP_BACKGROUND_COLOR)
-        set_title_bar_color(self)
+        self.configure(background=s.APP_BACKGROUND_COLOR)
+        s.set_title_bar_color(self)
 
         self.name_label = tkinter.Label(master=self)
         self.name_label.place(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT*0, width=UNIT_WIDTH * 4, height=UNIT_HEIGHT)
         self.name_label.configure(
-            background=ENTRY_BACKGROUND_COLOR, foreground=TEXT_COLORS[0], text='Please provide the new module name')
+            background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0], text='Please provide the new module name')
         self.name_entry = tkinter.Entry(master=self)
         self.name_entry.place(x=int(UNIT_WIDTH*0.5), y=UNIT_HEIGHT * 1, width=UNIT_WIDTH * 3, height=UNIT_HEIGHT)
-        self.name_entry.configure(background=ENTRY_BACKGROUND_COLOR, foreground=TEXT_COLORS[0])
+        self.name_entry.configure(background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0])
         self.options_label = tkinter.Label(master=self)
         self.options_label.place(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT * 3, width=UNIT_WIDTH * 4, height=UNIT_HEIGHT)
         self.options_label.configure(
-            background=ENTRY_BACKGROUND_COLOR, foreground=TEXT_COLORS[0],
+            background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0],
             text='Please choose the definition creation mode')
         self.options_container = tkinter.Frame(master=self)
         self.options_container.place(x=int(UNIT_WIDTH*0.5), y=UNIT_HEIGHT*4, width=UNIT_WIDTH*3, height=UNIT_HEIGHT*3)
-        self.options_container.configure(background=ENTRY_BACKGROUND_COLOR)
+        self.options_container.configure(background=s.ENTRY_BACKGROUND_COLOR)
         self.variable_option = tkinter.StringVar()
         option_button_a = tkinter.Checkbutton(
             master=self.options_container, text='present directory', variable=self.variable_option, onvalue='directory')
         option_button_a.place(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT * 0, width=2 * UNIT_WIDTH, height=UNIT_HEIGHT)
-        option_button_a.configure(background=ENTRY_BACKGROUND_COLOR, foreground=TEXT_COLORS[0],
-                                  activebackground=APP_BACKGROUND_COLOR, activeforeground=TEXT_COLORS[0],
-                                  selectcolor=ENTRY_BACKGROUND_COLOR)
+        option_button_a.configure(background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0],
+                                  activebackground=s.APP_BACKGROUND_COLOR, activeforeground=s.TEXT_COLORS[0],
+                                  selectcolor=s.ENTRY_BACKGROUND_COLOR)
         option_button_b = tkinter.Checkbutton(
             master=self.options_container, text='comparison', variable=self.variable_option, onvalue='comparison')
         option_button_b.place(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT * 1, width=2 * UNIT_WIDTH, height=UNIT_HEIGHT)
-        option_button_b.configure(background=ENTRY_BACKGROUND_COLOR, foreground=TEXT_COLORS[0],
-                                  activebackground=APP_BACKGROUND_COLOR, activeforeground=TEXT_COLORS[0],
-                                  selectcolor=ENTRY_BACKGROUND_COLOR)
+        option_button_b.configure(background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0],
+                                  activebackground=s.APP_BACKGROUND_COLOR, activeforeground=s.TEXT_COLORS[0],
+                                  selectcolor=s.ENTRY_BACKGROUND_COLOR)
         option_button_c = tkinter.Checkbutton(
             master=self.options_container, text='snapshot', variable=self.variable_option, onvalue='snapshot')
         option_button_c.place(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT * 2, width=2 * UNIT_WIDTH, height=UNIT_HEIGHT)
         option_button_c.configure(
-            background=ENTRY_BACKGROUND_COLOR, foreground=TEXT_COLORS[0], selectcolor=ENTRY_BACKGROUND_COLOR,
-            activebackground=APP_BACKGROUND_COLOR, activeforeground=TEXT_COLORS[0])
+            background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0], selectcolor=s.ENTRY_BACKGROUND_COLOR,
+            activebackground=s.APP_BACKGROUND_COLOR, activeforeground=s.TEXT_COLORS[0])
         option_button_a.select()
 
         self.ok_button = s.ReactiveButton(master=self, text='run', command=self.return_entry)
         self.ok_button.place(x=int(UNIT_WIDTH*0.5), y=int(UNIT_HEIGHT * 7.5), width=UNIT_WIDTH, height=UNIT_HEIGHT)
         self.ok_button.configure(
-            background=APP_BACKGROUND_COLOR, foreground=TEXT_COLORS[0], image=image_button_small_idle,
-            activebackground=APP_BACKGROUND_COLOR, borderwidth=0, compound='center'
+            background=s.APP_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0], image=image_button_small_idle,
+            activebackground=s.APP_BACKGROUND_COLOR, borderwidth=0, compound='center'
         )
         self.cancel_button = s.ReactiveButton(master=self, text='cancel', command=self.return_cancel)
         self.cancel_button.place(x=int(UNIT_WIDTH*2.5), y=int(UNIT_HEIGHT*7.5), width=UNIT_WIDTH, height=UNIT_HEIGHT)
         self.cancel_button.configure(
-            background=APP_BACKGROUND_COLOR, foreground=TEXT_COLORS[0], image=image_button_small_idle,
-            activebackground=APP_BACKGROUND_COLOR, borderwidth=0, compound='center'
+            background=s.APP_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0], image=image_button_small_idle,
+            activebackground=s.APP_BACKGROUND_COLOR, borderwidth=0, compound='center'
         )
         self.protocol("WM_DELETE_WINDOW", self.return_cancel)
         self.mainloop()
@@ -109,18 +108,6 @@ class NewModuleDialog(tkinter.Toplevel):
         new_module_name, new_module_source = '', ''
         self.quit()
         self.destroy()
-
-
-def set_title_bar_color(window):
-    """based on https://stackoverflow.com/questions/67444141/how-to-change-the-title-bar-in-tkinter"""
-    window.update()
-    hwnd = windll.user32.GetParent(window.winfo_id())
-    dwmwa_caption_color = 35
-    color_r = int(APP_BACKGROUND_COLOR[1:3], base=16)
-    color_g = int(APP_BACKGROUND_COLOR[3:5], base=16)
-    color_b = int(APP_BACKGROUND_COLOR[5:7], base=16)
-    reformatted_color = color_b * 16 ** 4 + color_g * 16 ** 2 + color_r
-    windll.dwmapi.DwmSetWindowAttribute(hwnd, dwmwa_caption_color, byref(c_int(reformatted_color)), sizeof(c_int))
 
 
 class ColumnedListbox(tkinter.ttk.Treeview):
@@ -165,58 +152,6 @@ def open_children(tree, parent):
             open_children(tree, child)
     except _tkinter.TclError:
         pass
-
-
-def load_font(font_path):
-    """
-    Loads the given font into the application.
-    :param font_path: path to the font.
-    :return: True if the font has been loaded. False otherwise.
-    """
-    '''based on https://stackoverflow.com/questions/11993290/truly-custom-font-in-tkinter'''
-    # https://github.com/ifwe/digsby/blob/f5fe00244744aa131e07f09348d10563f3d8fa99/digsby/src/gui/native/win/winfonts.py#L15
-    if os.path.isfile(font_path):
-        path_buf = create_unicode_buffer(font_path)
-        flags = (0x10 | 0)
-        num_fonts_added = windll.gdi32.AddFontResourceExW(byref(path_buf), flags, 0)
-        return bool(num_fonts_added)
-    else:
-        return False
-
-
-if load_font('./aesthetic/Albertus MT Light.ttf'):
-    FONT_TEXT = ('Albertus MT Light', 11, 'normal')
-    FONT_BUTTON = ('Albertus MT Light', 10, 'normal')
-else:
-    FONT_TEXT = ('Lato', 11, 'normal')
-    FONT_BUTTON = ('Lato', 11, 'normal')
-
-APP_BACKGROUND_COLOR = 'grey'
-ENTRY_BACKGROUND_COLOR = 'gray'
-TEXT_COLORS = ['black', 'blue', 'purple', 'violet']
-INI_LEVEL_COLORS = ['red', 'orange', 'yellow', 'green', 'turquoise']
-
-
-def load_colors():
-    """ Loads colors from colors.ini into application constants. """
-    global APP_BACKGROUND_COLOR, ENTRY_BACKGROUND_COLOR, TEXT_COLORS, INI_LEVEL_COLORS
-    TEXT_COLORS.clear()
-    INI_LEVEL_COLORS.clear()
-    if os.path.isfile('./aesthetic/colors.ini'):
-        with open('./aesthetic/colors.ini') as colors_buffer:
-            colors_lines = colors_buffer.readlines()
-        for line in colors_lines:
-            if ' =' in line.strip():
-                if ' = ' in line.strip():
-                    color_key, value = line.strip().split(' = ')
-                    if color_key == 'APP_BACKGROUND_COLOR':
-                        APP_BACKGROUND_COLOR = value
-                    elif color_key == 'ENTRY_BACKGROUND_COLOR':
-                        ENTRY_BACKGROUND_COLOR = value
-                    elif 'TEXT_COLOR' in color_key:
-                        TEXT_COLORS.append(value)
-                    elif 'LEVEL_COLOR' in color_key:
-                        INI_LEVEL_COLORS.append(value)
 
 
 def warning_file_save():
@@ -581,7 +516,7 @@ def set_text_color(event=None):
         text_file_content.tag_config('comment', foreground='grey')
         if rest_of_line:
             level = rest_of_line.rstrip().count(s.LEVEL_INDENT)
-            text_file_content.tag_config(f'level{level}', foreground=INI_LEVEL_COLORS[level])
+            text_file_content.tag_config(f'level{level}', foreground=s.INI_LEVEL_COLORS[level])
             if rest_of_line.split()[0].strip() in current_levels[level]:
                 text_file_content.tag_add(f'level{level}', f'{line_index}.0',
                                           f'{line_index}.{len(rest_of_line)}')
@@ -1071,13 +1006,13 @@ def open_browser_item():
             item_index = 0
             for output_folder in output_folders:
                 listbox_browser.insert(item_index, output_folder)
-                listbox_browser.itemconfig(item_index, foreground=INI_LEVEL_COLORS[1])
+                listbox_browser.itemconfig(item_index, foreground=s.INI_LEVEL_COLORS[1])
                 item_index += 1
             for output_file in output_files:
                 listbox_browser.insert(item_index, output_file)
                 listbox_browser.itemconfig(
                     item_index,
-                    foreground=INI_LEVEL_COLORS[3] if output_file.endswith('.ini') else INI_LEVEL_COLORS[2]
+                    foreground=s.INI_LEVEL_COLORS[3] if output_file.endswith('.ini') else s.INI_LEVEL_COLORS[2]
                 )
                 item_index += 1
             listbox_browser.activate(0)
@@ -1241,9 +1176,8 @@ key_to_command_current = {
 }
 
 
-load_colors()
 initiate()
-# settings = s.settings_get()
+settings = s.settings_get()
 
 main_window = tkinter.Tk()
 main_window.iconbitmap('aesthetic/icon.ico')
@@ -1251,11 +1185,15 @@ main_window.title(s.PROGRAM_NAME)
 main_window.minsize(width=1100, height=400)
 main_window.maxsize(width=1600, height=900)
 main_window.geometry('1250x650')
-main_window.configure(padx=10, pady=10, background=APP_BACKGROUND_COLOR)
+main_window.configure(padx=10, pady=10, background=s.APP_BACKGROUND_COLOR)
 main_window.bind('<Key>', press_key_in_current_mode)
 main_window.bind_all('<Control-Key-f>', use_selected_text)
 main_window.bind_all('<Control-Key-r>', use_selected_text)
-set_title_bar_color(main_window)
+s.set_title_bar_color(main_window)
+s.main_window = main_window
+s.current_info = tkinter.Toplevel(master=main_window)
+s.current_info.destroy()
+s.load_aesthetic()
 
 # TODO later: loading screen
 
@@ -1458,48 +1396,48 @@ try:
     # image_button_large_pressed = tkinter.PhotoImage(file=r'aesthetic\rotwk_button_large_pressed.png')
     for button in small_buttons:
         button.configure(
-            image=image_button_small_idle, compound='center', foreground=TEXT_COLORS[0], font=FONT_BUTTON,
-            border=0, background=APP_BACKGROUND_COLOR, activebackground=APP_BACKGROUND_COLOR)
+            image=image_button_small_idle, compound='center', foreground=s.TEXT_COLORS[0], font=s.FONT_BUTTON,
+            border=0, background=s.APP_BACKGROUND_COLOR, activebackground=s.APP_BACKGROUND_COLOR)
     for button in large_buttons:
         button.configure(
-            image=image_button_large_idle, compound='center', foreground=TEXT_COLORS[0], font=FONT_BUTTON,
-            border=0, background=APP_BACKGROUND_COLOR, activebackground=APP_BACKGROUND_COLOR)
+            image=image_button_large_idle, compound='center', foreground=s.TEXT_COLORS[0], font=s.FONT_BUTTON,
+            border=0, background=s.APP_BACKGROUND_COLOR, activebackground=s.APP_BACKGROUND_COLOR)
 except _tkinter.TclError:
     for button in small_buttons:
         button.configure(
-            foreground=TEXT_COLORS[0], font=FONT_BUTTON,
-            border=1, background=APP_BACKGROUND_COLOR, activebackground=APP_BACKGROUND_COLOR)
+            foreground=s.TEXT_COLORS[0], font=s.FONT_BUTTON,
+            border=1, background=s.APP_BACKGROUND_COLOR, activebackground=s.APP_BACKGROUND_COLOR)
     for button in large_buttons:
         button.configure(
-            foreground=TEXT_COLORS[0], font=FONT_BUTTON,
-            border=1, background=APP_BACKGROUND_COLOR, activebackground=APP_BACKGROUND_COLOR)
+            foreground=s.TEXT_COLORS[0], font=s.FONT_BUTTON,
+            border=1, background=s.APP_BACKGROUND_COLOR, activebackground=s.APP_BACKGROUND_COLOR)
 
 for container in containers:
-    container.configure(background=APP_BACKGROUND_COLOR)
+    container.configure(background=s.APP_BACKGROUND_COLOR)
 for label in labels:
-    label.configure(background=APP_BACKGROUND_COLOR, foreground=TEXT_COLORS[0], font=FONT_TEXT)
+    label.configure(background=s.APP_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0], font=s.FONT_TEXT)
 for text in texts:
     text.configure(
-        foreground=TEXT_COLORS[0], font=FONT_TEXT, selectforeground=TEXT_COLORS[-1],
-        background=ENTRY_BACKGROUND_COLOR, selectbackground=TEXT_COLORS[0])
+        foreground=s.TEXT_COLORS[0], font=s.FONT_TEXT, selectforeground=s.TEXT_COLORS[-1],
+        background=s.ENTRY_BACKGROUND_COLOR, selectbackground=s.TEXT_COLORS[0])
 for entry in entries:
     entry.configure(
-        background=ENTRY_BACKGROUND_COLOR, foreground=TEXT_COLORS[0], font=FONT_TEXT,
-        selectbackground=TEXT_COLORS[0], selectforeground=TEXT_COLORS[-1],
-        disabledbackground=ENTRY_BACKGROUND_COLOR, disabledforeground=TEXT_COLORS[0])
-text_result.configure(foreground=TEXT_COLORS[1])
+        background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0], font=s.FONT_TEXT,
+        selectbackground=s.TEXT_COLORS[0], selectforeground=s.TEXT_COLORS[-1],
+        disabledbackground=s.ENTRY_BACKGROUND_COLOR, disabledforeground=s.TEXT_COLORS[0])
+text_result.configure(foreground=s.TEXT_COLORS[1])
 listbox_browser.configure(
-    background=ENTRY_BACKGROUND_COLOR, foreground=TEXT_COLORS[0], font=FONT_TEXT,
-    selectbackground=TEXT_COLORS[0], selectforeground=TEXT_COLORS[-1])
+    background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0], font=s.FONT_TEXT,
+    selectbackground=s.TEXT_COLORS[0], selectforeground=s.TEXT_COLORS[-1])
 current_style = tkinter.ttk.Style(master=main_window)
 current_style.theme_use('clam')
 tkinter.ttk.Style().configure(
-    '.', width=UNIT_WIDTH * 2, font=FONT_TEXT, foreground=TEXT_COLORS[0], background=ENTRY_BACKGROUND_COLOR)
+    '.', width=UNIT_WIDTH * 2, font=s.FONT_TEXT, foreground=s.TEXT_COLORS[0], background=s.ENTRY_BACKGROUND_COLOR)
 tkinter.ttk.Style().configure(
-    'Treeview', background=ENTRY_BACKGROUND_COLOR, fieldbackground=ENTRY_BACKGROUND_COLOR, fieldbw=0,
-    selectbackground=TEXT_COLORS[0], selectforeground=TEXT_COLORS[-1])
+    'Treeview', background=s.ENTRY_BACKGROUND_COLOR, fieldbackground=s.ENTRY_BACKGROUND_COLOR, fieldbw=0,
+    selectbackground=s.TEXT_COLORS[0], selectforeground=s.TEXT_COLORS[-1])
 tkinter.ttk.Style().configure(
-    'Treeview.Heading', borderwidth=0, overbackground=TEXT_COLORS[0], overforeground=TEXT_COLORS[-1])
+    'Treeview.Heading', borderwidth=0, overbackground=s.TEXT_COLORS[0], overforeground=s.TEXT_COLORS[-1])
 
 for index in range(len(settings) - 1):
     list_labels_settings[index].place(x=0, y=UNIT_HEIGHT * index, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT)
@@ -1596,3 +1534,4 @@ position(
 set_window_modules()
 main_window.protocol("WM_DELETE_WINDOW", on_app_close)
 main_window.mainloop()
+
