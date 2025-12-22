@@ -44,15 +44,15 @@ INI_ENDS = ['End', 'END', 'EndScript']
 INI_DELIMITERS = []
 STR_DELIMITERS = []
 
-
-def load_delimiters():
-    global INI_DELIMITERS, STR_DELIMITERS
-    if os.path.isfile('./_delimiters_ini.json'):
-        with open('./_delimiters_ini.json') as delimiters_buffer:
-            INI_DELIMITERS = json.load(delimiters_buffer)
-    if os.path.isfile('./_delimiters_str.json'):
-        with open('./_delimiters_str.json') as delimiters_buffer:
-            STR_DELIMITERS = json.load(delimiters_buffer)
-
-
-load_delimiters()
+# # # load delimiters
+for delimiter_path in ['./_delimiters_ini.json', './_delimiters_str.json']:
+    if os.path.isfile(delimiter_path or f".{delimiter_path}"):
+        if os.path.isfile(f".{delimiter_path}"):
+            delimiter_path = f".{delimiter_path}"
+        with open(delimiter_path) as delimiters_buffer:
+            if '_ini' in delimiter_path:
+                INI_DELIMITERS = json.load(delimiters_buffer)
+            elif '_str' in delimiter_path:
+                STR_DELIMITERS = json.load(delimiters_buffer)
+    else:
+        raise InternalError("delimiters files not found")

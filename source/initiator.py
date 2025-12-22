@@ -5,15 +5,12 @@ import winreg
 import json
 from tkinter.filedialog import askdirectory
 from tkinter.messagebox import askyesnocancel, showerror, showwarning
-from sys import exit
 
-from source.shared import PROGRAM_NAME, InternalError, load_delimiters
+import source.shared
+# from source.shared import PROGRAM_NAME, InternalError, load_delimiters
 from source.settings import settings_read, settings_save_to_file, SETTINGS_PATH
 from source.module_control import definition_write, SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARISON_DIRECTORY
 
-# import PyInstaller
-#
-# PyInstaller.PYINSTALLER_SUPPRESS_SPLASH_SCREEN = 1
 
 default_folders_dict = {
     'library': './_LIBRARY',
@@ -66,14 +63,14 @@ def get_game_directory():
                 #     game_directories.append(search_reg('SOFTWARE', game_key['Name']))
                 # except FileNotFoundError:
                 provided_directory = askdirectory(
-                    title=f"{PROGRAM_NAME}: please select {game_key['Name']} directory (or create one)",
+                    title=f"{source.shared.PROGRAM_NAME}: please select {game_key['Name']} directory (or create one)",
                     initialdir='../')
                 if provided_directory:
                     game_directories.append(provided_directory)
                 else:
                     cancel_initiation()
     except NameError:
-        raise InternalError
+        raise source.shared.InternalError
     for game_index in range(len(game_directories)):
         if os.path.isdir(game_directories[game_index]):
             game_directories[game_index] = os.path.relpath(game_directories[game_index]).replace('\\', '/')
@@ -101,7 +98,7 @@ def ensure_game_options():
 def cancel_initiation():
     """ Triggered when the directories are not provided to terminate the window. """
     showerror(
-        title=f'{PROGRAM_NAME} initiator: Error',
+        title=f'{source.shared.PROGRAM_NAME} initiator: Error',
         message='The program cannot function properly without the appropriate settings\n Please try again'
     )
     exit()
@@ -136,7 +133,7 @@ def initiate():
     """ Initiates the application settings by asking for directories needed by the application. """
     initiator = tkinter.Tk()
     initiator.iconbitmap('aesthetic/icon.ico')
-    initiator.title(f'{PROGRAM_NAME} initiator')
+    initiator.title(f'{source.shared.PROGRAM_NAME} initiator')
     initiator.minsize(width=500, height=200)
     initiator_label = tkinter.Label(master=initiator, text='Looking for game paths. Please wait...')
     initiator_label.pack()
@@ -144,13 +141,13 @@ def initiate():
     if not os.path.isfile(SETTINGS_PATH):
         try:
             game_paths_list = get_game_directory()
-        except InternalError:
+        except source.shared.InternalError:
             game_paths_list = []
         directories_dict = {}
         initiator_label.configure(text='Initiating functional directories.')
         initiator.update()
         use_default_paths = askyesnocancel(
-            title=f'{PROGRAM_NAME} initiator:',
+            title=f'{source.shared.PROGRAM_NAME} initiator:',
             message=f'Use default functional folder names? If not, you can choose your own.'
         )
         if use_default_paths is True:
@@ -159,14 +156,14 @@ def initiate():
         if use_default_paths is False:
             for key in default_folders_dict:
                 evaluated_string = askdirectory(
-                    title=f'{PROGRAM_NAME} initiator: Please select the module {key} directory\n',
+                    title=f'{source.shared.PROGRAM_NAME} initiator: Please select the module {key} directory\n',
                     initialdir='./'
                 )
                 if os.path.isdir(evaluated_string):
                     directories_dict[key] = os.path.relpath(evaluated_string).replace('\\', '/')
                 else:
                     showwarning(
-                        title=f'{PROGRAM_NAME} initiator: ',
+                        title=f'{source.shared.PROGRAM_NAME} initiator: ',
                         message=f'The provided name is empty.\n'
                                 f' The default value will be applied'
                     )
@@ -199,22 +196,20 @@ def initiate():
                 definition_write(module_directory=f"{directories_dict['library']}/{game_path.split('/')[-1]}",
                                  return_type='object save', changes_source=game_path,
                                  description=f"Initial {game_path.split('/')[-1]} - created automatically")
-            except InternalError:
+            except source.shared.InternalError:
                 pass
     else:
         settings_read('initiate')
-        # pass
-    # process_constants()
     ensure_game_options()
-    load_delimiters()
+    # source.shared.load_delimiters()
     initiator.destroy()
 
 
-_all_defined = [
-    # initiate_game_data,
-    search_reg,
-    get_game_directory,
-    ensure_game_options,
-    cancel_initiation,
-    initiate,
-]
+# _all_defined = [
+#     # initiate_game_data,
+#     search_reg,
+#     get_game_directory,
+#     ensure_game_options,
+#     cancel_initiation,
+#     initiate,
+# ]
