@@ -1,6 +1,8 @@
 import os.path
 import json
 import inspect
+import tkinter
+import _tkinter
 
 
 PROGRAM_NAME = 'Lord of the Mods'
@@ -31,6 +33,28 @@ _SETTINGS_FORMAT = {
     KEY_GAMES: [],
     KEY_EXCEPTIONS: []
 }
+
+UNIT_WIDTH = 80
+UNIT_HEIGHT = 40
+DOUBLE_WIDTH = UNIT_WIDTH * 2
+TEXT_WIDTH = UNIT_WIDTH * 12
+FULL_WIDTH = UNIT_WIDTH * 15
+
+# # # default aesthetic
+FONT_TEXT = ('Lato', 11, 'normal')
+FONT_BUTTON = ('Lato', 11, 'normal')
+APP_BACKGROUND_COLOR = "#303840"
+ENTRY_BACKGROUND_COLOR = "#292F36"
+TEXT_COLORS = ["#C9AB69", "#757364", "#ABA298", "#484D43"]
+INI_LEVEL_COLORS = ["#81B895", "#7B9AAB", "#8C7EAB", "#AB7D8C", "#7DAB9B"]
+BUTTON_SMALL_IDLE = None  # tkinter.PhotoImage(file='./aesthetic/button_small_idle.png')
+BUTTON_SMALL_HOVER = None  # tkinter.PhotoImage(file='./aesthetic/button_small_hover.png')
+BUTTON_LARGE_IDLE = None  # tkinter.PhotoImage(file='./aesthetic/button_large_idle.png')
+BUTTON_LARGE_HOVER = None  # tkinter.PhotoImage(file='./aesthetic/button_large_hover.png')
+
+# # # global variable
+current_info: tkinter.Toplevel
+main_window: tkinter.Tk
 
 
 def this_module():
@@ -166,3 +190,74 @@ def settings_set(settings_dict=None, do_initiate: bool = False, new_settings=Non
         return True
     except InternalError:
         return False
+
+
+class ReactiveButton(tkinter.Button):
+    """
+    tkinter Button but changing its image on hovering and with showing an info popup on its master Window
+    """
+    def __init__(self, info_content='', small=False, **kwargs):
+        super().__init__(**kwargs)
+        if small:
+            self.default_image = BUTTON_SMALL_IDLE
+            self.active_image = BUTTON_SMALL_HOVER
+        else:
+            self.default_image = BUTTON_LARGE_IDLE
+            self.active_image = BUTTON_LARGE_HOVER
+        self.bind('<Enter>', self.on_hover)
+        self.bind('<Leave>', self.out_hover)
+        self.info_content = info_content
+        self.info_id = ''
+        self.super_master = main_window
+        self.info = current_info
+        self.configure(image=self.default_image, background=APP_BACKGROUND_COLOR)
+
+    def on_hover(self, event=None):
+        if event:
+            pass
+        self.configure(image=self.active_image, background=ENTRY_BACKGROUND_COLOR)
+        self.info_id = self.super_master.after(1000, self.display_info)
+
+    def out_hover(self, event=None):
+        if event:
+            pass
+        self.configure(image=self.default_image, background=APP_BACKGROUND_COLOR)
+        try:
+            self.super_master.after_cancel(self.info_id)
+            try:
+                self.info.destroy()
+            except NameError:
+                pass
+        except AttributeError:
+            pass
+
+    def display_info(self):
+        if self.info_content:
+            info_box = tkinter.Toplevel(master=self.super_master)
+            try:
+                self.info.destroy()
+            except NameError:
+                pass
+            self.info = info_box
+            info_box.winfo_x()
+            info_box.overrideredirect(True)
+            info_box.attributes('-topmost', True)
+            info_box.configure(background=APP_BACKGROUND_COLOR, relief='ridge', borderwidth=5, padx=5, pady=5)
+            info_text = tkinter.Label(master=info_box, text=self.info_content)
+            info_text.pack()
+            info_text.configure(background=APP_BACKGROUND_COLOR, foreground=TEXT_COLORS[0])
+            cursor_x = self.super_master.winfo_pointerx()
+            cursor_y = self.super_master.winfo_pointery()
+            info_box.geometry(f'+{cursor_x}+{cursor_y - info_text.winfo_height() * UNIT_HEIGHT - 10}')
+
+    def set(self, settings):
+        for setting in settings:
+            if setting == 'text':
+                self.configure(**{setting: settings[setting].upper()})
+            elif setting == 'info_content':
+                self.info_content = settings[setting]
+            else:
+                try:
+                    self.configure(**{setting: settings[setting]})
+                except _tkinter.TclError:
+                    print(f'button.set: unrecognized key {setting}')

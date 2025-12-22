@@ -31,11 +31,6 @@ new_module_name = ''
 new_module_source = ''
 
 
-# TODO later: class ReactiveButton that reacts to hover and press through binding and shows info on hover
-class ReactiveButton(tkinter.Button):
-    pass
-
-
 class NewModuleDialog(tkinter.Toplevel):
     """ a Tk/TCl Toplevel-based class """
     def __init__(self, **kw):
@@ -83,13 +78,13 @@ class NewModuleDialog(tkinter.Toplevel):
             activebackground=APP_BACKGROUND_COLOR, activeforeground=TEXT_COLORS[0])
         option_button_a.select()
 
-        self.ok_button = tkinter.Button(master=self, text='run', command=self.return_entry)
+        self.ok_button = s.ReactiveButton(master=self, text='run', command=self.return_entry)
         self.ok_button.place(x=int(UNIT_WIDTH*0.5), y=int(UNIT_HEIGHT * 7.5), width=UNIT_WIDTH, height=UNIT_HEIGHT)
         self.ok_button.configure(
             background=APP_BACKGROUND_COLOR, foreground=TEXT_COLORS[0], image=image_button_small_idle,
             activebackground=APP_BACKGROUND_COLOR, borderwidth=0, compound='center'
         )
-        self.cancel_button = tkinter.Button(master=self, text='cancel', command=self.return_cancel)
+        self.cancel_button = s.ReactiveButton(master=self, text='cancel', command=self.return_cancel)
         self.cancel_button.place(x=int(UNIT_WIDTH*2.5), y=int(UNIT_HEIGHT*7.5), width=UNIT_WIDTH, height=UNIT_HEIGHT)
         self.cancel_button.configure(
             background=APP_BACKGROUND_COLOR, foreground=TEXT_COLORS[0], image=image_button_small_idle,
@@ -1266,18 +1261,18 @@ set_title_bar_color(main_window)
 
 container_command = tkinter.Frame(master=main_window)
 container_command_buttons = tkinter.Frame(master=container_command)
-button_run = tkinter.Button(master=container_command_buttons)
-button_execute = tkinter.Button(master=container_command_buttons, text='clear logs'.upper(), command=set_log_update)
+button_run = s.ReactiveButton(master=container_command_buttons)
+button_execute = s.ReactiveButton(master=container_command_buttons, text='clear logs'.upper(), command=set_log_update)
 text_result = tkinter.Text(master=container_command, state='disabled')
-button_menu_modules = tkinter.Button(
+button_menu_modules = s.ReactiveButton(
     master=container_command_buttons, text='modules'.upper(), command=set_window_modules)
-button_menu_back = tkinter.Button(master=container_command_buttons, text='back'.upper())
-button_menu_settings = tkinter.Button(
+button_menu_back = s.ReactiveButton(master=container_command_buttons, text='back'.upper())
+button_menu_settings = s.ReactiveButton(
     master=container_command_buttons, text='edit settings'.upper(), command=set_window_settings)
 
-button_function_find = tkinter.Button(
+button_function_find = s.ReactiveButton(
     master=container_command_buttons, text='find text'.upper(), command=set_window_find)
-button_function_replace = tkinter.Button(
+button_function_replace = s.ReactiveButton(
     master=container_command_buttons, text='replace text'.upper(), command=set_window_replace)
 
 container_current = tkinter.Frame(master=main_window)
@@ -1300,7 +1295,7 @@ for setting in settings:
         continue
     list_labels_settings.append(tkinter.Label(master=container_settings, text=setting))
     list_entry_settings.append(tkinter.Entry(master=container_settings))
-    list_buttons_settings.append(tkinter.Button(master=container_settings, text='select'.upper()))
+    list_buttons_settings.append(s.ReactiveButton(master=container_settings, text='select'.upper()))
 
 try:
     list_buttons_settings[2].configure(command=lambda: settings_select_new_directory(2))
@@ -1315,19 +1310,19 @@ treeview_modules_idle = ColumnedListbox(master=container_modules, width=LIST_WID
 treeview_modules_idle.bind('<<TreeviewSelect>>', on_select_module_idle)
 treeview_modules_idle.bind('<Double-1>', command_module_browse)
 container_module_buttons = tkinter.Frame(master=container_modules, pady=7)
-button_module_attach = tkinter.Button(
+button_module_attach = s.ReactiveButton(
     master=container_module_buttons, text='attach module'.upper(), command=command_module_attach)
-button_module_retrieve = tkinter.Button(
+button_module_retrieve = s.ReactiveButton(
     master=container_module_buttons, text='detach module'.upper(), command=command_module_retrieve)
-button_module_reload = tkinter.Button(
+button_module_reload = s.ReactiveButton(
     master=container_module_buttons, text='reload module'.upper(), command=command_module_reload)
-button_module_browse = tkinter.Button(
+button_module_browse = s.ReactiveButton(
     master=container_module_buttons, text='open module'.upper(), command=command_module_browse)
-button_module_copy = tkinter.Button(
+button_module_copy = s.ReactiveButton(
     master=container_module_buttons, text='copy module'.upper(), command=command_module_copy)
-button_module_new = tkinter.Button(
+button_module_new = s.ReactiveButton(
     master=container_module_buttons, text='new module'.upper(), command=command_module_new)
-button_definition_edit = tkinter.Button(
+button_definition_edit = s.ReactiveButton(
     master=container_module_buttons, text='edit module data'.upper(), command=set_window_definition)
 
 label_modules_active = tkinter.Label(master=container_modules, text='active modules:', width=UNIT_WIDTH * 2)
@@ -1353,16 +1348,16 @@ listbox_browser.bind('<Double-1>', command_browser_forward)
 container_scope_select = tkinter.Frame(master=container_current)
 label_scope_select = tkinter.Label(master=container_scope_select, text='in file(s) or folder(s):')
 text_scope_select = tkinter.Text(master=container_scope_select)
-button_scope_select_file = tkinter.Button(
+button_scope_select_file = s.ReactiveButton(
     master=container_scope_select, text='select a file'.upper(), command=lambda: command_select_file(text_scope_select))
-button_scope_select_folder = tkinter.Button(
+button_scope_select_folder = s.ReactiveButton(
     master=container_scope_select, text='select a folder'.upper(),
     command=lambda: command_select_folder(text_scope_select))
 label_scope_except = tkinter.Label(master=container_scope_select, text='except:')
 text_scope_except = tkinter.Text(master=container_scope_select)
-button_scope_except_file = tkinter.Button(
+button_scope_except_file = s.ReactiveButton(
     master=container_scope_select, text='select a file'.upper(), command=lambda: command_select_file(text_scope_except))
-button_scope_except_folder = tkinter.Button(
+button_scope_except_folder = s.ReactiveButton(
     master=container_scope_select, text='select a folder'.upper(),
     command=lambda: command_select_folder(text_scope_except))
 
@@ -1371,7 +1366,7 @@ label_find = tkinter.Label(master=container_find, text='find text:')
 text_find = tkinter.Text(master=container_find)
 
 container_replace = tkinter.Frame(master=container_current)
-button_replace_copy = tkinter.Button(master=container_replace, text='copy text'.upper(), command=command_copy_find)
+button_replace_copy = s.ReactiveButton(master=container_replace, text='copy text'.upper(), command=command_copy_find)
 label_replace = tkinter.Label(master=container_replace, text='replace with text:')
 text_replace = tkinter.Text(master=container_replace)
 
