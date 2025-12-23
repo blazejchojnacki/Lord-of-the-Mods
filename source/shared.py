@@ -47,10 +47,13 @@ APP_BACKGROUND_COLOR = "#303840"
 ENTRY_BACKGROUND_COLOR = "#292F36"
 TEXT_COLORS = ["#C9AB69", "#757364", "#ABA298", "#484D43"]
 INI_LEVEL_COLORS = ["#81B895", "#7B9AAB", "#8C7EAB", "#AB7D8C", "#7DAB9B"]
-BUTTON_SMALL_IDLE = None  # tkinter.PhotoImage(file='./aesthetic/button_small_idle.png')
-BUTTON_SMALL_HOVER = None  # tkinter.PhotoImage(file='./aesthetic/button_small_hover.png')
-BUTTON_LARGE_IDLE = None  # tkinter.PhotoImage(file='./aesthetic/button_large_idle.png')
-BUTTON_LARGE_HOVER = None  # tkinter.PhotoImage(file='./aesthetic/button_large_hover.png')
+BUTTON_SMALL_IDLE = None
+BUTTON_SMALL_HOVER = None
+BUTTON_LARGE_IDLE = None
+BUTTON_LARGE_HOVER = None
+KEY_LABEL = 'label'
+KEY_RETURN = 'command'
+KEY_INFO = 'info'
 
 # # # global variable
 current_info: tkinter.Toplevel
@@ -303,3 +306,57 @@ def load_aesthetic():
                 FONT_TEXT = (aesthetic_json["FONT_NAME"], aesthetic_json["FONT_SIZE_TEXT"], aesthetic_json["FONT_TYPE"])
                 FONT_BUTTON = (aesthetic_json["FONT_NAME"], aesthetic_json["FONT_SIZE_BUTTON"],
                                aesthetic_json["FONT_TYPE"])
+
+
+class ChoiceWindow(tkinter.Toplevel):
+    """
+    TK-based popping window for choices. Replacing askquestions etc.
+    """
+    def __init__(self, title, text, buttons):
+        super().__init__()
+        load_aesthetic()
+        set_title_bar_color(self)
+        if os.path.isfile('./aesthetic/icon.ico'):
+            self.iconbitmap('./aesthetic/icon.ico')
+        self.width = DOUBLE_WIDTH*4
+        self.height = UNIT_HEIGHT*6
+        self.geometry(f'{self.width}x{self.height}')
+        self.attributes('-topmost', True)
+        self.configure(background=APP_BACKGROUND_COLOR)
+        self.protocol("WM_DELETE_WINDOW", self.on_choosing)
+        self.title = f'{PROGRAM_NAME}: {title}'
+        # OPTIMIZE: the changes text is truncated
+        self.text_label = tkinter.Label(master=self, background=APP_BACKGROUND_COLOR, font=FONT_TEXT, text=text[:1000],
+                                        foreground=TEXT_COLORS[0])
+        self.text_label.place(x=UNIT_WIDTH, y=UNIT_HEIGHT, width=self.width-2*UNIT_WIDTH, height=UNIT_HEIGHT*2)
+        self.container_buttons = tkinter.Frame(self, background=APP_BACKGROUND_COLOR)
+        self.container_buttons.place(x=0, y=UNIT_HEIGHT*3, width=self.width, height=self.height)
+        self.buttons = []
+        for button in buttons:
+            self.add_button(button[KEY_LABEL], button[KEY_RETURN], button[KEY_INFO])
+        self.rearrange()
+        self.chosen_value = False
+        self.mainloop()
+
+    def on_choosing(self, value=None):
+        self.quit()
+        self.destroy()
+        self.chosen_value = value
+        return value
+
+    def add_button(self, label: str, value: object, info: str, position: int = None):
+        if position is None:
+            position = len(self.buttons)
+        self.buttons.insert(position, ReactiveButton(
+            info_content=info, text=label, master=self.container_buttons, command=lambda: self.on_choosing(value)))
+
+    def rearrange(self):
+        for button in self.buttons:
+            button.place(x=UNIT_WIDTH*(self.buttons.index(button)+1)*2,
+                         y=UNIT_HEIGHT, width=UNIT_WIDTH, height=UNIT_HEIGHT, anchor='ne')
+
+
+def invoke_choice(**key_args):
+    choice_window = ChoiceWindow(**key_args)
+    return choice_window.chosen_value
+
