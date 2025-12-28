@@ -8,8 +8,8 @@ from tklinenums import TkLineNumbers
 
 import source.shared as s
 from source.initiator import initiate
-from source.file_editor import convert_string, find_replace_text, move_file, duplicates_commenter, load_file, \
-    load_directories
+from source.constructor import load_file
+from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
 from source.module_control import modules_filter, modules_sort, snapshot_take, snapshot_compare, \
     module_detect_changes, module_copy, detect_new_modules, \
     definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES
@@ -28,6 +28,34 @@ current_file_content_backup = ''
 current_window = ''
 new_module_name = ''
 new_module_source = ''
+
+
+def load_directories(full_path, mode=0):
+    """
+
+    :param full_path:
+    :param mode: mode=0 makes the function omit the full path,
+     mode=1 makes the function provide the full path of each item
+    :return: a tuple of two lists of folders and files contained in the given directory
+    """
+    output_folders = []
+    output_files = []
+    try:
+        items = os.listdir(full_path)
+    except PermissionError as error:
+        raise s.InternalError(error.strerror)
+    for item in items:
+        if os.path.isdir(f'{full_path}/{item}'):
+            output_folders.append(f'{(full_path + "/") * mode}{item}')
+            if mode == 1:
+                add_folders, add_files = load_directories(output_folders[-1], mode=1)
+                if add_folders:
+                    output_folders.append(add_folders)
+                if add_files:
+                    output_files.append(add_files)
+        elif os.path.isfile(f'{full_path}/{item}'):
+            output_files.append(f'{(full_path + "/") * mode}{item}')
+    return output_folders, output_files
 
 
 class NewModuleDialog(tkinter.Toplevel):
@@ -201,7 +229,7 @@ def set_window_find():
     button_menu_modules.configure(text='return to modules'.upper())
     retrieve(button_menu_settings, button_function_find)
     try:
-        selection = convert_string(text_file_content.selection_get(), direction='display')
+        selection = reformat_string(text_file_content.selection_get(), direction='display')
         text_find.delete('1.0', 'end')
         text_find.insert('1.0', selection)
     except UnboundLocalError:
@@ -232,7 +260,7 @@ def set_window_replace():
     container_scope_select.place_configure(y=int(UNIT_HEIGHT * 5.5))
     retrieve(button_menu_settings, button_function_replace)
     try:
-        selection = convert_string(text_file_content.selection_get(), direction='display')
+        selection = reformat_string(text_file_content.selection_get(), direction='display')
         text_find.delete('1.0', 'end')
         text_find.insert('1.0', selection)
     except UnboundLocalError:
@@ -612,23 +640,23 @@ def command_copy_find():
 
 def command_run_find():
     """ Runs the find_text function. """
-    find = convert_string(text_find.get('1.0', 'end').strip(), direction='display')
+    find = reformat_string(text_find.get('1.0', 'end').strip(), direction='display')
     scope = text_scope_select.get('1.0', 'end').replace('/', '\\').strip()
     exception_string = text_scope_except.get('1.0', 'end').replace('/', '\\').strip()
     exceptions = exception_string.split(', ')
     if find and scope:
-        output = find_replace_text(find=find, scope=scope, exceptions=exceptions, mode='initiate')
+        output = text_find_replace(find=find, scope=scope, exceptions=exceptions, mode='initiate')
         set_log_update(output)
 
 
 def command_run_replace():
     """ Runs the replace_text function. """
-    find = convert_string(text_find.get('1.0', 'end').strip(), direction='display')
-    replace_with = convert_string(text_replace.get('1.0', 'end').strip(), direction='display')
+    find = reformat_string(text_find.get('1.0', 'end').strip(), direction='display')
+    replace_with = reformat_string(text_replace.get('1.0', 'end').strip(), direction='display')
     scope = text_scope_select.get('1.0', 'end').replace('/', '\\').strip()
     exception_string = text_scope_except.get('1.0', 'end').replace('/', '\\').strip()
     exceptions = exception_string.split(', ')
-    output = find_replace_text(find=find, replace_with=replace_with, scope=scope, exceptions=exceptions)
+    output = text_find_replace(find=find, replace_with=replace_with, scope=scope, exceptions=exceptions)
     set_log_update(output)
     text_file_content.delete('1.0', 'end')
     text_file_content.insert('end', load_file(scope)[0])
@@ -678,7 +706,7 @@ def command_run_move():
 def command_run_duplicate():
     """ Runs the duplicates_commenter function. """
     file_named = text_scope_select.get('1.0', 'end').replace('/', '\\').strip()
-    output = duplicates_commenter(in_file=file_named)
+    output = duplicates_find(of_object_or_file=file_named)
     set_log_update(output)
 
 
