@@ -20,7 +20,7 @@ TRANSFER_TYPES = [
     'delete',
 ]
 DEFINITION_NAME = '_definition.ini'
-DEFINITION_CLASSES = ['General', 'Clone', 'Foundling', 'Template']  # 'Version', 'Module'
+DEFINITION_CLASSES = ['General', 'Clone', 'Foundling', 'Template']
 DEFINITION_CLASS_TEMPLATE = {
     'path': '',
     'class': '',
@@ -554,7 +554,6 @@ def initiate_comparison(module_directory, start_module=None, changes_source='dir
                             if len(current_file) > 0:
                                 current_file_path, current_value = current_file.strip().split('\t')
                                 if file_path == current_file_path:
-                                    # if current_value != value:
                                     changes += f'\t\t../{file_path}\tdifferent\n'
                                     is_file_new = False
                                     break
@@ -798,7 +797,6 @@ def module_reverse(module_object=None, module_name='', transfer='copy', comparis
                 if os.path.isfile(f'{heir_directory}/{DEFINITION_NAME}'):
                     heir_definition_dict = definition_read(module_path=heir_directory)
                     if heir_definition_dict['active']:
-                        # raise ModuleError(f"module_reverse error: heir module {definition_dict['heir']} still active")
                         module_reverse(module_name=heir_definition_dict['name'], transfer='remove')
     elif check_type == 'pass':
         error_sensitivity = False
@@ -946,20 +944,6 @@ def module_copy(new_name, template_directory=None, changes_source=None):
     :param changes_source: 'snapshot' | 'comparison' | 'directory' - passes the value to definition_write
     :return: logs about the details of the transfer
     """
-    # try:
-    #     if template_directory is None and current(MODULE_TEMPLATE):
-    #         template_directory = current(MODULE_TEMPLATE)
-    # except s.InternalError:
-    #     try:
-    #         template_directory = askdirectory(
-    #             title=f'{s.PROGRAM_NAME}: choose a module template to copy',
-    #             initialdir=s.LIBRARY
-    #         )
-    #     except s.InternalError:
-    #         template_directory = askdirectory(
-    #             title=f'{s.PROGRAM_NAME}: choose a module template to copy',
-    #             initialdir='../'
-    #         )
     if not template_directory:
         return 'module_copy error: template not selected'
     all_modules_names = modules_filter(return_type='names')
