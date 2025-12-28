@@ -1,4 +1,3 @@
-# from source.shared import INI_COMMENTS, INI_ENDS, LEVEL_INDENT, InternalError, INI_DELIMITERS, STR_DELIMITERS
 import source.shared as s
 from source.module_control import DEFINITION_NAME
 

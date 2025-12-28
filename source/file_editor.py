@@ -1,9 +1,11 @@
 from datetime import datetime
 import os
 import shutil
+import re
 
-from source.file_interpreter import load_items, load_items_part, print_items, print_items_part, comment_out, \
-    recognize_item_class
+# from source.file_interpreter import load_items, load_items_part, print_items, print_items_part, comment_out, \
+#     recognize_item_class
+import source.constructor as c
 import source.shared as s
 
 # TODO later: reference checker
@@ -73,7 +75,7 @@ def find_replace_text(find, replace_with=None, scope='', exceptions=None, mode='
             return output
     if os.path.isfile(scope):
         try:
-            file_content = print_items(file=scope)
+            file_content = c.load_file(scope)
             if file_content.lower().count(find.lower()) > 0:
                 if 'include' in mode:
                     output = file_content[
@@ -236,74 +238,62 @@ def move_file(full_path, to_folder, mode=0):
     return output
 
 
-# TODO later: look for duplicates in other files too. Objects can be overwritten.
-def duplicates_commenter(in_file):
+def duplicates_find(of_object_or_file, in_file_or_directory=None):
     """
-    finds the duplicates in a given file
-    :param in_file: string path of the file to load
+    Finds the duplicates in a given file or directory. Is recurrent.
+    :param of_object_or_file: the object or file of objects to look for duplicates
+    :param in_file_or_directory: string path of the file to load
     :return: logs of the values commented out
     """
-    new_content = ''
-    output = f'{datetime.now()}'
-    output += f' command: comment out duplicates in {in_file}:\n'
-    items = load_items(in_file)
-    if type(items) is str:
-        return items
-    items_number = len(items)
-    remaining_items_index = 1
-    last_result = ''
-    for item_index in range(1, items_number):
-        to_comment = False
-        remaining_items_index += 1
-        for remaining_item_index in range(remaining_items_index, items_number):
-            if items[item_index].parameter['name'].lower() == items[remaining_item_index].parameter['name'].lower():
-                if items[item_index].parameter['class'] == items[remaining_item_index].parameter['class']:
-                    to_comment = True
-        if to_comment:
-            new_content += comment_out(print_items([items[0], items[item_index]])[0])
-            last_result = print_items([items[0], items[item_index]])
-            output += last_result
-        else:
-            new_content += print_items([items[0], items[item_index]])
-    if not last_result:
-        output += 'no duplicate definition found'
-    try:
-        with open(f'{s.LOG_PATH}/file_changes.txt', 'a') as log_file:
-            log_file.write(output + '\n')
-    except FileNotFoundError:
-        with open(f'{s.LOG_PATH}/file_changes.txt', 'w') as log_file:
-            log_file.write(output + '\n')
-    with open(in_file, 'w') as new_file:
-        new_file.write(new_content)
-    return output
-
-
-def load_file(full_path):
-    """
-
-    :param full_path: absolute path of the file to load into the text editor
-    :return: the file content
-    """
-    if full_path.endswith('.ini') or full_path.endswith('.str'):
-        file_content = print_items(file=full_path)
-        try:
-            file_levels = recognize_item_class(from_file=full_path)
-        except s.InternalError as error:
-            return error.message, []
-        return file_content, file_levels
-    elif full_path.endswith('.inc'):
-        file_content = print_items_part(load_items_part(from_file=full_path))
-        try:
-            file_levels = recognize_item_class(from_file=full_path)
-        except s.InternalError as error:
-            return error.message, []
-        return file_content, file_levels
-    elif full_path.endswith('.txt'):
-        with open(full_path) as loaded_file:
-            file_content = loaded_file.read()
-            return file_content, []
+    if in_file_or_directory is None:
+        in_file_or_directory = of_object_or_file
+    if of_object_or_file.endswith('.str'):
+        space = ':'
     else:
-        raise TypeError
+        space = ' '
+    output = f'{datetime.now()}'
+    output += f' command: find duplicates from {of_object_or_file} in {in_file_or_directory}:\n'
+    if os.path.isfile(in_file_or_directory):
+        with open(in_file_or_directory) as file_buffer:
+            file_lines = file_buffer.readlines()
+    elif os.path.isdir(in_file_or_directory):
+        for file_or_directory in os.listdir(in_file_or_directory):
+            output += duplicates_find(of_object_or_file, file_or_directory)
+    if isinstance(of_object_or_file, c.ConstructLevel):
+        items_to_look_for = of_object_or_file
+    elif isinstance(of_object_or_file, c.ConstructFile):
+        items_to_look_for = of_object_or_file
+    elif os.path.isfile(of_object_or_file):
+        items_to_look_for = c.ConstructFile(of_object_or_file)
+    else:
+        raise s.InternalError(f"wrong input type {of_object_or_file}")
+    items_number = len(items_to_look_for)
+    for item_index in range(1, items_number):
+        is_duplicated = False
+        if isinstance(items_to_look_for[item_index], dict):
+            continue
+        item_phrase = (
+            rf"{items_to_look_for[item_index][0]['class']}\s?{space}\s?{items_to_look_for[item_index][0]['name'].replace('?', r'\?')}\s"
+            .replace('+', r'\+')
+        )
+        if find_result := re.findall(item_phrase, '\n'.join(file_lines)):
+            if of_object_or_file == in_file_or_directory and len(find_result) > 1:
+                is_duplicated = True
+            elif of_object_or_file != in_file_or_directory:
+                is_duplicated = True
+            else:
+                is_duplicated = False
+        if is_duplicated:
+            title = f"{items_to_look_for[item_index][0]['class']}:{items_to_look_for[item_index][0]['name']}\n"
+            line_numbers = []
+            for line_index in range(len(file_lines)):
+                if title.casefold() in file_lines[line_index].casefold() and '//' not in file_lines[line_index]:
+                    line_numbers.append(str(line_index + 1))
+            output_line = ('\tline ' + ', '.join(line_numbers) + ' ' + title)
+            # print(output_line)
+            if len(line_numbers) > 1 and output_line not in output:
+                output += output_line
+    return output
 
 
 def load_directories(full_path, mode=0):

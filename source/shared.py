@@ -7,6 +7,7 @@ from ctypes import windll, byref, sizeof, c_int, create_unicode_buffer
 
 PROGRAM_NAME = 'Lord of the Mods'
 MAIN_DIRECTORY = os.path.abspath('..').replace('\\', '/')
+MOD_DEF_FILE_NAME = '_definition.ini'
 LOG_PATH = './change_logs'
 INI_PATH_PART = '/data/ini'
 LEVEL_INDENT = ' ' * 4
