@@ -61,6 +61,21 @@ current_info: tkinter.Toplevel
 main_window: tkinter.Tk
 
 
+def log(output, file='file_changes.txt'):
+    if os.path.isfile(f'{LOG_PATH}/{file}'):
+        with open(f'{LOG_PATH}/{file}', 'a') as log_file:
+            log_file.write(output + '\n')
+    elif os.path.isfile(f'.{LOG_PATH}/{file}'):
+        with open(f'.{LOG_PATH}/{file}', 'a') as log_file:
+            log_file.write(output + '\n')
+    elif os.path.isdir(LOG_PATH):
+        with open(f'{LOG_PATH}/{file}', 'w') as log_file:
+            log_file.write(output + '\n')
+    elif os.path.isdir(f'.{LOG_PATH}'):
+        with open(f'.{LOG_PATH}/{file}', 'w') as log_file:
+            log_file.write(output + '\n')
+
+
 def this_module():
     module_name_full = str(inspect.getmodule(inspect.currentframe().f_back.f_back))
     return module_name_full[module_name_full.rfind('\\') + len('\\'):module_name_full.rfind('.')]
