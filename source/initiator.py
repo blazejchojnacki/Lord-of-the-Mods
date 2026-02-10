@@ -9,7 +9,6 @@ from tkinter.messagebox import askyesnocancel, showerror, showwarning
 import source.shared
 from source.module_control import definition_write, SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARISON_DIRECTORY
 
-
 default_folders_dict = {
     'library': './_LIBRARY',
     'archive': './_ARCHIVE',
@@ -19,10 +18,30 @@ if os.path.isfile('./initial/_games.json'):
     with open('./initial/_games.json') as games_buffer:
         game_list = json.load(games_buffer)
 else:
-    pass
+    game_list = [
+        {
+            "Name": "The Battle for Middle-earth II",
+            "Registry": "SOFTWARE\\WOW6432Node\\Electronic Arts",
+            "Roaming": "/AppData/Roaming/My Battle for Middle-earth(tm) II Files",
+            "RoamingFiles": [
+                "/Options.ini",
+                "/Worldbuilder.ini"
+            ],
+            "EXE": "lotrbfme2.exe"
+        },
+        {
+            "Name": "The Lord of the Rings, The Rise of the Witch-king",
+            "Registry": "SOFTWARE\\WOW6432Node\\Electronic Arts",
+            "Roaming": "/AppData/Roaming/My The Lord of the Rings, The Rise of the Witch-king Files",
+            "RoamingFiles": [
+                "/Options.ini",
+                "/Worldbuilder.ini"
+            ],
+            "EXE": "lotrbfme2ep1.exe"
+        }
+    ]
 
 
-# 024-08-26
 def search_reg(master_key_name, game_name):
     """ Looks for the game installation paths in the Windows Registry. """
     registry = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
@@ -38,7 +57,7 @@ def search_reg(master_key_name, game_name):
                     install_directory = winreg.QueryValueEx(child_key, 'InstallPath')[0]
                     if install_directory.endswith('\\'):
                         install_directory = install_directory[:-1]
-                    output += install_directory.replace('\\', '/')  # + '\n'
+                    output += install_directory.replace('\\', '/')
                 except FileNotFoundError:
                     continue
             else:
@@ -51,20 +70,17 @@ def search_reg(master_key_name, game_name):
 def get_game_directory():
     """ Returns a list of game paths. """
     game_directories = []
-    try:
-        for game_key in game_list:
-            try:
-                game_directories.append(search_reg(game_key['Registry'], game_key['Name']))
-            except FileNotFoundError:
-                provided_directory = askdirectory(
-                    title=f"{source.shared.PROGRAM_NAME}: please select {game_key['Name']} directory (or create one)",
-                    initialdir='../')
-                if provided_directory:
-                    game_directories.append(provided_directory)
-                else:
-                    cancel_initiation()
-    except NameError:
-        raise source.shared.InternalError
+    for game_key in game_list:
+        try:
+            game_directories.append(search_reg(game_key['Registry'], game_key['Name']))
+        except FileNotFoundError:
+            provided_directory = askdirectory(
+                title=f"{source.shared.PROGRAM_NAME}: please select {game_key['Name']} directory (or create one)",
+                initialdir='../')
+            if provided_directory:
+                game_directories.append(provided_directory)
+            else:
+                cancel_initiation()
     for game_index in range(len(game_directories)):
         if os.path.isdir(game_directories[game_index]):
             game_directories[game_index] = os.path.relpath(game_directories[game_index]).replace('\\', '/')
@@ -98,31 +114,6 @@ def cancel_initiation():
     exit()
 
 
-def copy_default(new_directory, initial_dir='./initial/default_module_template'):
-    """
-    Copies the files from the initial_dir into the new directory
-    :param new_directory: current LIBRARY path
-    :param initial_dir: directory to copy from
-    :return:
-    """
-    if not os.path.isdir(new_directory):
-        os.mkdir(new_directory)
-    if os.path.isdir(initial_dir):
-        for file_or_folder in os.listdir(initial_dir):
-            if (os.path.isfile(f'{initial_dir}/{file_or_folder}')
-                    and not os.path.isfile(f'{new_directory}/{file_or_folder}')):
-                shutil.copy(f'{initial_dir}/{file_or_folder}', new_directory)
-            elif os.path.isdir(f'{initial_dir}/{file_or_folder}'):
-                if not os.path.isdir(f'{new_directory}/{file_or_folder}'):
-                    os.mkdir(f'{new_directory}/{file_or_folder}')
-                copy_default(
-                    new_directory=f'{new_directory}/{file_or_folder}',
-                    initial_dir=f'{initial_dir}/{file_or_folder}'
-                )
-    else:
-        pass
-
-
 def initiate():
     """ Initiates the application settings by asking for directories needed by the application. """
     initiator = tkinter.Tk()
@@ -135,7 +126,7 @@ def initiate():
     if not os.path.isfile(source.shared.SETTINGS_PATH):
         try:
             game_paths_list = get_game_directory()
-        except source.shared.InternalError:
+        except NameError:
             game_paths_list = []
         directories_dict = {}
         initiator_label.configure(text='Initiating functional directories.')
@@ -164,7 +155,6 @@ def initiate():
                     directories_dict[key] = default_folders_dict[key]
         elif use_default_paths is None:
             cancel_initiation()
-        copy_default(directories_dict['library'])
         source.shared.settings_set(
             do_initiate=True,
             settings_dict={
