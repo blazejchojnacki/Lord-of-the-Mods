@@ -155,6 +155,10 @@ def definition_write(definition_object=None, module_directory=None, return_type=
             definition_object = definition_read(module_path=f'{module_directory}')
         else:
             definition_object = Definition()
+    if 'class' in key_args:
+        definition_object['class'] = key_args['class']
+    else:
+        definition_object['class'] = DEFINITION_CLASSES[0]
     try:
         if not definition_object['game'] and os.path.isdir(module_directory):
             game_folders = os.listdir(module_directory)
@@ -278,7 +282,7 @@ def hash_directory(file_or_folder, path_to_omit=''):
             path_to_register = file_or_folder[file_or_folder.index(path_to_omit) + len(path_to_omit) + 1:]
         else:
             path_to_register = file_or_folder
-        output[os.path.relpath(path_to_register).replace('\\', '/')] = f'\t{hash_file(file_or_folder)}\n'
+        output[os.path.relpath(path_to_register).replace('\\', '/')] = f'{hash_file(file_or_folder)}'
     elif os.path.isdir(file_or_folder):
         next_directory = os.listdir(file_or_folder)
         for next_folder in next_directory:
@@ -302,7 +306,7 @@ def get_available_name(snapshot_directory, prefix='file_snapshot_'):
             while not suffix.isnumeric():
                 last_snapshot = max(snapshot_list, key=os.path.getctime)
                 snapshot_list.remove(last_snapshot)
-                suffix = last_snapshot[last_snapshot.index(prefix) + len(prefix):last_snapshot.index('.txt')]
+                suffix = last_snapshot[last_snapshot.index(prefix) + len(prefix):last_snapshot.index('.json')]
             counter = str(int(suffix) + 1)
         except ValueError:
             counter = askstring(title=f'{s.PROGRAM_NAME}', prompt='Please give a name to the new file')

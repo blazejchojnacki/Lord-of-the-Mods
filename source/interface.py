@@ -1090,7 +1090,7 @@ class Window(tkinter.Tk):
     def refresh_definitions(self):
         """ Refreshes the lists of active and non-active modules. """
         try:
-            self.set_log_update(detect_new_modules())
+            # self.set_log_update(detect_new_modules())
             self.treeview_modules_active.delete(*self.treeview_modules_active.get_children())
             library_folders = [_ for _ in os.listdir(s.LIBRARY) if _ not in s.current[s.KEY_EXCEPTIONS]]
             for folder in library_folders:

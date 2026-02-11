@@ -12,7 +12,7 @@ from source.module_control import definition_write, SNAPSHOT_DIRECTORY, SNAPSHOT
 default_folders_dict = {
     'library': './_LIBRARY',
     'archive': './_ARCHIVE',
-}
+}  # TODO: don't ask if those already exist
 
 if os.path.isfile('./initial/_games.json'):
     with open('./initial/_games.json') as games_buffer:
