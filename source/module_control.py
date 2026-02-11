@@ -625,16 +625,27 @@ def check_library(module_object):
     return library_missing
 
 
-# TODO: check
-def module_reverse(module_object=None, module_name='', transfer='copy', comparison_path='', last_snapshot=None,
-                   check_type='definition'):
+def check_relative(module_object, relation):
+    if 'heir' == relation:
+        if module_object['heir']:
+            if os.path.isfile(f"{s.LIBRARY}/{module_object['heir']}/{DEFINITION_NAME}"):
+                heir_module_object = definition_read(f"{s.LIBRARY}/{module_object['heir']}")
+                if heir_module_object['active']:
+                    return heir_module_object
+    elif 'ancestor' == relation:
+        if module_object['ancestor']:
+            ancestor_directory = f"{s.LIBRARY}/{module_object['ancestor']}"
+            if os.path.isfile(f'{ancestor_directory}/{DEFINITION_NAME}'):
+                ancestor_module_object = definition_read(module_path=ancestor_directory)
+                if not ancestor_module_object['active']:
+                    return ancestor_module_object
+
+
+def module_reverse(module_object, transfer='copy', check_type='hash, heir'):
     """
     Detaches the module from the game directory, by retrieving all its files to the LIBRARY.
     :param module_object: (optional) the dictionary-based Definition object
-    :param module_name: (optional) the name of the module to detach
     :param transfer: 'copy' | 'move' | 'delete' - transfer type.
-    :param comparison_path: (optional) path to a comparison file on which the changes will be based.
-    :param last_snapshot: (optional) path to a snapshot file on which the changes will be based.
     :param check_type: 'definition' | 'snapshot' | 'pass' - check if the module is indeed in the game folder
     If 'definition', checks the files enlisted in the changes of the definition file.
      Also checks and detaches if necessary any modules depending on this one.
@@ -643,23 +654,13 @@ def module_reverse(module_object=None, module_name='', transfer='copy', comparis
     :return: logs about the transfer details.
     """
     global error_sensitivity
-    comparison_lines = []
-    if module_object:
-        module_name = module_object['name']
-        changes = module_object['changes']
-        for change_file in changes:
-            comparison_lines.append(change_file.replace('\\', '/') + f'\t{changes[change_file]}\n')
+    if module_object is None:
+        raise s.InternalError('missing object')
+    module_name = module_object['name']
+    comparison_dict = module_object['changes']
     if not os.path.isdir(f'{s.LIBRARY}/{module_name}'):
         os.mkdir(f'{s.LIBRARY}/{module_name}')
-    module_directory = f'{s.LIBRARY}/{module_name}'
-    if os.path.isfile(f"{module_directory}/{COMPARISON_NAME}{module_name}.txt"):
-        comparison_path = f"{module_directory}/{COMPARISON_NAME}{module_name}.txt"
     if transfer == 'remove':
-        try:
-            if module_object is None:
-                module_object = definition_read(module_path=module_directory)
-        except s.InternalError as error:
-            raise error
         if module_object['active'] is False and check_type != 'pass':
             raise s.InternalError('deactivation of inactive module aborted')
         if module_object['class'] == DEFINITION_CLASSES[0]:
@@ -668,96 +669,86 @@ def module_reverse(module_object=None, module_name='', transfer='copy', comparis
             transfer = 'move'
         elif module_object['class'] == DEFINITION_CLASSES[1]:
             transfer = 'delete'
-    if transfer == 'move' or transfer == 'delete':
-        try:
-            override = module_detect_changes(module_directory=module_directory)
-        except s.InternalError as error:
-            raise error
-        if override:
-            raise s.InternalError('changes have been made to the module file')
-            # TODO later: if changes, propose to save them
-    if not comparison_path and not comparison_lines:
-        if last_snapshot is None:
-            selected_file = askopenfilename(title=f'{s.PROGRAM_NAME}: select a snapshot or a comparison file',
-                                            initialdir=SNAPSHOT_DIRECTORY)
-            if selected_file.split('/')[-1].startswith(COMPARISON_NAME):
-                comparison_path = selected_file
-            elif selected_file.split('/')[-1].startswith('file_snapshot_'):
-                last_snapshot = selected_file
-        if last_snapshot:
-            new_snapshot = snapshot_take(return_type='text')
-            comparison_lines = snapshot_compare(last_snapshot, new_snapshot, return_type='lines')
-        if not comparison_path:
-            raise s.InternalError('comparison missing')
-    if os.path.isfile(comparison_path) and not comparison_lines:
-        with open(comparison_path) as comparison_file:
-            comparison_lines = comparison_file.readlines()
-    if not comparison_lines:
+    module_directory = f'{s.LIBRARY}/{module_name}'
+    if not comparison_dict:
         raise s.InternalError('comparison missing')
 
     error_sensitivity = True
-    if check_type == 'snapshot':
-        # TODO later: verify prerequisites by making a snapshot and comparing it
-        pass
-    elif check_type == 'definition':
-        if os.path.isfile(f'{module_directory}/{DEFINITION_NAME}'):
-            definition_dict = definition_read(module_path=module_directory)
-            if definition_dict['heir']:
-                heir_directory = f"{'/'.join(module_directory.split('/')[:-1])}/{definition_dict['heir']}"
-                if os.path.isfile(f'{heir_directory}/{DEFINITION_NAME}'):
-                    heir_definition_dict = definition_read(module_path=heir_directory)
-                    if heir_definition_dict['active']:
-                        module_reverse(module_name=heir_definition_dict['name'], transfer='remove')
+    if 'heir' in check_type:
+        if heir_module_object := check_relative(module_object, 'heir'):
+            if not module_reverse(heir_module_object, transfer='remove'):
+                raise s.InternalError('heir module not retrieved')
     elif check_type == 'pass':
         error_sensitivity = False
     output = ''
     try:
-        for line in comparison_lines:
-            path_start = s.MAIN_DIRECTORY.replace('\\', '/').count('/')
-            file_path, value = line.strip().split('\t')
-            file_path_game = '/'.join(file_path.split('/')[:-1])
+        for path_key in comparison_dict:
+            path_start = 0
+            file_path_source = f"{s.MAIN_DIRECTORY}/{path_key}"
+            file_path_game = f"{s.MAIN_DIRECTORY}/{'/'.join(path_key.split('/')[:-1])}"
             file_path_module = (f"{s.LIBRARY}/{module_name}/"
-                                f"{'/'.join(file_path.split('/')[path_start:-1])}")
-            file_path_archive = f"{s.ARCHIVE}/{module_name}/{'/'.join(file_path.split('/')[path_start:])}"
-            if value == 'unchanged':
+                                f"{'/'.join(path_key.split('/')[path_start:-1])}")
+            file_path_archive = f"{s.ARCHIVE}/{module_name}/{'/'.join(path_key.split('/')[path_start:])}"
+            if 'hash' in check_type:
                 pass
-            elif value == 'different':
+            if comparison_dict[path_key][0] == 'unchanged':
+                pass
+            elif comparison_dict[path_key][0] == 'changed':
                 if transfer in TRANSFER_TYPES:
-                    ensure_path_exists(file_path, f'{s.LIBRARY}/{module_name}')
-                    output += test_transfer(file_path, file_path_module, transfer, error_sensitivity)
+                    ensure_path_exists(path_key, f'{s.LIBRARY}/{module_name}')
+                    output += test_transfer(file_path_source, file_path_module, transfer, error_sensitivity)
                 if transfer == 'move' or transfer == 'delete':
-                    ensure_path_exists(file_path, f'{s.ARCHIVE}/{module_name}')
+                    ensure_path_exists(path_key, f'{s.ARCHIVE}/{module_name}')
                     output += test_transfer(file_path_archive, file_path_game, 'move', error_sensitivity)
-            elif value == 'new':
-                ensure_path_exists(file_path, f'{s.LIBRARY}/{module_name}')
+            elif comparison_dict[path_key][0] == 'added':
+                ensure_path_exists(path_key, f'{s.LIBRARY}/{module_name}')
                 try:
-                    output += test_transfer(file_path, file_path_module, transfer, error_sensitivity)
+                    output += test_transfer(file_path_source, file_path_module, transfer, error_sensitivity)
                 except FileExistsError:
                     pass
-            elif value == 'removed':
+            elif comparison_dict[path_key][0] == 'removed':
                 if transfer == 'move' or transfer == 'delete':
-                    ensure_path_exists(file_path, f'{s.ARCHIVE}/{module_name}')
+                    ensure_path_exists(file_path_source, f'{s.ARCHIVE}/{module_name}')
                     output += test_transfer(file_path_archive, file_path_game, 'move', error_sensitivity)
                 else:
                     pass
     except s.InternalError:
-        return module_attach(module_directory=module_directory, check_type='pass')
+        log(f'module_reverse {module_name} CANCELLED\n{output}')
+        module_attach(module_directory=module_directory, check_type='pass')
+        return False
     if TEST:
         raise s.InternalError('under TEST phase: module_reverse not applied')
     definition_edit(definition_object=module_object, active=False)
-    return log(f'module_reverse {module_name}\n{output}')
+    log(f'module_reverse {module_name}\n{output}')
+    return True
 
 
-# TODO: check
-def module_attach(module_object=None, module_directory=None, check_type='definition'):
+def module_detect_override(module: Definition):
+    """
+
+    :param module:
+    :return:
+     - time-optimization might be required -
+    """
+    new_changes = module['changes']
+    active_modules = modules_filter(active=True)
+    for active_module in active_modules:
+        if module['ancestor'] == active_module['name']:
+            return active_module
+    for active_module in active_modules:
+        if not active_module['heir']:
+            for active_file in active_module['changes']:
+                if active_file.strip('../') in new_changes:
+                    return active_module
+    return False
+
+
+def module_attach(module_object=None, module_directory=None, check_type='ancestor'):
     """
     Attaches a module to the game directory.
     :param module_object: (optional) dictionary-based module object
     :param module_directory: (optional) path of the module to attach
-    :param check_type: 'definition' | 'snapshot' | 'pass' - check if the module is indeed in the LIBRARY folder
-    If 'definition', checks the files enlisted in the changes of the definition file.
-     Also checks and attaches if necessary any modules required to this one.
-    If 'snapshot', checks the files compared to the values in a given snapshot file.
+    :param check_type: 'ancestor' | 'snapshot' | 'pass' - check if the module is indeed in the LIBRARY folder
     If 'pass', does not check, just tries to attach what it can.
     :return: logs about the transfer details.
     """
@@ -772,13 +763,11 @@ def module_attach(module_object=None, module_directory=None, check_type='definit
         if os.path.isfile(f'{module_directory}/{DEFINITION_NAME}'):
             module_object = definition_read(module_path=module_directory)
     error_sensitivity = True
-    if check_type == 'snapshot':
-        # TODO later: verify prerequisites by making a snapshot and comparing it
-        pass
-    elif check_type == 'definition':
-        if os.path.isdir(module_object['path']):
-            module_directory = module_object['path']
-        elif os.path.isdir(f"{s.LIBRARY}/{module_object['name']}"):
+    if ancestor_module := module_detect_override(module_object):
+        module_object = definition_edit(module_object, ancestor=ancestor_module['name'])
+        definition_edit(ancestor_module, heir=module_object['name'])
+    if 'ancestor' in check_type:
+        if os.path.isdir(f"{s.LIBRARY}/{module_object['name']}"):
             module_directory = f"{s.LIBRARY}/{module_object['name']}"
         else:
             raise s.InternalError('path not recognized')
@@ -788,62 +777,59 @@ def module_attach(module_object=None, module_directory=None, check_type='definit
             transfer = 'move'
         elif module_object['class'] == DEFINITION_CLASSES[1]:
             transfer = 'copy'
-        if module_object['ancestor']:
-            ancestor_directory = f"{'/'.join(module_directory.split('/')[:-1])}/{module_object['ancestor']}"
-            if os.path.isfile(f'{ancestor_directory}/{DEFINITION_NAME}'):
-                ancestor_definition_dict = definition_read(module_path=ancestor_directory)
-                if not ancestor_definition_dict['active']:
-                    module_attach(module_directory=ancestor_directory)
+        if ancestor_module_object := check_relative(module_object, 'ancestor'):
+            if not module_attach(ancestor_module_object):
+                raise s.InternalError('ancestor module not attached')
     elif check_type == 'pass':
         error_sensitivity = False
     module_name = module_directory.split('/')[-1]
     if not os.path.isdir(f'{s.ARCHIVE}/{module_name}'):
         os.mkdir(f'{s.ARCHIVE}/{module_name}')
-    comparison_lines = []
+    comparison_dict = {}
     try:
         changes = module_object['changes']
         for change_file in changes:
-            comparison_lines.append(change_file.replace('\\', '/') + f'\t{changes[change_file]}\n')
+            comparison_dict[change_file] = changes[change_file]
     except s.InternalError:
         pass
-    if not comparison_lines and os.path.isfile(f"{module_directory}/{COMPARISON_NAME}{module_name}.txt"):
-        with open(f"{module_directory}/{COMPARISON_NAME}{module_name}.txt") as comparison_buffer:
-            comparison_lines = comparison_buffer.readlines()
-    if comparison_lines:
+    if not comparison_dict and os.path.isfile(f"{module_directory}/{COMPARISON_NAME}{module_name}.json"):
+        with open(f"{module_directory}/{COMPARISON_NAME}{module_name}.json") as comparison_buffer:
+            comparison_dict = json.load(comparison_buffer)
+    if comparison_dict:
+        output = ''
         try:
-            output = ''
-            path_start = s.MAIN_DIRECTORY.count('/')
-            for line in comparison_lines:
-                try:
-                    file_path, value = line.strip().split('\t')
-                except ValueError:
-                    raise s.InternalError('module_attach: valueError')
-                file_path_game = '/'.join(file_path.split('/')[:-1])
+            path_start = 0
+            for path_key in comparison_dict:
+                file_path_source = f"{s.MAIN_DIRECTORY}{path_key}"
+                file_path_game = f"{s.MAIN_DIRECTORY}{'/'.join(path_key.split('/')[:-1])}"
                 file_path_archive = (f"{s.ARCHIVE}/{module_name}/"
-                                     f"{'/'.join(file_path.split('/')[path_start:-1])}")
+                                     f"{'/'.join(path_key.split('/')[path_start:-1])}")
                 file_path_module = (f"{s.LIBRARY}/{module_name}/"
-                                    f"{'/'.join(file_path.split('/')[path_start:])}")
-                if value == 'unchanged':
+                                    f"{'/'.join(path_key.split('/')[path_start:])}")
+                if comparison_dict[path_key][0] == 'unchanged':
                     pass
-                elif value == 'different':
-                    ensure_path_exists(file_path)
-                    ensure_path_exists(file_path, f'{s.ARCHIVE}/{module_name}')
-                    output += test_transfer(file_path, file_path_archive, transfer, error_sensitivity)
+                elif comparison_dict[path_key][0] == 'changed':
+                    ensure_path_exists(path_key)
+                    ensure_path_exists(path_key, f'{s.ARCHIVE}/{module_name}')
+                    output += test_transfer(file_path_source, file_path_archive, transfer, error_sensitivity)
                     output += test_transfer(file_path_module, file_path_game, transfer, error_sensitivity)
-                elif value == 'new':
-                    ensure_path_exists(file_path)
+                elif comparison_dict[path_key][0] == 'added':
+                    ensure_path_exists(path_key)
                     output += test_transfer(file_path_module, file_path_game, transfer, error_sensitivity)
-                elif value == 'removed':
-                    ensure_path_exists(file_path)
-                    output += test_transfer(file_path, file_path_archive, transfer, error_sensitivity)
+                elif comparison_dict[path_key][0] == 'removed':
+                    ensure_path_exists(path_key)
+                    output += test_transfer(file_path_source, file_path_archive, transfer, error_sensitivity)
         except s.InternalError:
-            return module_reverse(module_object=module_object, transfer='remove', check_type='pass')
+            log(f'module_attach {module_name} CANCELLED\n{output}')
+            module_reverse(module_object=module_object, transfer='remove', check_type='pass')
+            return False
     else:
-        raise s.InternalError('module_attach: comparison missing')
+        raise s.InternalError('comparison missing')
     if TEST:
         raise s.InternalError('Test phase: module_attach not applied')
     definition_edit(definition_object=module_object, active=True)
-    return log(f'module_attach {module_name}\n{output}')
+    log(f'module_attach {module_name}\n{output}')
+    return True
 
 
 def module_new(name: str, changes_source: str = ''):
@@ -906,8 +892,6 @@ def module_copy(new_name, template_directory=None, changes_source=None):
             output += f'warning: {file} FileNotFoundError'
     return log(output)
 
-
-# rest is checked
 
 def module_detect_changes(module=None):
     """ Inspects if the files of a module have been changed and returns a text where the changes are listed. """
