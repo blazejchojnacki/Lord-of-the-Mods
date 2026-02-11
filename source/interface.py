@@ -19,7 +19,8 @@ UNIT_HEIGHT = 40
 TEXT_WIDTH = UNIT_WIDTH * 12
 FULL_WIDTH = UNIT_WIDTH * 15
 LIST_WIDTH = 160
-MODULE_COLUMNS = ('name', 'class', 'progress', 'description')
+# MODULE_COLUMNS = ('name', 'class', 'progress', 'description')
+MODULE_COLUMNS = {'name': 1, 'class': 1, 'progress': 1, 'description': 5}
 
 global_modules = []
 current_path = ''
@@ -113,17 +114,16 @@ class NewModuleDialog(tkinter.Toplevel):
 class ColumnedListbox(tkinter.ttk.Treeview):
     """ a Tk/Tcl Treeview-based class with predefined columns"""
 
-    def __init__(self, master, width, height, show='tree headings'):  # , **kw
+    def __init__(self, master, width=0, height=0, columns=None, show='tree headings'):  # , **kw
         super().__init__(master=master, height=height, show=show)
-        self.width = width * 6
-        self.columns_list = MODULE_COLUMNS
-        self.build_list()
-        self.set_columns_proportions(proportions=(1, 1, 1, 5))
-
-    def build_list(self):
+        if columns is None:
+            columns = MODULE_COLUMNS
+        self.width = width
+        self.columns_list = list(columns.keys())
         self.configure(columns=self.columns_list)
         for column in self.columns_list:
             self.heading(column, text=column)
+        self.set_columns_proportions(list(columns.values()))
 
     def set_columns_proportions(self, proportions):
         total_quotient = sum(proportions, 1)
