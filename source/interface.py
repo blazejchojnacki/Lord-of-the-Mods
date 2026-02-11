@@ -1137,11 +1137,6 @@ def settings_select_add_directory(index_funct):
         set_log_update('setting configuration aborted')
 
 
-def coordinate(**key_args):
-    return key_args
-
-
-# 024-08_06
 def position(*elements):
     for element in elements:
         try:
@@ -1457,66 +1452,66 @@ list_text_definition_editor[-1].place_configure(height=UNIT_HEIGHT * 4)
 
 
 dict_position = {
-    container_current: coordinate(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 13),
+    container_current: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 13),
 
-    label_modules_idle: coordinate(x=0, y=int(UNIT_HEIGHT * 2.5), width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
-    treeview_modules_idle: coordinate(x=UNIT_WIDTH * 2, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT * 5),
-    container_module_buttons: coordinate(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT * 5 + 5, width=FULL_WIDTH,
+    label_modules_idle: dict(x=0, y=int(UNIT_HEIGHT * 2.5), width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
+    treeview_modules_idle: dict(x=UNIT_WIDTH * 2, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT * 5),
+    container_module_buttons: dict(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT * 5 + 5, width=FULL_WIDTH,
                                          height=UNIT_HEIGHT + 10),
-    button_module_new: coordinate(x=UNIT_WIDTH * 0, y=0),
-    button_module_attach: coordinate(x=UNIT_WIDTH * 2, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
-    label_modules_active: coordinate(x=0, y=int(UNIT_HEIGHT * 9), width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
-    treeview_modules_active: coordinate(x=UNIT_WIDTH * 2, y=int(UNIT_HEIGHT * 6.5), width=TEXT_WIDTH,
+    button_module_new: dict(x=UNIT_WIDTH * 0, y=0),
+    button_module_attach: dict(x=UNIT_WIDTH * 2, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
+    label_modules_active: dict(x=0, y=int(UNIT_HEIGHT * 9), width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
+    treeview_modules_active: dict(x=UNIT_WIDTH * 2, y=int(UNIT_HEIGHT * 6.5), width=TEXT_WIDTH,
                                         height=UNIT_HEIGHT * 5),
 
-    label_browser: coordinate(x=0, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT),
-    listbox_browser: coordinate(x=UNIT_WIDTH * 1, y=UNIT_HEIGHT, width=TEXT_WIDTH, height=UNIT_HEIGHT * 10),
+    label_browser: dict(x=0, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT),
+    listbox_browser: dict(x=UNIT_WIDTH * 1, y=UNIT_HEIGHT, width=TEXT_WIDTH, height=UNIT_HEIGHT * 10),
 
-    label_scope_select: coordinate(x=0, y=0),
-    text_scope_select: coordinate(x=UNIT_WIDTH*2, y=UNIT_HEIGHT*0, width=TEXT_WIDTH-UNIT_WIDTH*4, height=UNIT_HEIGHT),
-    button_scope_select_file: coordinate(x=TEXT_WIDTH - UNIT_WIDTH * 2, y=UNIT_HEIGHT * 0),
-    button_scope_select_folder: coordinate(x=TEXT_WIDTH, y=UNIT_HEIGHT * 0),
-    label_scope_except: coordinate(x=0, y=UNIT_HEIGHT * 1),
-    text_scope_except: coordinate(x=UNIT_WIDTH*2, y=UNIT_HEIGHT*1, width=TEXT_WIDTH-UNIT_WIDTH*4, height=UNIT_HEIGHT),
-    button_scope_except_file: coordinate(x=TEXT_WIDTH - UNIT_WIDTH*2, y=UNIT_HEIGHT*1),
-    button_scope_except_folder: coordinate(x=TEXT_WIDTH, y=UNIT_HEIGHT*1),
+    label_scope_select: dict(x=0, y=0),
+    text_scope_select: dict(x=UNIT_WIDTH*2, y=UNIT_HEIGHT*0, width=TEXT_WIDTH-UNIT_WIDTH*4, height=UNIT_HEIGHT),
+    button_scope_select_file: dict(x=TEXT_WIDTH - UNIT_WIDTH * 2, y=UNIT_HEIGHT * 0),
+    button_scope_select_folder: dict(x=TEXT_WIDTH, y=UNIT_HEIGHT * 0),
+    label_scope_except: dict(x=0, y=UNIT_HEIGHT * 1),
+    text_scope_except: dict(x=UNIT_WIDTH*2, y=UNIT_HEIGHT*1, width=TEXT_WIDTH-UNIT_WIDTH*4, height=UNIT_HEIGHT),
+    button_scope_except_file: dict(x=TEXT_WIDTH - UNIT_WIDTH*2, y=UNIT_HEIGHT*1),
+    button_scope_except_folder: dict(x=TEXT_WIDTH, y=UNIT_HEIGHT*1),
 
-    text_file_content: coordinate(x=UNIT_WIDTH * 1, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT * 12),
-    numeration: coordinate(x=0, y=0, width=UNIT_WIDTH - 1, height=UNIT_HEIGHT * 12),
-    label_find: coordinate(x=0, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
-    text_find: coordinate(x=UNIT_WIDTH * 2, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT),
-    button_replace_copy: coordinate(x=0, y=0),
-    label_replace: coordinate(x=0, y=UNIT_HEIGHT),
-    text_replace: coordinate(x=UNIT_WIDTH * 2, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT * 2),
+    text_file_content: dict(x=UNIT_WIDTH * 1, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT * 12),
+    numeration: dict(x=0, y=0, width=UNIT_WIDTH - 1, height=UNIT_HEIGHT * 12),
+    label_find: dict(x=0, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
+    text_find: dict(x=UNIT_WIDTH * 2, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT),
+    button_replace_copy: dict(x=0, y=0),
+    label_replace: dict(x=0, y=UNIT_HEIGHT),
+    text_replace: dict(x=UNIT_WIDTH * 2, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT * 2),
     # container_command:
-    text_result: coordinate(x=0, y=0, width=FULL_WIDTH, height=int(UNIT_HEIGHT * 0.75)),
-    container_command_buttons: coordinate(x=0, y=UNIT_HEIGHT * 2, anchor='sw', width=FULL_WIDTH, height=UNIT_HEIGHT),
-    button_menu_back: coordinate(x=0, y=0),
-    button_menu_modules: coordinate(x=UNIT_WIDTH * 1, y=0),
-    button_menu_settings: coordinate(x=UNIT_WIDTH * 3, y=0),
-    button_run: coordinate(x=UNIT_WIDTH * 5, y=0),
-    button_execute: coordinate(x=UNIT_WIDTH * 7, y=0),
-    # button_function_duplicate: coordinate(x=UNIT_WIDTH * 9, y=0),
-    button_function_find: coordinate(x=UNIT_WIDTH * 11, y=0),
-    button_function_replace: coordinate(x=UNIT_WIDTH * 13, y=0),
+    text_result: dict(x=0, y=0, width=FULL_WIDTH, height=int(UNIT_HEIGHT * 0.75)),
+    container_command_buttons: dict(x=0, y=UNIT_HEIGHT * 2, anchor='sw', width=FULL_WIDTH, height=UNIT_HEIGHT),
+    button_menu_back: dict(x=0, y=0),
+    button_menu_modules: dict(x=UNIT_WIDTH * 1, y=0),
+    button_menu_settings: dict(x=UNIT_WIDTH * 3, y=0),
+    button_run: dict(x=UNIT_WIDTH * 5, y=0),
+    button_execute: dict(x=UNIT_WIDTH * 7, y=0),
+    # button_function_duplicate: dict(x=UNIT_WIDTH * 9, y=0),
+    button_function_find: dict(x=UNIT_WIDTH * 11, y=0),
+    button_function_replace: dict(x=UNIT_WIDTH * 13, y=0),
 
     # non-default
-    container_modules: coordinate(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 13),
-    button_module_browse: coordinate(x=UNIT_WIDTH * 8, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
-    button_definition_edit: coordinate(x=UNIT_WIDTH * 12, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
-    button_module_retrieve: coordinate(x=UNIT_WIDTH * 4, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
-    button_module_reload: coordinate(x=UNIT_WIDTH * 6, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
+    container_modules: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 13),
+    button_module_browse: dict(x=UNIT_WIDTH * 8, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
+    button_definition_edit: dict(x=UNIT_WIDTH * 12, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
+    button_module_retrieve: dict(x=UNIT_WIDTH * 4, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
+    button_module_reload: dict(x=UNIT_WIDTH * 6, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
 
-    container_command: coordinate(x=0, y=UNIT_HEIGHT * 15, anchor='sw', width=FULL_WIDTH, height=UNIT_HEIGHT * 2),
-    container_settings: coordinate(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 11),
-    container_definition: coordinate(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 11),
-    container_browser: coordinate(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 12),
-    # container_select_file: coordinate(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 2),
-    # container_folder_select: coordinate(x=0, y=UNIT_HEIGHT * 2, width=FULL_WIDTH, height=UNIT_HEIGHT * 3),
-    container_scope_select: coordinate(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 2),
-    container_file_content: coordinate(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 13),
-    container_find: coordinate(x=0, y=int(UNIT_HEIGHT * 7.5), width=FULL_WIDTH, height=UNIT_HEIGHT * 1),
-    container_replace: coordinate(x=0, y=int(UNIT_HEIGHT * 8.5), width=FULL_WIDTH, height=UNIT_HEIGHT * 2),
+    container_command: dict(x=0, y=UNIT_HEIGHT * 15, anchor='sw', width=FULL_WIDTH, height=UNIT_HEIGHT * 2),
+    container_settings: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 11),
+    container_definition: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 11),
+    container_browser: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 12),
+    # container_select_file: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 2),
+    # container_folder_select: dict(x=0, y=UNIT_HEIGHT * 2, width=FULL_WIDTH, height=UNIT_HEIGHT * 3),
+    container_scope_select: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 2),
+    container_file_content: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 13),
+    container_find: dict(x=0, y=int(UNIT_HEIGHT * 7.5), width=FULL_WIDTH, height=UNIT_HEIGHT * 1),
+    container_replace: dict(x=0, y=int(UNIT_HEIGHT * 8.5), width=FULL_WIDTH, height=UNIT_HEIGHT * 2),
 }
 
 position(
