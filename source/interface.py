@@ -8,7 +8,7 @@ from tklinenums import TkLineNumbers
 
 import source.shared as s
 from source.initiator import initiate
-from source.constructor import load_file
+from source.constructor import load_file, load_directories
 from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
 from source.module_control import modules_filter, modules_sort, snapshot_take, snapshot_compare, \
     module_detect_changes, module_copy, detect_new_modules, \
@@ -28,34 +28,6 @@ current_file_content_backup = ''
 current_window = ''
 new_module_name = ''
 new_module_source = ''
-
-
-def load_directories(full_path, mode=0):
-    """
-
-    :param full_path:
-    :param mode: mode=0 makes the function omit the full path,
-     mode=1 makes the function provide the full path of each item
-    :return: a tuple of two lists of folders and files contained in the given directory
-    """
-    output_folders = []
-    output_files = []
-    try:
-        items = os.listdir(full_path)
-    except PermissionError as error:
-        raise s.InternalError(error.strerror)
-    for item in items:
-        if os.path.isdir(f'{full_path}/{item}'):
-            output_folders.append(f'{(full_path + "/") * mode}{item}')
-            if mode == 1:
-                add_folders, add_files = load_directories(output_folders[-1], mode=1)
-                if add_folders:
-                    output_folders.append(add_folders)
-                if add_files:
-                    output_files.append(add_files)
-        elif os.path.isfile(f'{full_path}/{item}'):
-            output_files.append(f'{(full_path + "/") * mode}{item}')
-    return output_folders, output_files
 
 
 class NewModuleDialog(tkinter.Toplevel):

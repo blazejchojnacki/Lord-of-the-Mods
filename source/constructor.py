@@ -225,3 +225,31 @@ def load_file(full_path):
         raise source.shared.InternalError(f'empty path.')
     else:
         raise source.shared.InternalError(f'wrong path or unsupported file type: {full_path}')
+
+
+def load_directories(full_path, mode=0):
+    """
+
+    :param full_path:
+    :param mode: mode=0 makes the function omit the full path,
+     mode=1 makes the function provide the full path of each item
+    :return: a tuple of two lists of folders and files contained in the given directory
+    """
+    output_folders = []
+    output_files = []
+    try:
+        items = os.listdir(full_path)
+    except PermissionError as error:
+        raise s.InternalError(error.strerror)
+    for item in items:
+        if os.path.isdir(f'{full_path}/{item}'):
+            output_folders.append(f'{(full_path + "/") * mode}{item}')
+            if mode == 1:
+                add_folders, add_files = load_directories(output_folders[-1], mode=1)
+                if add_folders:
+                    output_folders.append(add_folders)
+                if add_files:
+                    output_files.append(add_files)
+        elif os.path.isfile(f'{full_path}/{item}'):
+            output_files.append(f'{(full_path + "/") * mode}{item}')
+    return output_folders, output_files

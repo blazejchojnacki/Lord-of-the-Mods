@@ -647,9 +647,6 @@ def module_reverse(module_object, transfer='copy', check_type='hash, heir'):
     :param module_object: (optional) the dictionary-based Definition object
     :param transfer: 'copy' | 'move' | 'delete' - transfer type.
     :param check_type: 'definition' | 'snapshot' | 'pass' - check if the module is indeed in the game folder
-    If 'definition', checks the files enlisted in the changes of the definition file.
-     Also checks and detaches if necessary any modules depending on this one.
-    If 'snapshot', checks the files compared to the values in a given snapshot file.
     If 'pass', does not check, just tries to detach what it can.
     :return: logs about the transfer details.
     """

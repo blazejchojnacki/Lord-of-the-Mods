@@ -4,4 +4,4 @@ Alternatively, the modules can be tested via trials.py
 """
 
 if __name__ == "__main__":
-    import source.window_console
+    import source.interface
