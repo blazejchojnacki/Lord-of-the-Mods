@@ -11,7 +11,7 @@ from source.initiator import initiate
 from source.constructor import load_file, load_directories
 from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
 from source.module_control import modules_filter, modules_sort, snapshot_take, snapshot_compare, \
-    module_detect_changes, module_copy, detect_new_modules, \
+    module_detect_changes, module_copy, module_new, detect_new_modules, \
     definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES
 
 UNIT_WIDTH = 80
@@ -21,92 +21,6 @@ FULL_WIDTH = UNIT_WIDTH * 15
 LIST_WIDTH = 160
 # MODULE_COLUMNS = ('name', 'class', 'progress', 'description')
 MODULE_COLUMNS = {'name': 1, 'class': 1, 'progress': 1, 'description': 5}
-
-new_module_name = ''
-new_module_source = ''
-
-
-class NewModuleDialog(tkinter.Toplevel):
-    """ a Tk/TCl Toplevel-based class """
-
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        self.title = f'{s.PROGRAM_NAME}: new module initiator'
-        self.iconbitmap('aesthetic/icon.ico')
-        self.geometry('320x360')
-        self.resizable(False, False)
-        self.configure(background=s.APP_BACKGROUND_COLOR)
-        s.set_title_bar_color(self)
-
-        self.name_label = tkinter.Label(master=self)
-        self.name_label.place(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT * 0, width=UNIT_WIDTH * 4, height=UNIT_HEIGHT)
-        self.name_label.configure(
-            background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0], text='Please provide the new module name')
-        self.name_entry = tkinter.Entry(master=self)
-        self.name_entry.place(x=int(UNIT_WIDTH * 0.5), y=UNIT_HEIGHT * 1, width=UNIT_WIDTH * 3, height=UNIT_HEIGHT)
-        self.name_entry.configure(background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0])
-        self.options_label = tkinter.Label(master=self)
-        self.options_label.place(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT * 3, width=UNIT_WIDTH * 4, height=UNIT_HEIGHT)
-        self.options_label.configure(
-            background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0],
-            text='Please choose the definition creation mode')
-        self.options_container = tkinter.Frame(master=self)
-        self.options_container.place(x=int(UNIT_WIDTH * 0.5), y=UNIT_HEIGHT * 4, width=UNIT_WIDTH * 3,
-                                     height=UNIT_HEIGHT * 3)
-        self.options_container.configure(background=s.ENTRY_BACKGROUND_COLOR)
-        self.variable_option = tkinter.StringVar()
-        option_button_a = tkinter.Checkbutton(
-            master=self.options_container, text='present directory', variable=self.variable_option, onvalue='directory')
-        option_button_a.place(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT * 0, width=2 * UNIT_WIDTH, height=UNIT_HEIGHT)
-        option_button_a.configure(background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0],
-                                  activebackground=s.APP_BACKGROUND_COLOR, activeforeground=s.TEXT_COLORS[0],
-                                  selectcolor=s.ENTRY_BACKGROUND_COLOR)
-        option_button_b = tkinter.Checkbutton(
-            master=self.options_container, text='comparison', variable=self.variable_option, onvalue='comparison')
-        option_button_b.place(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT * 1, width=2 * UNIT_WIDTH, height=UNIT_HEIGHT)
-        option_button_b.configure(background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0],
-                                  activebackground=s.APP_BACKGROUND_COLOR, activeforeground=s.TEXT_COLORS[0],
-                                  selectcolor=s.ENTRY_BACKGROUND_COLOR)
-        option_button_c = tkinter.Checkbutton(
-            master=self.options_container, text='snapshot', variable=self.variable_option, onvalue='snapshot')
-        option_button_c.place(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT * 2, width=2 * UNIT_WIDTH, height=UNIT_HEIGHT)
-        option_button_c.configure(
-            background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0], selectcolor=s.ENTRY_BACKGROUND_COLOR,
-            activebackground=s.APP_BACKGROUND_COLOR, activeforeground=s.TEXT_COLORS[0])
-        option_button_a.select()
-
-        self.ok_button = s.ReactiveButton(master=self, text='run', command=self.return_entry)
-        self.ok_button.place(x=int(UNIT_WIDTH * 0.5), y=int(UNIT_HEIGHT * 7.5), width=UNIT_WIDTH, height=UNIT_HEIGHT)
-        self.ok_button.configure(
-            background=s.APP_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0], image=s.BUTTON_SMALL_IDLE,
-            activebackground=s.APP_BACKGROUND_COLOR, borderwidth=0, compound='center'
-        )
-        self.cancel_button = s.ReactiveButton(master=self, text='cancel', command=self.return_cancel)
-        self.cancel_button.place(x=int(UNIT_WIDTH * 2.5), y=int(UNIT_HEIGHT * 7.5), width=UNIT_WIDTH,
-                                 height=UNIT_HEIGHT)
-        self.cancel_button.configure(
-            background=s.APP_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0], image=s.BUTTON_SMALL_IDLE,
-            activebackground=s.APP_BACKGROUND_COLOR, borderwidth=0, compound='center'
-        )
-        self.protocol("WM_DELETE_WINDOW", self.return_cancel)
-        self.mainloop()
-
-    def return_entry(self):
-        global new_module_name, new_module_source
-        all_module_names = modules_filter(return_type='names')
-        if self.name_entry.get() and self.variable_option.get() and self.name_entry.get() not in all_module_names:
-            new_module_name = self.name_entry.get()
-            new_module_source = self.variable_option.get()
-            self.quit()
-            self.destroy()
-        else:
-            self.name_label.configure(text=' Please provide a name unique to the new module')
-
-    def return_cancel(self):
-        global new_module_name, new_module_source
-        new_module_name, new_module_source = '', ''
-        self.quit()
-        self.destroy()
 
 
 class ColumnedListbox(tkinter.ttk.Treeview):
@@ -168,6 +82,9 @@ class Window(tkinter.Tk):
         self.global_modules = []
         self.current_levels = []
         self.current_file_content_backup = ''
+
+        self.new_module_name = ''
+        self.new_module_source = ''
 
         self.key_to_command_module = {
             '<Return>': self.command_browser_forward,
@@ -267,7 +184,7 @@ class Window(tkinter.Tk):
         self.button_module_copy = s.ReactiveButton(
             master=container_module_buttons, text='copy module'.upper(), command=self.command_module_copy)
         self.button_module_new = s.ReactiveButton(
-            master=container_module_buttons, text='new module'.upper(), command=self.command_module_new)
+            master=container_module_buttons, text='new module'.upper(), command=self.set_window_module_new)
         self.button_definition_edit = s.ReactiveButton(
             master=container_module_buttons, text='edit module data'.upper(), command=self.set_window_definition)
 
@@ -285,6 +202,32 @@ class Window(tkinter.Tk):
                 continue
             list_labels_module_editor.append(tkinter.Label(master=self.container_definition, text=key))
             self.list_text_definition_editor.append(tkinter.Text(master=self.container_definition))
+
+        # # # new module screen
+        self.container_module_new = tkinter.Frame(master=self.container_current)
+        self.label_module_new_name = tkinter.Label(master=self.container_module_new,
+                                                   text='New module name:')
+        self.entry_module_new_name = tkinter.Entry(master=self.container_module_new)
+        self.label_module_new_options = tkinter.Label(master=self.container_module_new,
+                                                      text='it will be based on:')
+        self.label_module_new_options.configure(
+            background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0])
+        self.container_module_new_options = tkinter.Frame(master=self.container_module_new)
+        self.container_module_new_options.configure(background=s.ENTRY_BACKGROUND_COLOR)
+        self.variable_option = tkinter.StringVar()
+        self.option_button_0 = tkinter.Checkbutton(
+            master=self.container_module_new_options, text='nothing', variable=self.variable_option,
+            onvalue='nothing')
+        self.option_button_a = tkinter.Checkbutton(
+            master=self.container_module_new_options, text='a present directory', variable=self.variable_option,
+            onvalue='directory')
+        self.option_button_b = tkinter.Checkbutton(
+            master=self.container_module_new_options, text='a comparison file', variable=self.variable_option,
+            onvalue='comparison')
+        self.option_button_c = tkinter.Checkbutton(
+            master=self.container_module_new_options, text='a snapshot file', variable=self.variable_option,
+            onvalue='snapshot')
+        self.option_button_0.select()
 
         self.container_browser = tkinter.Frame(master=self.container_current)
         self.label_browser = tkinter.Label(master=self.container_browser)
@@ -324,6 +267,8 @@ class Window(tkinter.Tk):
             self.container_current,
             self.container_settings,
             self.container_modules,
+            self.container_module_new,
+            self.container_module_new_options,
             container_module_buttons,
             self.container_definition,
             self.container_browser,
@@ -478,6 +423,18 @@ class Window(tkinter.Tk):
 
             self.label_browser: dict(x=0, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT),
             self.listbox_browser: dict(x=UNIT_WIDTH * 1, y=UNIT_HEIGHT, width=TEXT_WIDTH, height=UNIT_HEIGHT * 10),
+            # # # container_module_new
+            self.container_module_new: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 13),
+            self.label_module_new_name: dict(x=0, y=0, width=UNIT_WIDTH * 4, height=UNIT_HEIGHT),
+            self.entry_module_new_name: dict(x=int(UNIT_WIDTH * 0.5), y=UNIT_HEIGHT * 1, width=UNIT_WIDTH * 3,
+                                             height=UNIT_HEIGHT),
+            self.container_module_new_options: dict(x=int(UNIT_WIDTH * 0.5), y=UNIT_HEIGHT * 4, width=UNIT_WIDTH * 3,
+                                                    height=UNIT_HEIGHT * 4),
+            self.label_module_new_options: dict(x=0, y=UNIT_HEIGHT * 3, width=UNIT_WIDTH * 4, height=UNIT_HEIGHT),
+            self.option_button_0: dict(x=0, y=UNIT_HEIGHT * 0, width=s.DOUBLE_WIDTH, height=UNIT_HEIGHT),
+            self.option_button_a: dict(x=0, y=UNIT_HEIGHT * 1, width=s.DOUBLE_WIDTH, height=UNIT_HEIGHT),
+            self.option_button_b: dict(x=0, y=UNIT_HEIGHT * 2, width=s.DOUBLE_WIDTH, height=UNIT_HEIGHT),
+            self.option_button_c: dict(x=0, y=UNIT_HEIGHT * 3, width=s.DOUBLE_WIDTH, height=UNIT_HEIGHT),
 
             self.label_scope_select: dict(x=0, y=0),
             self.text_scope_select: dict(x=UNIT_WIDTH * 2, y=UNIT_HEIGHT * 0, width=TEXT_WIDTH - UNIT_WIDTH * 4,
@@ -533,6 +490,9 @@ class Window(tkinter.Tk):
         self.position(
             self.container_current, self.text_result,
             self.container_command_buttons, self.button_menu_back, self.button_menu_modules, self.button_menu_settings,
+            self.label_module_new_name, self.entry_module_new_name, self.label_module_new_options,
+            self.container_module_new_options,
+            self.option_button_0, self.option_button_a, self.option_button_b, self.option_button_c,
             self.button_run,
             self.button_execute, self.button_function_find, self.button_function_replace,
             container_module_buttons, self.button_module_new, self.button_module_attach,
@@ -569,8 +529,17 @@ class Window(tkinter.Tk):
             self.warning_file_save()
         self.current_window = ''
         self.retrieve(self.container_browser, self.container_modules, self.container_definition,
-                      self.container_find, self.container_replace,
+                      self.container_find, self.container_replace, self.container_module_new,
                       self.container_scope_select, self.container_file_content, self.container_settings)
+
+    def set_window_module_new(self, start_name: str = ''):
+        self.clear_window()
+        # TODO: complete buttons
+        self.retrieve(self.button_menu_modules)
+        self.position(self.container_module_new, self.button_menu_back)
+        if start_name:
+            self.entry_module_new_name.insert('end', start_name)
+        self.current_window = 'module_new'
 
     def set_window_find(self):
         """ Loads the screen for finding text. """
@@ -1123,7 +1092,20 @@ class Window(tkinter.Tk):
         try:
             self.set_log_update(detect_new_modules())
             self.treeview_modules_active.delete(*self.treeview_modules_active.get_children())
-            self.treeview_modules_idle.delete(*self.treeview_modules_idle.get_children())
+            library_folders = [_ for _ in os.listdir(s.LIBRARY) if _ not in s.current[s.KEY_EXCEPTIONS]]
+            for folder in library_folders:
+                if not os.path.isfile(f'{s.LIBRARY}/{folder}/{DEFINITION_NAME}'):
+                    self.set_log_update(f'Detected a definition-less folder in the library - {folder}')
+                    do_initiate = tkinter.messagebox.askokcancel(
+                        title=s.PROGRAM_NAME,
+                        message=f'The folder {s.LIBRARY}/{folder}\n seems to have no definition.\n'
+                                'Do you wish it to become a module?\n'
+                    )
+                    if do_initiate:
+                        self.set_window_module_new(start_name=folder)
+                        return
+                    if not do_initiate:
+                        s.settings_set({s.KEY_EXCEPTIONS: folder})
             active_modules = modules_filter('definitions', active=True)
             active_module_parent_dict = modules_sort(modules=active_modules)
             for module in active_modules:
@@ -1139,6 +1121,8 @@ class Window(tkinter.Tk):
                 except KeyError:
                     pass
             self.treeview_modules_active.open_children()
+
+            self.treeview_modules_idle.delete(*self.treeview_modules_idle.get_children())
             idle_modules = modules_filter('definitions', active=False)
             idle_module_parent_dict = modules_sort(modules=idle_modules)
             for module in idle_modules:
@@ -1157,19 +1141,23 @@ class Window(tkinter.Tk):
         except s.InternalError:
             self.set_log_update('definitions not loaded - settings not loaded.')
             return
+        except _tkinter.TclError:
+            self.set_log_update('loading module error')
         self.retrieve(self.button_module_retrieve, self.button_module_attach)
 
     def command_module_new(self):
         """ Creates a new module after asking for a name and a way to create it. """
-        global new_module_name
-        NewModuleDialog()
-        if new_module_name:
-            self.set_log_update(f'command_module_new: creating module {new_module_name}. Please wait ...')
-            self.set_log_update(module_copy(new_module_name, changes_source=new_module_source))
-            self.refresh_definitions()
+        self.new_module_name = self.entry_module_new_name.get()
+        self.new_module_source = self.variable_option.get()
+        if self.new_module_name and self.new_module_name not in modules_filter(return_type='names'):
+            self.set_log_update(f'command_module_new: creating module {self.new_module_name}. Please wait ...')
+            output = module_new(self.new_module_name, changes_source=self.new_module_source)
+            self.set_window_modules()
+            self.set_log_update(output)
         else:
+            self.label_module_new_name.configure(text=' Please provide a name unique to the new module')
             self.set_log_update('command_module_new error: a correct unique name was not provided')
-        new_module_name = ''
+        self.new_module_name = ''
 
     def command_module_copy(self):
         """ Copies the selected module. Currently, not in use """
