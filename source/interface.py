@@ -28,6 +28,7 @@ new_module_source = ''
 
 class NewModuleDialog(tkinter.Toplevel):
     """ a Tk/TCl Toplevel-based class """
+
     def __init__(self, **kw):
         super().__init__(**kw)
         self.title = f'{s.PROGRAM_NAME}: new module initiator'
@@ -38,11 +39,11 @@ class NewModuleDialog(tkinter.Toplevel):
         s.set_title_bar_color(self)
 
         self.name_label = tkinter.Label(master=self)
-        self.name_label.place(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT*0, width=UNIT_WIDTH * 4, height=UNIT_HEIGHT)
+        self.name_label.place(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT * 0, width=UNIT_WIDTH * 4, height=UNIT_HEIGHT)
         self.name_label.configure(
             background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0], text='Please provide the new module name')
         self.name_entry = tkinter.Entry(master=self)
-        self.name_entry.place(x=int(UNIT_WIDTH*0.5), y=UNIT_HEIGHT * 1, width=UNIT_WIDTH * 3, height=UNIT_HEIGHT)
+        self.name_entry.place(x=int(UNIT_WIDTH * 0.5), y=UNIT_HEIGHT * 1, width=UNIT_WIDTH * 3, height=UNIT_HEIGHT)
         self.name_entry.configure(background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0])
         self.options_label = tkinter.Label(master=self)
         self.options_label.place(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT * 3, width=UNIT_WIDTH * 4, height=UNIT_HEIGHT)
@@ -50,7 +51,8 @@ class NewModuleDialog(tkinter.Toplevel):
             background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0],
             text='Please choose the definition creation mode')
         self.options_container = tkinter.Frame(master=self)
-        self.options_container.place(x=int(UNIT_WIDTH*0.5), y=UNIT_HEIGHT*4, width=UNIT_WIDTH*3, height=UNIT_HEIGHT*3)
+        self.options_container.place(x=int(UNIT_WIDTH * 0.5), y=UNIT_HEIGHT * 4, width=UNIT_WIDTH * 3,
+                                     height=UNIT_HEIGHT * 3)
         self.options_container.configure(background=s.ENTRY_BACKGROUND_COLOR)
         self.variable_option = tkinter.StringVar()
         option_button_a = tkinter.Checkbutton(
@@ -74,13 +76,14 @@ class NewModuleDialog(tkinter.Toplevel):
         option_button_a.select()
 
         self.ok_button = s.ReactiveButton(master=self, text='run', command=self.return_entry)
-        self.ok_button.place(x=int(UNIT_WIDTH*0.5), y=int(UNIT_HEIGHT * 7.5), width=UNIT_WIDTH, height=UNIT_HEIGHT)
+        self.ok_button.place(x=int(UNIT_WIDTH * 0.5), y=int(UNIT_HEIGHT * 7.5), width=UNIT_WIDTH, height=UNIT_HEIGHT)
         self.ok_button.configure(
             background=s.APP_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0], image=s.BUTTON_SMALL_IDLE,
             activebackground=s.APP_BACKGROUND_COLOR, borderwidth=0, compound='center'
         )
         self.cancel_button = s.ReactiveButton(master=self, text='cancel', command=self.return_cancel)
-        self.cancel_button.place(x=int(UNIT_WIDTH*2.5), y=int(UNIT_HEIGHT*7.5), width=UNIT_WIDTH, height=UNIT_HEIGHT)
+        self.cancel_button.place(x=int(UNIT_WIDTH * 2.5), y=int(UNIT_HEIGHT * 7.5), width=UNIT_WIDTH,
+                                 height=UNIT_HEIGHT)
         self.cancel_button.configure(
             background=s.APP_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0], image=s.BUTTON_SMALL_IDLE,
             activebackground=s.APP_BACKGROUND_COLOR, borderwidth=0, compound='center'
@@ -203,7 +206,8 @@ class Window(tkinter.Tk):
         self.container_command = tkinter.Frame(master=self)
         self.container_command_buttons = tkinter.Frame(master=self.container_command)
         self.button_run = s.ReactiveButton(master=self.container_command_buttons)
-        self.button_execute = s.ReactiveButton(master=self.container_command_buttons, text='clear logs'.upper(), command=self.set_log_update)
+        self.button_execute = s.ReactiveButton(master=self.container_command_buttons, text='clear logs'.upper(),
+                                               command=self.set_log_update)
         self.text_result = tkinter.Text(master=self.container_command, state='disabled')
         self.button_menu_modules = s.ReactiveButton(
             master=self.container_command_buttons, text='modules'.upper(), command=self.set_window_modules)
@@ -219,7 +223,8 @@ class Window(tkinter.Tk):
         self.container_current = tkinter.Frame(master=self)
 
         self.container_file_content = tkinter.Frame(master=self.container_current)
-        self.text_file_content = tkinter.Text(master=self.container_file_content, width=TEXT_WIDTH, height=30, undo=True)
+        self.text_file_content = tkinter.Text(master=self.container_file_content, width=TEXT_WIDTH, height=30,
+                                              undo=True)
         numeration = TkLineNumbers(self.container_file_content, self.text_file_content, justify='right')
         self.event_delete('<<SelectAll>>', '<Control-Key-/>')
         self.text_file_content.bind('<Control-Key-/>', self.use_selected_text)
@@ -266,7 +271,8 @@ class Window(tkinter.Tk):
         self.button_definition_edit = s.ReactiveButton(
             master=container_module_buttons, text='edit module data'.upper(), command=self.set_window_definition)
 
-        label_modules_active = tkinter.Label(master=self.container_modules, text='active modules:', width=UNIT_WIDTH * 2)
+        label_modules_active = tkinter.Label(master=self.container_modules, text='active modules:',
+                                             width=UNIT_WIDTH * 2)
         self.treeview_modules_active = ColumnedListbox(master=self.container_modules, width=LIST_WIDTH, height=10)
         self.treeview_modules_active.bind('<<TreeviewSelect>>', self.on_select_module_active)
         self.treeview_modules_active.bind('<Double-1>', self.command_module_browse)
@@ -290,14 +296,16 @@ class Window(tkinter.Tk):
         self.label_scope_select = tkinter.Label(master=self.container_scope_select, text='in file(s) or folder(s):')
         self.text_scope_select = tkinter.Text(master=self.container_scope_select)
         button_scope_select_file = s.ReactiveButton(
-            master=self.container_scope_select, text='select a file'.upper(), command=lambda: self.command_select_file(self.text_scope_select))
+            master=self.container_scope_select, text='select a file'.upper(),
+            command=lambda: self.command_select_file(self.text_scope_select))
         self.button_scope_select_folder = s.ReactiveButton(
             master=self.container_scope_select, text='select a folder'.upper(),
             command=lambda: self.command_select_folder(self.text_scope_select))
         self.label_scope_except = tkinter.Label(master=self.container_scope_select, text='except:')
         self.text_scope_except = tkinter.Text(master=self.container_scope_select)
         self.button_scope_except_file = s.ReactiveButton(
-            master=self.container_scope_select, text='select a file'.upper(), command=lambda: self.command_select_file(self.text_scope_except))
+            master=self.container_scope_select, text='select a file'.upper(),
+            command=lambda: self.command_select_file(self.text_scope_except))
         button_scope_except_folder = s.ReactiveButton(
             master=self.container_scope_select, text='select a folder'.upper(),
             command=lambda: self.command_select_folder(self.text_scope_except))
@@ -307,7 +315,8 @@ class Window(tkinter.Tk):
         self.text_find = tkinter.Text(master=self.container_find)
 
         self.container_replace = tkinter.Frame(master=self.container_current)
-        button_replace_copy = s.ReactiveButton(master=self.container_replace, text='copy text'.upper(), command=self.command_copy_find)
+        button_replace_copy = s.ReactiveButton(master=self.container_replace, text='copy text'.upper(),
+                                               command=self.command_copy_find)
         label_replace = tkinter.Label(master=self.container_replace, text='replace with text:')
         self.text_replace = tkinter.Text(master=self.container_replace)
 
@@ -429,7 +438,8 @@ class Window(tkinter.Tk):
         current_style = tkinter.ttk.Style(master=self)
         current_style.theme_use('clam')
         tkinter.ttk.Style().configure(
-            '.', width=UNIT_WIDTH * 2, font=s.FONT_TEXT, foreground=s.TEXT_COLORS[0], background=s.ENTRY_BACKGROUND_COLOR)
+            '.', width=UNIT_WIDTH * 2, font=s.FONT_TEXT, foreground=s.TEXT_COLORS[0],
+            background=s.ENTRY_BACKGROUND_COLOR)
         tkinter.ttk.Style().configure(
             'Treeview', background=s.ENTRY_BACKGROUND_COLOR, fieldbackground=s.ENTRY_BACKGROUND_COLOR, fieldbw=0,
             selectbackground=s.TEXT_COLORS[0], selectforeground=s.TEXT_COLORS[-1])
@@ -438,8 +448,9 @@ class Window(tkinter.Tk):
 
         for index in range(len(s.current) - 1):
             list_labels_settings[index].place(x=0, y=UNIT_HEIGHT * index, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT)
-            self.list_entry_settings[index].place(x=UNIT_WIDTH * 2 + 10, y=UNIT_HEIGHT * index, width=TEXT_WIDTH - UNIT_WIDTH,
-                                             height=UNIT_HEIGHT)
+            self.list_entry_settings[index].place(x=UNIT_WIDTH * 2 + 10, y=UNIT_HEIGHT * index,
+                                                  width=TEXT_WIDTH - UNIT_WIDTH,
+                                                  height=UNIT_HEIGHT)
             if index < 2:
                 self.list_entry_settings[index].configure(state='disabled')
                 continue
@@ -458,24 +469,26 @@ class Window(tkinter.Tk):
             label_modules_idle: dict(x=0, y=int(UNIT_HEIGHT * 2.5), width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
             self.treeview_modules_idle: dict(x=UNIT_WIDTH * 2, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT * 5),
             container_module_buttons: dict(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT * 5 + 5, width=FULL_WIDTH,
-                                                 height=UNIT_HEIGHT + 10),
+                                           height=UNIT_HEIGHT + 10),
             self.button_module_new: dict(x=UNIT_WIDTH * 0, y=0),
             self.button_module_attach: dict(x=UNIT_WIDTH * 2, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
             label_modules_active: dict(x=0, y=int(UNIT_HEIGHT * 9), width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
             self.treeview_modules_active: dict(x=UNIT_WIDTH * 2, y=int(UNIT_HEIGHT * 6.5), width=TEXT_WIDTH,
-                                                height=UNIT_HEIGHT * 5),
+                                               height=UNIT_HEIGHT * 5),
 
             self.label_browser: dict(x=0, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT),
             self.listbox_browser: dict(x=UNIT_WIDTH * 1, y=UNIT_HEIGHT, width=TEXT_WIDTH, height=UNIT_HEIGHT * 10),
 
             self.label_scope_select: dict(x=0, y=0),
-            self.text_scope_select: dict(x=UNIT_WIDTH*2, y=UNIT_HEIGHT*0, width=TEXT_WIDTH-UNIT_WIDTH*4, height=UNIT_HEIGHT),
+            self.text_scope_select: dict(x=UNIT_WIDTH * 2, y=UNIT_HEIGHT * 0, width=TEXT_WIDTH - UNIT_WIDTH * 4,
+                                         height=UNIT_HEIGHT),
             button_scope_select_file: dict(x=TEXT_WIDTH - UNIT_WIDTH * 2, y=UNIT_HEIGHT * 0),
             self.button_scope_select_folder: dict(x=TEXT_WIDTH, y=UNIT_HEIGHT * 0),
             self.label_scope_except: dict(x=0, y=UNIT_HEIGHT * 1),
-            self.text_scope_except: dict(x=UNIT_WIDTH*2, y=UNIT_HEIGHT*1, width=TEXT_WIDTH-UNIT_WIDTH*4, height=UNIT_HEIGHT),
-            self.button_scope_except_file: dict(x=TEXT_WIDTH - UNIT_WIDTH*2, y=UNIT_HEIGHT*1),
-            button_scope_except_folder: dict(x=TEXT_WIDTH, y=UNIT_HEIGHT*1),
+            self.text_scope_except: dict(x=UNIT_WIDTH * 2, y=UNIT_HEIGHT * 1, width=TEXT_WIDTH - UNIT_WIDTH * 4,
+                                         height=UNIT_HEIGHT),
+            self.button_scope_except_file: dict(x=TEXT_WIDTH - UNIT_WIDTH * 2, y=UNIT_HEIGHT * 1),
+            button_scope_except_folder: dict(x=TEXT_WIDTH, y=UNIT_HEIGHT * 1),
 
             self.text_file_content: dict(x=UNIT_WIDTH * 1, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT * 12),
             numeration: dict(x=0, y=0, width=UNIT_WIDTH - 1, height=UNIT_HEIGHT * 12),
@@ -486,7 +499,8 @@ class Window(tkinter.Tk):
             self.text_replace: dict(x=UNIT_WIDTH * 2, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT * 2),
             # self.container_command:
             self.text_result: dict(x=0, y=0, width=FULL_WIDTH, height=int(UNIT_HEIGHT * 0.75)),
-            self.container_command_buttons: dict(x=0, y=UNIT_HEIGHT * 2, anchor='sw', width=FULL_WIDTH, height=UNIT_HEIGHT),
+            self.container_command_buttons: dict(x=0, y=UNIT_HEIGHT * 2, anchor='sw', width=FULL_WIDTH,
+                                                 height=UNIT_HEIGHT),
             self.button_menu_back: dict(x=0, y=0),
             self.button_menu_modules: dict(x=UNIT_WIDTH * 1, y=0),
             self.button_menu_settings: dict(x=UNIT_WIDTH * 3, y=0),
@@ -503,7 +517,8 @@ class Window(tkinter.Tk):
             self.button_module_retrieve: dict(x=UNIT_WIDTH * 4, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
             self.button_module_reload: dict(x=UNIT_WIDTH * 6, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
 
-            self.container_command: dict(x=0, y=UNIT_HEIGHT * 15, anchor='sw', width=FULL_WIDTH, height=UNIT_HEIGHT * 2),
+            self.container_command: dict(x=0, y=UNIT_HEIGHT * 15, anchor='sw', width=FULL_WIDTH,
+                                         height=UNIT_HEIGHT * 2),
             self.container_settings: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 11),
             self.container_definition: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 11),
             self.container_browser: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 12),
@@ -517,7 +532,8 @@ class Window(tkinter.Tk):
 
         self.position(
             self.container_current, self.text_result,
-            self.container_command_buttons, self.button_menu_back, self.button_menu_modules, self.button_menu_settings, self.button_run,
+            self.container_command_buttons, self.button_menu_back, self.button_menu_modules, self.button_menu_settings,
+            self.button_run,
             self.button_execute, self.button_function_find, self.button_function_replace,
             container_module_buttons, self.button_module_new, self.button_module_attach,
             self.text_file_content, numeration, self.label_browser, self.listbox_browser,
@@ -554,7 +570,7 @@ class Window(tkinter.Tk):
         self.current_window = ''
         self.retrieve(self.container_browser, self.container_modules, self.container_definition,
                       self.container_find, self.container_replace,
-                 self.container_scope_select, self.container_file_content, self.container_settings)
+                      self.container_scope_select, self.container_file_content, self.container_settings)
 
     def set_window_find(self):
         """ Loads the screen for finding text. """
@@ -565,8 +581,9 @@ class Window(tkinter.Tk):
         self.container_command.place_configure(height=UNIT_HEIGHT * 5)
         self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 5)
         self.text_result.place_configure(height=UNIT_HEIGHT * 4)
-        self.position(self.container_file_content, self.container_scope_select, self.container_find, self.button_function_replace,
-                 self.button_scope_select_folder, self.button_scope_except_file)
+        self.position(self.container_file_content, self.container_scope_select, self.container_find,
+                      self.button_function_replace,
+                      self.button_scope_select_folder, self.button_scope_except_file)
         self.container_file_content.place_configure(height=UNIT_HEIGHT * 5)
         self.container_scope_select.place_configure(y=int(UNIT_HEIGHT * 5.5))
         self.button_menu_back.config(command=self.set_window_file)
@@ -596,8 +613,9 @@ class Window(tkinter.Tk):
         self.container_command.place_configure(height=UNIT_HEIGHT * 4)
         self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 4)
         self.text_result.place_configure(height=UNIT_HEIGHT * 3)
-        self.position(self.container_file_content, self.container_scope_select, self.container_find, self.container_replace,
-                 self.button_function_find, self.button_scope_select_folder, self.button_scope_except_file)
+        self.position(self.container_file_content, self.container_scope_select, self.container_find,
+                      self.container_replace,
+                      self.button_function_find, self.button_scope_select_folder, self.button_scope_except_file)
         self.container_file_content.place_configure(height=UNIT_HEIGHT * 5)
         self.container_scope_select.place_configure(y=int(UNIT_HEIGHT * 5.5))
         self.retrieve(self.button_menu_settings, self.button_function_replace)
@@ -627,14 +645,16 @@ class Window(tkinter.Tk):
         self.text_result.place_configure(height=UNIT_HEIGHT * 9)
         self.position(self.container_scope_select)  # , container_folder_select
         try:
-            self.current_path = f"{self.label_browser.cget('text')}/{self.listbox_browser.selection_get()}".replace('\\', '/')
+            self.current_path = f"{self.label_browser.cget('text')}/{self.listbox_browser.selection_get()}".replace(
+                '\\', '/')
         except _tkinter.TclError:
             print('file not selected')
         self.button_menu_back.configure(command=self.command_browser_back)
         self.label_scope_select.configure(text='file')
         self.text_scope_select.delete('1.0', 'end')
         try:
-            self.text_scope_select.insert('1.0', f"{self.label_browser.cget('text')}/{self.listbox_browser.selection_get()}")
+            self.text_scope_select.insert('1.0',
+                                          f"{self.label_browser.cget('text')}/{self.listbox_browser.selection_get()}")
         except _tkinter.TclError:
             self.text_scope_select.insert('end', self.current_path)
         self.label_scope_except.configure(text='to folder')
@@ -655,7 +675,8 @@ class Window(tkinter.Tk):
             self.container_command.place_configure(height=UNIT_HEIGHT * 2)
             self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 2)
             self.text_result.place_configure(height=int(UNIT_HEIGHT * 0.75))
-            self.position(self.container_file_content, self.button_run, self.button_function_find, self.button_function_replace)
+            self.position(self.container_file_content, self.button_run, self.button_function_find,
+                          self.button_function_replace)
             self.retrieve(self.button_execute)
             self.text_file_content.focus()
             self.button_menu_back.configure(command=self.command_browser_back)
@@ -671,14 +692,16 @@ class Window(tkinter.Tk):
         self.key_to_command_current = self.key_to_command_module.copy()
         self.clear_window()
         self.container_current.place_configure(height=UNIT_HEIGHT * 13)
-        self.position(self.container_modules, self.button_module_new, self.container_command, self.button_run, self.button_execute,
-                 self.button_menu_settings, self.container_command_buttons, self.text_result)
+        self.position(self.container_modules, self.button_module_new, self.container_command, self.button_run,
+                      self.button_execute,
+                      self.button_menu_settings, self.container_command_buttons, self.text_result)
         self.button_run.configure(text='take snapshot'.upper(), command=self.command_snapshot_take)
         self.button_execute.configure(text='compare snapshots'.upper(), command=self.command_snapshot_compare)
         self.button_menu_settings.configure(text='edit settings'.upper(), command=self.set_window_settings)
         self.button_menu_modules.configure(text='refresh modules'.upper())
-        self.retrieve(self.button_module_copy, self.button_definition_edit, self.button_function_find, self.button_function_replace,
-                 self.button_menu_back)
+        self.retrieve(self.button_module_copy, self.button_definition_edit, self.button_function_find,
+                      self.button_function_replace,
+                      self.button_menu_back)
         self.refresh_definitions()
         self.treeview_modules_idle.focus_set()
         try:
@@ -731,7 +754,8 @@ class Window(tkinter.Tk):
         self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 2)
         self.text_result.place_configure(height=int(UNIT_HEIGHT * 0.75))
         self.position(self.container_browser)
-        self.retrieve(self.button_module_new, self.button_function_find, self.button_function_replace, self.button_menu_settings)
+        self.retrieve(self.button_module_new, self.button_function_find, self.button_function_replace,
+                      self.button_menu_settings)
         self.button_run.configure(text='open'.upper(), command=self.command_browser_forward)
         self.button_execute.configure(text='move file'.upper(), command=self.set_window_move)
         self.open_browser_item()
@@ -821,7 +845,8 @@ class Window(tkinter.Tk):
         """ Launches a window for selecting a folder and pastes it into the folder text field. """
         selected_folder = askdirectory(
             title=f'{s.PROGRAM_NAME}: select a folder',
-            initialdir=self.current_path if os.path.isdir(self.current_path) else self.current_path[:self.current_path.rfind('/')])
+            initialdir=self.current_path if os.path.isdir(self.current_path) else self.current_path[
+                                                                                  :self.current_path.rfind('/')])
         if len(text_widget.get('1.0', 'end')) > 1:
             text_widget.insert('end', f', {selected_folder}')
         else:
@@ -832,7 +857,8 @@ class Window(tkinter.Tk):
         """ Launches a window for selecting one or more file(s) and pastes it into the file text field. """
         selected_files = askopenfilenames(
             title=f'{s.PROGRAM_NAME}: select one or multiple files',
-            initialdir=self.current_path if os.path.isdir(self.current_path) else self.current_path[:self.current_path.rfind('/')])
+            initialdir=self.current_path if os.path.isdir(self.current_path) else self.current_path[
+                                                                                  :self.current_path.rfind('/')])
         if selected_files:
             strip_chars = "(),'"
             if len(text_widget.get('1.0', 'end')) > 1:
@@ -858,11 +884,11 @@ class Window(tkinter.Tk):
                 rest_of_line = ''
             elif s.INI_COMMENTS[0] in line:
                 self.text_file_content.tag_add('comment', f'{line_index}.{line.index(s.INI_COMMENTS[0])}',
-                                          f'{line_index}.end')
+                                               f'{line_index}.end')
                 rest_of_line = line[:line.index(s.INI_COMMENTS[0])]
             elif s.INI_COMMENTS[1] * 2 in line:
                 self.text_file_content.tag_add('comment', f'{line_index}.{line.index(s.INI_COMMENTS[1] * 2)}',
-                                          f'{line_index}.end')
+                                               f'{line_index}.end')
                 rest_of_line = line[:line.index(s.INI_COMMENTS[1] * 2)]
             self.text_file_content.tag_config('comment', foreground='grey')
             if rest_of_line:
@@ -870,10 +896,10 @@ class Window(tkinter.Tk):
                 self.text_file_content.tag_config(f'level{level}', foreground=s.INI_LEVEL_COLORS[level])
                 if rest_of_line.split()[0].strip() in self.current_levels[level]:
                     self.text_file_content.tag_add(f'level{level}', f'{line_index}.0',
-                                              f'{line_index}.{len(rest_of_line)}')
+                                                   f'{line_index}.{len(rest_of_line)}')
                 elif rest_of_line.strip() in s.INI_ENDS:
                     self.text_file_content.tag_add(f'level{level}', f'{line_index}.0',
-                                              f'{line_index}.{len(rest_of_line)}')
+                                                   f'{line_index}.{len(rest_of_line)}')
 
     def command_text_comment(self):
         """ Comments the text selected in the text editor """
@@ -1062,10 +1088,11 @@ class Window(tkinter.Tk):
         if event:
             pass
         try:
-            self.current_path = (f"{s.LIBRARY}/"
-                            f"{self.treeview_modules_idle.item(self.treeview_modules_idle.selection()[0], 'values')[0]}")
+            self.current_path = (
+                f"{s.LIBRARY}/"
+                f"{self.treeview_modules_idle.item(self.treeview_modules_idle.selection()[0], 'values')[0]}")
             self.treeview_modules_active.selection_remove(self.treeview_modules_active.selection()[0])
-            # selection_remove is a selection event steeling focus to the other list
+            # # # selection_remove is a selection event steeling focus to the other list
             self.treeview_modules_idle.selection_set(self.treeview_modules_idle.selection()[0])
         except IndexError:
             pass
@@ -1079,14 +1106,16 @@ class Window(tkinter.Tk):
         if event:
             pass
         try:
-            self.current_path = (f"{s.LIBRARY}/"
-                            f"{self.treeview_modules_active.item(self.treeview_modules_active.selection()[0], 'values')[0]}")
+            self.current_path = (
+                f"{s.LIBRARY}/"
+                f"{self.treeview_modules_active.item(self.treeview_modules_active.selection()[0], 'values')[0]}")
             self.treeview_modules_idle.selection_remove(self.treeview_modules_idle.selection()[0])
             self.treeview_modules_active.selection_set(self.treeview_modules_active.selection()[0])
         except IndexError:
             pass
         self.key_to_command_current['<Return>'] = self.command_module_browse
-        self.position(self.button_module_retrieve, self.button_module_reload, self.button_module_browse, self.button_definition_edit)
+        self.position(self.button_module_retrieve, self.button_module_reload, self.button_module_browse,
+                      self.button_definition_edit)
         self.retrieve(self.button_module_attach)
 
     def refresh_definitions(self):
@@ -1196,7 +1225,8 @@ class Window(tkinter.Tk):
                         self.set_log_update(f"module {module['name']} deactivated")
                         return
                     else:
-                        self.set_log_update(f'command_module_retrieve error: module {module_selected} retrieval aborted')
+                        self.set_log_update(
+                            f'command_module_retrieve error: module {module_selected} retrieval aborted')
             self.set_log_update(f'command_module_retrieve error: module {module_selected} not found')
         except _tkinter.TclError:
             self.set_log_update('command_module_retrieve error: module not selected')
