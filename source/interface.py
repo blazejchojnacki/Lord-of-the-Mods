@@ -305,9 +305,11 @@ class Window(tkinter.Tk):
             self.button_run,
             self.button_execute,
         ]
+        self.check_buttons = [self.option_button_0, self.option_button_a, self.option_button_b, self.option_button_c]
         labels = [
             label_modules_idle,
             label_modules_active,
+            self.label_module_new_name,
             self.label_browser,
             self.label_scope_select,
             label_find,
@@ -329,6 +331,7 @@ class Window(tkinter.Tk):
         for parameter_text in self.list_text_definition_editor:
             texts.append(parameter_text)
         entries = [
+            self.entry_module_new_name
         ]
         for setting_entry in self.list_entry_settings:
             entries.append(setting_entry)
@@ -377,6 +380,10 @@ class Window(tkinter.Tk):
                 selectbackground=s.TEXT_COLORS[0], selectforeground=s.TEXT_COLORS[-1],
                 disabledbackground=s.ENTRY_BACKGROUND_COLOR, disabledforeground=s.TEXT_COLORS[0])
         self.text_result.configure(foreground=s.TEXT_COLORS[1])
+        for check_button in self.check_buttons:
+            check_button.configure(background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0],
+                                   activebackground=s.APP_BACKGROUND_COLOR, activeforeground=s.TEXT_COLORS[0],
+                                   selectcolor=s.ENTRY_BACKGROUND_COLOR)
         self.listbox_browser.configure(
             background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0], font=s.FONT_TEXT,
             selectbackground=s.TEXT_COLORS[0], selectforeground=s.TEXT_COLORS[-1])
@@ -534,9 +541,10 @@ class Window(tkinter.Tk):
 
     def set_window_module_new(self, start_name: str = ''):
         self.clear_window()
-        # TODO: complete buttons
-        self.retrieve(self.button_menu_modules)
-        self.position(self.container_module_new, self.button_menu_back)
+        self.retrieve(self.button_menu_modules, self.button_menu_settings, self.button_execute)
+        self.position(self.container_module_new, self.button_menu_back, self.button_run)
+        self.button_run.configure(text='create', command=self.command_module_new)
+        self.button_menu_back.configure(command=self.command_module_new_cancel)
         if start_name:
             self.entry_module_new_name.insert('end', start_name)
         self.current_window = 'module_new'
@@ -688,7 +696,7 @@ class Window(tkinter.Tk):
         self.key_to_command_current = self.key_to_command_text.copy()
         self.clear_window()
         self.position(self.container_definition, self.button_menu_back)
-        self.retrieve(self.button_menu_settings, self.button_menu_back, self.button_execute)
+        self.retrieve(self.button_menu_settings, self.button_execute)
         self.button_menu_back.configure(command=self.set_window_modules)
         self.button_run.configure(text='save parameters'.upper(), command=self.command_definition_save)
         self.button_menu_modules.configure(text='return to modules'.upper())
@@ -1158,6 +1166,13 @@ class Window(tkinter.Tk):
             self.label_module_new_name.configure(text=' Please provide a name unique to the new module')
             self.set_log_update('command_module_new error: a correct unique name was not provided')
         self.new_module_name = ''
+
+    def command_module_new_cancel(self):
+        """ escape the module_new screen """
+        self.label_module_new_name.configure(text='')
+        self.option_button_0.select()
+        self.set_window_modules()
+        self.set_log_update('new module creation cancelled')
 
     def command_module_copy(self):
         """ Copies the selected module. Currently, not in use """
