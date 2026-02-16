@@ -1,4 +1,5 @@
 import os.path
+import shutil
 import tkinter
 import _tkinter
 from tkinter.messagebox import askquestion
@@ -11,8 +12,14 @@ from source.initiator import initiate
 from source.constructor import load_file, load_directories
 from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
 from source.module_control import modules_filter, modules_sort, snapshot_take, snapshot_compare, \
-    module_detect_changes, module_copy, module_new, detect_new_modules, \
-    definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES
+    module_detect_changes, module_copy, module_new, detect_new_modules, hash_file, \
+    definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES, CHANGES_TYPES
+
+
+main_window = None
+current_info: tkinter.Toplevel
+popping_list_deployed = False
+popping_list_chosen = ''
 
 UNIT_WIDTH = 80
 UNIT_HEIGHT = 40
@@ -21,6 +28,7 @@ FULL_WIDTH = UNIT_WIDTH * 15
 LIST_WIDTH = 160
 
 MODULE_COLUMNS = {'name': 1, 'class': 1, 'progress': 1, 'description': 5}
+CHANGES_COLUMNS = {'path': 6, 'type': 1}
 
 
 class ColumnedListbox(tkinter.ttk.Treeview):
@@ -66,6 +74,72 @@ def open_children(tree, parent):
         pass
 
 
+class PoppingList(tkinter.Toplevel):
+    """ Tk-based popping window with a list of choices """
+
+    def __init__(self, master, focus_point, choices: list, **kwargs):
+        global popping_list_deployed
+        super().__init__(master, **kwargs)
+        self.master = master
+        self.overrideredirect(True)
+        self.attributes('-topmost', True)
+        self.option_listbox = tkinter.Listbox(master=self)
+        self.option_listbox.configure(
+            background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0], font=s.FONT_TEXT,
+            selectbackground=s.TEXT_COLORS[0], selectforeground=s.TEXT_COLORS[-1])
+        self.option_listbox.pack()
+        self.option_list = choices
+        for option_name in self.option_list:
+            self.option_listbox.insert('end', option_name)
+            # self.option_listbox.itemconfig('end', foreground='grey' if version_dict[version_name] else 'green')
+
+        self.option_listbox.bind('<<ListboxSelect>>', self.on_select_option)
+        self.master.bind('<Configure>', self.keep_track)
+        popping_list_deployed = True
+        self.offset_x = focus_point[0]
+        self.offset_y = focus_point[1]
+        self.keep_track()
+        self.bind('<FocusOut>', self.on_select_cancel)
+        self.click_func = self.master.bind('<Button>', self.on_select_cancel, add=True)
+        self.mainloop()
+
+    def keep_track(self, event=None):
+        if event:
+            pass
+        self.master.update()
+        try:
+            if popping_list_deployed is True:
+                self.geometry(
+                    f'+{self.master.winfo_x() + self.offset_x}+{self.master.winfo_y() + self.offset_y}'
+                )
+        except _tkinter.TclError:
+            print('selection aborted: window closed')
+
+    def on_select_option(self, event):
+        global popping_list_chosen, popping_list_deployed
+        if event:
+            pass
+        try:
+            selected_option = self.option_listbox.selection_get()
+            popping_list_chosen = selected_option
+            self.quit()
+            self.destroy()
+            popping_list_deployed = False
+        except _tkinter.TclError:
+            print('on_select_option error: TclError')
+
+    def on_select_cancel(self, event=None):
+        global popping_list_deployed
+        if event:
+            pass
+        try:
+            self.destroy()
+            popping_list_deployed = False
+            self.master.unbind('<Button>', self.click_func)
+        except NameError:
+            pass
+
+
 DIR_EXCEPTIONS = ['.git']
 
 
@@ -94,9 +168,6 @@ def get_change_statistics(module):
     return ''
 
 
-main_window = None
-
-
 class Window(tkinter.Tk):
     """ Tk-based app Window """
 
@@ -107,10 +178,12 @@ class Window(tkinter.Tk):
         self.current_path = ''
         self.current_window = ''
         self.global_modules = []
+        self.loaded_module = None
         self.current_levels = []
         self.current_file_content_backup = ''
         self.new_module_name = ''
         self.new_module_source = ''
+        self.new_changes = {}
 
         self.key_to_command_module = {
             '<Return>': self.command_browser_forward,
@@ -229,6 +302,19 @@ class Window(tkinter.Tk):
             self.list_labels_module_editor.append(tkinter.Label(master=self.container_definition, text=key))
             self.list_text_definition_editor.append(tkinter.Text(master=self.container_definition))
 
+        # # # changes
+        self.container_changes = tkinter.Frame(master=self.container_current)
+        self.label_changes = tkinter.Label(master=self.container_changes, text='changes')
+        self.proportions_changes = (6, 1)
+        self.treeview_changes = ColumnedListbox(
+            master=self.container_changes, width=TEXT_WIDTH, height=20, show='headings', columns=CHANGES_COLUMNS)
+        self.treeview_changes.bind('<<TreeviewSelect>>', self.on_select_change)
+        self.container_changes_new = tkinter.Frame(master=self.container_current)
+        self.treeview_changes_new = ColumnedListbox(
+            master=self.container_changes_new, width=TEXT_WIDTH, height=10, show='headings', columns=CHANGES_COLUMNS)
+        self.treeview_changes_new.bind('<<TreeviewSelect>>', self.on_select_change)
+        self.treeview_changes_new.bind('<Double-1>', self.on_double_click_change_new)
+
         # # # new module screen
         self.container_module_new = tkinter.Frame(master=self.container_current)
         self.label_module_new_name = tkinter.Label(master=self.container_module_new,
@@ -297,6 +383,8 @@ class Window(tkinter.Tk):
             self.container_module_new_options,
             container_module_buttons,
             self.container_definition,
+            self.container_changes,
+            self.container_changes_new,
             self.container_browser,
             self.container_file_content,
             self.container_scope_select,
@@ -336,6 +424,7 @@ class Window(tkinter.Tk):
             label_modules_idle,
             label_modules_active,
             self.label_module_new_name,
+            self.label_changes,
             self.label_browser,
             self.label_scope_select,
             label_find,
@@ -469,6 +558,12 @@ class Window(tkinter.Tk):
             self.option_button_b: dict(x=0, y=UNIT_HEIGHT * 2, width=s.DOUBLE_WIDTH, height=UNIT_HEIGHT),
             self.option_button_c: dict(x=0, y=UNIT_HEIGHT * 3, width=s.DOUBLE_WIDTH, height=UNIT_HEIGHT),
 
+            self.container_changes: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 12),
+            self.label_changes: dict(x=0, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT),
+            self.treeview_changes: dict(x=UNIT_WIDTH * 1, y=UNIT_HEIGHT, width=TEXT_WIDTH, height=UNIT_HEIGHT * 10),
+            self.container_changes_new: dict(x=0, y=UNIT_HEIGHT * 6, width=FULL_WIDTH, height=UNIT_HEIGHT * 6),
+            self.treeview_changes_new: dict(x=UNIT_WIDTH, y=UNIT_HEIGHT * 0, width=TEXT_WIDTH, height=UNIT_HEIGHT * 5),
+
             self.label_scope_select: dict(x=0, y=0),
             self.text_scope_select: dict(x=UNIT_WIDTH * 2, y=UNIT_HEIGHT * 0, width=TEXT_WIDTH - UNIT_WIDTH * 4,
                                          height=UNIT_HEIGHT),
@@ -531,6 +626,8 @@ class Window(tkinter.Tk):
             self.label_scope_select, button_scope_select_file, self.button_scope_select_folder, self.text_scope_select,
             self.label_scope_except, self.button_scope_except_file, button_scope_except_folder, self.text_scope_except,
             label_find, self.text_find, button_replace_copy, label_replace, self.text_replace,
+            self.container_changes, self.label_changes, self.treeview_changes, self.container_changes_new,
+            self.treeview_changes_new,
         )  #
 
         self.set_window_modules()
@@ -561,6 +658,15 @@ class Window(tkinter.Tk):
                     self.command_file_save()
         self.current_file_content_backup = ''
 
+    def warning_unsaved_changes(self):
+        if self.treeview_changes_new.get_children():
+            do_proceed = tkinter.messagebox.askyesno(
+                title=s.PROGRAM_NAME, message='some changes have not been applied.\n Do you wish to apply then?')
+            if do_proceed is True:
+                self.command_change_confirm()
+            elif do_proceed is False:
+                pass
+
     def position(self, *elements):
         for element in elements:
             try:
@@ -582,10 +688,13 @@ class Window(tkinter.Tk):
         """ Cleans the screen of all containers. """
         if self.current_window == 'file_editor':
             self.warning_file_save()
+        elif self.current_window == 'changes_new':
+            self.warning_unsaved_changes()
         self.current_window = ''
         self.retrieve(self.container_browser, self.container_modules, self.container_definition,
                       self.container_find, self.container_replace, self.container_module_new,
-                      self.container_scope_select, self.container_file_content, self.container_settings)
+                      self.container_scope_select, self.container_file_content, self.container_settings,
+                      self.container_changes_new, self.container_changes)
 
     def set_window_settings(self):
         """ Loads the screen for settings edition. """
@@ -639,11 +748,11 @@ class Window(tkinter.Tk):
             self.global_modules = modules_filter(return_type='definitions')
         self.key_to_command_current = self.key_to_command_text.copy()
         self.clear_window()
-        self.retrieve(self.button_menu_settings, self.button_execute)
-        self.position(self.container_definition, self.button_menu_back)
-        self.button_menu_back.configure(command=self.set_window_modules)
-        self.button_run.configure(text='save parameters'.upper(), command=self.command_definition_save)
+        self.retrieve(self.button_menu_settings, self.button_function_find)
+        self.position(self.container_definition, self.button_menu_back, self.button_execute)
         self.button_menu_modules.configure(text='return to modules'.upper())
+        self.button_run.configure(text='save parameters'.upper(), command=self.command_definition_save)
+        self.button_execute.configure(text='see changed files', command=self.set_window_changes)
         module_selected = self.current_path.split('/')[-1]
         for module in self.global_modules:
             if module_selected == module['name']:
@@ -663,8 +772,48 @@ class Window(tkinter.Tk):
                     if 'active' in param:
                         self.list_text_definition_editor[level].configure(state='disabled')
                     level += 1
+                self.loaded_module = module
+                break
         self.set_log_update('module definition edition feature loaded.')
         self.current_window = 'definition'
+
+    def set_window_changes(self):
+        self.key_to_command_current = self.key_to_command_browser.copy()
+        self.clear_window()
+        self.retrieve(self.button_execute, self.button_function_find, self.button_function_replace, self.button_run)
+        self.position(self.container_changes, self.treeview_changes, self.button_menu_back,
+                      self.button_menu_modules, self.button_menu_settings)
+        self.button_menu_back.configure(text='back', command=self.set_window_definition)
+        self.button_menu_modules.configure(text='return to modules', command=self.set_window_modules)
+        self.button_menu_settings.configure(text='edit changes', command=self.set_window_change_new)
+        # # # displayed on selection - see on_select_change()
+        self.button_execute.configure(text='open file', command=self.set_window_file)
+        self.treeview_changes.delete(*self.treeview_changes.get_children())
+        change_index = 0
+        for change in self.loaded_module['changes']:
+            change_values = (change, self.loaded_module['changes'][change][0])
+            self.treeview_changes.insert(index=change_index, parent='', values=change_values, iid=change_index)
+            change_index += 1
+        self.label_changes.configure(text=f"changes of {self.loaded_module['name']}")
+        self.treeview_changes.bind('<Double-1>', self.set_window_file)
+        self.current_window = 'changes'
+        self.set_log_update('Changes screen loaded')
+
+    def set_window_change_new(self):
+        self.retrieve()
+        self.position(self.container_changes_new, self.button_menu_modules, self.button_menu_settings,
+                      self.button_run, self.button_execute, self.button_function_find)
+        self.button_menu_back.configure(command=self.set_window_changes)
+        self.button_menu_modules.configure(text='add file(s)', command=self.command_change_path)
+        self.button_menu_settings.configure(text='copy file(s)', command=self.command_change_copy)
+        self.button_run.configure(text='delete change(s)', command=self.command_change_delete)
+        self.button_execute.configure(text='apply change(s)', command=self.command_change_confirm)
+        self.button_function_find.configure(text='change type', command=self.change_type)
+        self.container_changes.place_configure(height=UNIT_HEIGHT * 6)
+        self.treeview_changes.place_configure(height=UNIT_HEIGHT * 5)
+        self.treeview_changes.bind('<Double-1>', self.on_double_click_change_old)
+        self.current_window = 'changes_new'
+        self.set_log_update('Changes edition screen loaded')
 
     def set_window_browser(self):
         """ Loads the screen for browsing in modules directories. """
@@ -877,6 +1026,8 @@ class Window(tkinter.Tk):
         if event:
             pass
         try:
+            self.loaded_module = modules_filter(
+                name=self.treeview_modules_idle.item(self.treeview_modules_idle.selection()[0], 'values')[0])[0]
             self.current_path = (
                 f"{s.LIBRARY}/"
                 f"{self.treeview_modules_idle.item(self.treeview_modules_idle.selection()[0], 'values')[0]}")
@@ -895,6 +1046,8 @@ class Window(tkinter.Tk):
         if event:
             pass
         try:
+            self.loaded_module = modules_filter(
+                name=self.treeview_modules_active.item(self.treeview_modules_active.selection()[0], 'values')[0])[0]
             self.current_path = (
                 f"{s.LIBRARY}/"
                 f"{self.treeview_modules_active.item(self.treeview_modules_active.selection()[0], 'values')[0]}")
@@ -1135,29 +1288,138 @@ class Window(tkinter.Tk):
                     output = error.message
         self.set_log_update(output)
 
+    def on_select_change(self, event):
+        """ upon selecting a changed file, enables the 'open file' button """
+        if event:
+            pass
+        current_treeview = self.focus_get()
+        if current_treeview == self.treeview_changes or current_treeview == self.treeview_changes_new:
+            try:
+                self.current_path = (
+                    f"{s.LIBRARY}/{self.loaded_module['name']}/"
+                    f"{current_treeview.item(current_treeview.selection()[0], 'values')[0]}")
+                self.position(self.button_execute)
+            except IndexError:
+                self.retrieve(self.button_execute)
+                pass
+
+    def change_type(self, x=s.DOUBLE_WIDTH * 5, y=UNIT_HEIGHT * 8, tree='old and new'):
+        """"""
+        global popping_list_chosen
+        PoppingList(master=self, focus_point=(x + s.DOUBLE_WIDTH, y + UNIT_HEIGHT * 2), choices=CHANGES_TYPES)
+        try:
+            if self.treeview_changes.selection() and 'old' in tree:
+                for selected in self.treeview_changes.selection():
+                    self.treeview_changes.set(
+                        selected, CHANGES_COLUMNS[1], popping_list_chosen)
+                    path_added = self.treeview_changes.item(selected, 'values')[0]
+                    self.loaded_module['changes'][path_added][0] = popping_list_chosen
+            if self.treeview_changes_new.selection() and 'new' in tree:
+                for selected in self.treeview_changes_new.selection():
+                    self.treeview_changes_new.set(
+                        selected, CHANGES_COLUMNS[1], popping_list_chosen)
+                    path_added = self.treeview_changes_new.item(selected, 'values')[0]
+                    self.new_changes[path_added][0] = popping_list_chosen
+        except IndexError:
+            pass
+        except _tkinter.TclError:
+            self.set_log_update(popping_list_chosen)
+
+    def on_double_click_change_old(self, event=None):
+        """ - """
+        self.change_type(event.x, event.y, 'old')
+
+    def on_double_click_change_new(self, event=None):
+        """ - """
+        self.change_type(event.x, event.y + UNIT_HEIGHT * 5, 'new')
+
+    def command_change_path(self):
+        """ - """
+        module_path = f'{s.LIBRARY}/{self.loaded_module['name']}'
+        paths_added = tkinter.filedialog.askopenfilenames(title=s.PROGRAM_NAME, initialdir=module_path)
+        for path_added in paths_added:
+            hash_value = hash_file(path_added)
+            if module_path in path_added:
+                path_added = path_added[len(module_path) + 1:]
+            self.treeview_changes_new.insert('', 'end', values=(path_added, 'changed'))
+            try:
+                self.new_changes[path_added] = ['changed', hash_value]
+            except TypeError as error:
+                print(error)
+
+    def command_change_copy(self):
+        """ Copies selected files in the change list """
+        module_path = f'{s.LIBRARY}/{self.loaded_module['name']}'
+        game_directory = os.path.abspath('../').replace('\\', '/')
+        paths_added = tkinter.filedialog.askopenfilenames(title=s.PROGRAM_NAME, initialdir='../')
+        for path_added in paths_added:
+            if game_directory in path_added and module_path not in path_added:
+                new_path = path_added[path_added.rfind(game_directory) + len(game_directory):]
+                os.makedirs(f'{module_path}/{new_path[:new_path.rfind('/')]}', exist_ok=True)
+                shutil.copy2(src=path_added, dst=f'{module_path}/{new_path}')
+                hash_value = hash_file(f'{module_path}/{new_path}')
+                self.treeview_changes_new.insert('', 'end', values=(new_path, 'changed'))
+                self.new_changes[new_path] = ['changed', hash_value]
+            else:
+                self.set_log_update(f'file {path_added} could be copied')
+
+    def command_change_confirm(self):
+        """ saves the changes pending in the change list """
+        for change_new_id in self.treeview_changes_new.get_children():
+            change_new_values = self.treeview_changes_new.item(change_new_id, 'values')
+            if isinstance(change_new_values, tuple):
+                self.treeview_changes.insert(parent='', index='end', values=change_new_values)
+                self.treeview_changes.see(self.treeview_changes.get_children()[-1])
+                self.treeview_changes_new.delete(change_new_id)
+        # # # save changes:
+        self.loaded_module['changes'].update(self.new_changes)
+        self.loaded_module.edit(changes=self.loaded_module['changes'])
+        self.set_window_changes()
+
+    def command_change_delete(self):
+        """ Deletes a change file position from a change list """
+        try:
+            if self.treeview_changes.selection():
+                for selected in self.treeview_changes.selection():
+                    file_path = self.treeview_changes.item(selected, 'values')[0]
+                    self.loaded_module['changes'].pop(file_path)
+                    self.treeview_changes.delete(selected)
+                self.loaded_module.edit(changes=self.loaded_module['changes'])
+            if self.treeview_changes_new.selection():
+                for selected in self.treeview_changes_new.selection():
+                    file_path = self.treeview_changes_new.item(selected, 'values')[0]
+                    self.new_changes.pop(file_path)
+                    self.treeview_changes_new.delete(selected)
+        except _tkinter.TclError:
+            print('debug-1')
+        except IndexError:
+            print('debug-2')
+        except KeyError:
+            print('command_change_delete: KeyError')
+
     def command_module_browse(self, event=None):
         """ Allows to start browsing from the object folder if it can be found. """
         if event:
             pass
-        current_module = modules_filter(name=self.current_path.split('/')[-1])[0]
+        self.loaded_module = modules_filter(name=self.current_path.split('/')[-1])[0]
         game_paths = s.current[s.KEY_GAMES]
-        if current_module['class'] == DEFINITION_CLASSES[0] and current_module['active']:
-            if not current_module['game']:
-                for change_key in current_module['changes']:
+        if self.loaded_module['class'] == DEFINITION_CLASSES[0] and self.loaded_module['active']:
+            if not self.loaded_module['game']:
+                for change_key in self.loaded_module['changes']:
                     change_split = change_key.split('/')
                     if os.path.isdir('/'.join(change_split[:2])) and '/'.join(change_split[1:-1]) in game_paths:
                         self.current_path = '/'.join((change_split[0], game_paths[game_paths.index(change_split[1])]))
                         if os.path.isdir(f'{self.current_path}/data/ini/object'):
                             self.current_path = f'{self.current_path}/data/ini/object'
                         break
-            elif current_module['game'] in game_paths:
-                if os.path.isdir(f"../{game_paths[game_paths.index(current_module['game'])]}"):
-                    self.current_path = f"../{game_paths[game_paths.index(current_module['game'])]}"
-            elif f"{current_module['game']}/aotr" in game_paths:
-                if os.path.isdir(f"../{current_module['game']}/aotr/data/ini/object"):
-                    self.current_path = f"../{current_module['game']}/aotr/data/ini/object"
-                elif os.path.isdir(f"../{current_module['game']}/aotr"):
-                    self.current_path = f"../{current_module['game']}/aotr"
+            elif self.loaded_module['game'] in game_paths:
+                if os.path.isdir(f"../{game_paths[game_paths.index(self.loaded_module['game'])]}"):
+                    self.current_path = f"../{game_paths[game_paths.index(self.loaded_module['game'])]}"
+            elif f"{self.loaded_module['game']}/aotr" in game_paths:
+                if os.path.isdir(f"../{self.loaded_module['game']}/aotr/data/ini/object"):
+                    self.current_path = f"../{self.loaded_module['game']}/aotr/data/ini/object"
+                elif os.path.isdir(f"../{self.loaded_module['game']}/aotr"):
+                    self.current_path = f"../{self.loaded_module['game']}/aotr"
         else:
             for game_name in game_paths:
                 if os.path.isdir(f'{self.current_path}/{game_name}/data/ini/object'):
@@ -1449,26 +1711,26 @@ class Window(tkinter.Tk):
                 current_module_name = self.current_path[module_index_start: module_index_end]
                 current_module_list = modules_filter(name=current_module_name)
                 if current_module_list:
-                    current_module = current_module_list[0]
+                    self.loaded_module = current_module_list[0]
                 else:
                     module_index_start = self.current_path.find(s.MAIN_DIRECTORY) + len(s.MAIN_DIRECTORY) + 1
                     module_index_end = self.current_path.replace('\\', '/').find('/', module_index_start)
                     current_module_name = self.current_path[module_index_start: module_index_end]
                     current_module_list = modules_filter(name=current_module_name)
                     if current_module_list:
-                        current_module = current_module_list[0]
+                        self.loaded_module = current_module_list[0]
                     else:
                         output += '\nmodule not found - definition not updated.\n'
                         return self.set_log_update(output)
                 new_changes = {}
-                for file_path in current_module['changes']:
+                for file_path in self.loaded_module['changes']:
                     file_name = file_named.replace('\\', '/').split('/')[-1]
                     if file_path.split('/')[-1] == file_name:
                         file_rel_path = '..' + to_folder[module_index_end + 1:].replace('\\', '/')
-                        new_changes[f'{file_rel_path}/{file_name}'] = current_module['changes'][file_path]
+                        new_changes[f'{file_rel_path}/{file_name}'] = self.loaded_module['changes'][file_path]
                     else:
-                        new_changes[file_path] = current_module['changes'][file_path]
-                definition_edit(current_module, changes=new_changes)
+                        new_changes[file_path] = self.loaded_module['changes'][file_path]
+                definition_edit(self.loaded_module, changes=new_changes)
         self.set_log_update(output)
 
     def command_run_duplicate(self):

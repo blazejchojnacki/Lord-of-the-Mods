@@ -34,6 +34,8 @@ DEFINITION_CLASS_TEMPLATE = {
     'description': '',
     'changes': {}
 }
+CHANGES_TYPES = ['added', 'removed', 'changed', 'unchanged']
+
 PRINT_COLORS = {
     'information': '\033[96m',
     'warning': '\033[93m',
