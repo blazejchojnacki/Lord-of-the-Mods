@@ -83,6 +83,15 @@ def count_files_recurrent(path, counter: int = -1):
             counter += 1
     return counter
 
+def get_change_statistics(module):
+    if module['name']:
+        module_path = f"{s.LIBRARY}/{module['name']}"
+        output = (f"mentioned: {len(module['changes'])} ("
+                  f" removed: {len([_ for _ in module['changes'] if _[0] == 'removed'])}"
+                  f') | present in module: {count_files_recurrent(module_path)}')
+        return output
+    return ''
+
 
 main_window = None
 
@@ -530,6 +539,20 @@ class Window(tkinter.Tk):
         self.protocol("WM_DELETE_WINDOW", self.on_app_close)
         self.mainloop()
 
+    def on_app_close(self):
+        """ Triggered on closing the application to catch unsaved changes in files. """
+        self.set_log_update('closing application')
+        self.warning_file_save()
+        self.quit()
+
+    def set_log_update(self, line=''):
+        """ Replaces the content of the result field with a given content. """
+        self.text_result.configure(state='normal')
+        self.text_result.delete('1.0', 'end')
+        self.text_result.insert('end', line)
+        self.text_result.configure(state='disabled')
+        self.update()
+
     def warning_file_save(self):
         """ Checks if the edited file have been edited since the previous saving and prompts a question if not. """
         file_named = self.text_scope_select.get('1.0', 'end').replace('/', '\\').strip('\n\t {}')
@@ -539,12 +562,6 @@ class Window(tkinter.Tk):
                 if save_file == 'yes':
                     self.command_file_save()
         self.current_file_content_backup = ''
-
-    def on_app_close(self):
-        """ Triggered on closing the application to catch unsaved changes in files. """
-        self.set_log_update('closing application')
-        self.warning_file_save()
-        self.quit()
 
     def clear_container(self, container):
         self.retrieve(container.winfo_children())
@@ -558,6 +575,42 @@ class Window(tkinter.Tk):
                       self.container_find, self.container_replace, self.container_module_new,
                       self.container_scope_select, self.container_file_content, self.container_settings)
 
+    def set_window_settings(self):
+        """ Loads the screen for settings edition. """
+        self.key_to_command_current = self.key_to_command_text.copy()
+        self.clear_window()
+        self.retrieve(self.button_run, self.button_execute, self.button_function_find, self.button_function_replace)
+        self.position(self.container_settings, self.text_result)
+        self.button_menu_settings.configure(text='save settings'.upper(), command=self.command_settings_save)
+        self.button_menu_modules.configure(text='return to modules'.upper())
+        self.command_settings_reload()
+        self.current_window = 'settings'
+        self.set_log_update('settings edition feature loaded')
+
+    def set_window_modules(self):
+        """ Loads the screen for managing modules. """
+        self.key_to_command_current = self.key_to_command_module.copy()
+        self.clear_window()
+        self.retrieve(self.button_module_copy, self.button_definition_edit, self.button_function_find,
+                      self.button_function_replace, self.button_menu_back)
+        self.position(self.container_modules, self.button_module_new, self.container_command, self.button_run,
+                      self.button_execute,
+                      self.button_menu_settings, self.container_command_buttons, self.text_result)
+        self.container_current.place_configure(height=UNIT_HEIGHT * 13)
+        self.button_run.configure(text='take snapshot'.upper(), command=self.command_snapshot_take)
+        self.button_execute.configure(text='compare snapshots'.upper(), command=self.command_snapshot_compare)
+        self.button_menu_settings.configure(text='edit settings'.upper(), command=self.set_window_settings)
+        self.button_menu_modules.configure(text='refresh modules'.upper())
+        self.refresh_definitions()
+        self.treeview_modules_idle.focus_set()
+        try:
+            self.treeview_modules_idle.selection_set(self.treeview_modules_idle.get_children()[0])
+            self.treeview_modules_idle.focus(self.treeview_modules_idle.get_children()[0])
+        except IndexError:
+            pass
+        self.current_window = 'modules'
+        self.set_log_update('module manager window loaded.')
+
     def set_window_module_new(self, start_name: str = ''):
         self.clear_window()
         self.retrieve(self.button_menu_modules, self.button_menu_settings, self.button_execute)
@@ -567,6 +620,110 @@ class Window(tkinter.Tk):
         if start_name:
             self.entry_module_new_name.insert('end', start_name)
         self.current_window = 'module_new'
+
+    def set_window_definition(self):
+        """ Loads the screen for modification of module definitions. """
+        if not self.global_modules:
+            self.global_modules = modules_filter(return_type='definitions')
+        self.key_to_command_current = self.key_to_command_text.copy()
+        self.clear_window()
+        self.retrieve(self.button_menu_settings, self.button_execute)
+        self.position(self.container_definition, self.button_menu_back)
+        self.button_menu_back.configure(command=self.set_window_modules)
+        self.button_run.configure(text='save parameters'.upper(), command=self.command_definition_save)
+        self.button_menu_modules.configure(text='return to modules'.upper())
+        module_selected = self.current_path.split('/')[-1]
+        for module in self.global_modules:
+            if module_selected == module['name']:
+                level = 0
+                for param in DEFINITION_EXAMPLE:
+                    if param == 'comment':
+                        continue
+                    elif param == 'changes':
+                        self.list_labels_module_editor[-1].configure(text=get_change_statistics(module), justify='left')
+                        continue
+                    self.list_text_definition_editor[level].configure(state='normal')
+                    self.list_text_definition_editor[level].delete('1.0', 'end')
+                    if isinstance(module[param], bool):
+                        self.list_text_definition_editor[level].insert('end', str(module[param]))
+                    else:
+                        self.list_text_definition_editor[level].insert('end', module[param])
+                    if 'active' in param:
+                        self.list_text_definition_editor[level].configure(state='disabled')
+                    level += 1
+        self.set_log_update('module definition edition feature loaded.')
+        self.current_window = 'definition'
+
+    def set_window_browser(self):
+        """ Loads the screen for browsing in modules directories. """
+        self.key_to_command_current = self.key_to_command_browser.copy()
+        self.clear_window()
+        self.retrieve(self.button_module_new, self.button_function_find, self.button_function_replace,
+                      self.button_menu_settings)
+        self.position(self.container_browser)
+        self.container_current.place_configure(height=UNIT_HEIGHT * 13)
+        self.container_command.place_configure(height=UNIT_HEIGHT * 2)
+        self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 2)
+        self.text_result.place_configure(height=int(UNIT_HEIGHT * 0.75))
+        self.button_run.configure(text='open'.upper(), command=self.command_browser_forward)
+        self.button_execute.configure(text='move file'.upper(), command=self.set_window_move)
+        self.button_menu_back.config(command=self.command_browser_back)
+        self.open_browser_item()
+        self.listbox_browser.focus()
+        self.current_window = 'browser'
+        self.set_log_update(f'File browser loaded. Path: {os.path.abspath(self.current_path)}')
+
+    def set_window_move(self):
+        """ Loads the screen for moving files. """
+        self.key_to_command_current = self.key_to_command_text.copy()
+        self.clear_window()
+        self.retrieve(self.button_scope_select_folder, self.button_scope_except_file)
+        self.position(self.container_scope_select)
+        self.container_current.place_configure(height=UNIT_HEIGHT * 5)
+        self.container_command.place_configure(height=UNIT_HEIGHT * 10)
+        self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 10)
+        self.button_menu_back.configure(command=self.command_browser_back)
+        self.button_run.configure(text='move the file'.upper(), command=self.command_run_move)
+        self.button_run.focus()
+        self.button_execute.configure(text='clear logs'.upper(), command=self.set_log_update)
+        self.text_result.place_configure(height=UNIT_HEIGHT * 9)
+        try:
+            self.current_path = f"{self.label_browser.cget('text')}/{self.listbox_browser.selection_get()}".replace(
+                '\\', '/')
+        except _tkinter.TclError:
+            print('file not selected')
+        self.label_scope_select.configure(text='file')
+        self.text_scope_select.delete('1.0', 'end')
+        try:
+            self.text_scope_select.insert('1.0',
+                                          f"{self.label_browser.cget('text')}/{self.listbox_browser.selection_get()}")
+        except _tkinter.TclError:
+            self.text_scope_select.insert('end', self.current_path)
+        self.label_scope_except.configure(text='to folder')
+        self.current_window = 'file_move'
+        self.set_log_update(f'move feature loaded. file: {self.current_path}')
+
+    def set_window_file(self):
+        """ Loads the screen for file edition """
+        if self.command_file_load():
+            self.clear_window()
+            self.key_to_command_current = self.key_to_command_text.copy()
+            self.retrieve(self.button_execute)
+            self.position(self.container_file_content, self.button_run, self.button_function_find,
+                          self.button_function_replace)
+            self.container_current.place_configure(height=UNIT_HEIGHT * 13)
+            self.text_file_content.place_configure(height=UNIT_HEIGHT * 12)
+            self.container_command.place_configure(height=UNIT_HEIGHT * 2)
+            self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 2)
+            self.text_result.place_configure(height=int(UNIT_HEIGHT * 0.75))
+            self.text_file_content.focus()
+            self.button_menu_back.configure(command=self.command_browser_back)
+            self.button_run.configure(text='save file'.upper(), command=self.command_file_save, state='normal')
+            self.current_window = 'file_editor'
+            self.set_log_update(f'file editor loaded. file {self.current_path}')
+            return True
+        else:
+            return False
 
     def set_window_find(self):
         """ Loads the screen for finding text. """
@@ -630,155 +787,6 @@ class Window(tkinter.Tk):
             print('set_window_find warning: no text selected')
         self.current_window = 'self.text_replace'
         self.set_log_update('replace feature loaded')
-
-    def set_window_move(self):
-        """ Loads the screen for moving files. """
-        self.key_to_command_current = self.key_to_command_text.copy()
-        self.clear_window()
-        self.retrieve(self.button_scope_select_folder, self.button_scope_except_file)
-        self.position(self.container_scope_select)
-        self.container_current.place_configure(height=UNIT_HEIGHT * 5)
-        self.container_command.place_configure(height=UNIT_HEIGHT * 10)
-        self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 10)
-        self.button_menu_back.configure(command=self.command_browser_back)
-        self.button_run.configure(text='move the file'.upper(), command=self.command_run_move)
-        self.button_run.focus()
-        self.button_execute.configure(text='clear logs'.upper(), command=self.set_log_update)
-        self.text_result.place_configure(height=UNIT_HEIGHT * 9)
-        try:
-            self.current_path = f"{self.label_browser.cget('text')}/{self.listbox_browser.selection_get()}".replace(
-                '\\', '/')
-        except _tkinter.TclError:
-            print('file not selected')
-        self.label_scope_select.configure(text='file')
-        self.text_scope_select.delete('1.0', 'end')
-        try:
-            self.text_scope_select.insert('1.0',
-                                          f"{self.label_browser.cget('text')}/{self.listbox_browser.selection_get()}")
-        except _tkinter.TclError:
-            self.text_scope_select.insert('end', self.current_path)
-        self.label_scope_except.configure(text='to folder')
-        self.current_window = 'file_move'
-        self.set_log_update(f'move feature loaded. file: {self.current_path}')
-
-    def set_window_file(self):
-        """ Loads the screen for file edition """
-        if self.command_file_load():
-            self.clear_window()
-            self.key_to_command_current = self.key_to_command_text.copy()
-            self.retrieve(self.button_execute)
-            self.position(self.container_file_content, self.button_run, self.button_function_find,
-                          self.button_function_replace)
-            self.container_current.place_configure(height=UNIT_HEIGHT * 13)
-            self.text_file_content.place_configure(height=UNIT_HEIGHT * 12)
-            self.container_command.place_configure(height=UNIT_HEIGHT * 2)
-            self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 2)
-            self.text_result.place_configure(height=int(UNIT_HEIGHT * 0.75))
-            self.text_file_content.focus()
-            self.button_menu_back.configure(command=self.command_browser_back)
-            self.button_run.configure(text='save file'.upper(), command=self.command_file_save, state='normal')
-            self.current_window = 'file_editor'
-            self.set_log_update(f'file editor loaded. file {self.current_path}')
-            return True
-        else:
-            return False
-
-    def set_window_modules(self):
-        """ Loads the screen for managing modules. """
-        self.key_to_command_current = self.key_to_command_module.copy()
-        self.clear_window()
-        self.retrieve(self.button_module_copy, self.button_definition_edit, self.button_function_find,
-                      self.button_function_replace, self.button_menu_back)
-        self.position(self.container_modules, self.button_module_new, self.container_command, self.button_run,
-                      self.button_execute,
-                      self.button_menu_settings, self.container_command_buttons, self.text_result)
-        self.container_current.place_configure(height=UNIT_HEIGHT * 13)
-        self.button_run.configure(text='take snapshot'.upper(), command=self.command_snapshot_take)
-        self.button_execute.configure(text='compare snapshots'.upper(), command=self.command_snapshot_compare)
-        self.button_menu_settings.configure(text='edit settings'.upper(), command=self.set_window_settings)
-        self.button_menu_modules.configure(text='refresh modules'.upper())
-        self.refresh_definitions()
-        self.treeview_modules_idle.focus_set()
-        try:
-            self.treeview_modules_idle.selection_set(self.treeview_modules_idle.get_children()[0])
-            self.treeview_modules_idle.focus(self.treeview_modules_idle.get_children()[0])
-        except IndexError:
-            pass
-        self.current_window = 'modules'
-        self.set_log_update('module manager window loaded.')
-
-    def set_window_definition(self):
-        """ Loads the screen for modification of module definitions. """
-        if not self.global_modules:
-            self.global_modules = modules_filter(return_type='definitions')
-        self.key_to_command_current = self.key_to_command_text.copy()
-        self.clear_window()
-        self.retrieve(self.button_menu_settings, self.button_execute)
-        self.position(self.container_definition, self.button_menu_back)
-        self.button_menu_back.configure(command=self.set_window_modules)
-        self.button_run.configure(text='save parameters'.upper(), command=self.command_definition_save)
-        self.button_menu_modules.configure(text='return to modules'.upper())
-        module_selected = self.current_path.split('/')[-1]
-        for module in self.global_modules:
-            if module_selected == module['name']:
-                level = 0
-                for param in DEFINITION_EXAMPLE:
-                    if param == 'comment':
-                        continue
-                    elif param == 'changes':
-                        self.list_labels_module_editor[-1].configure(text=self.get_change_statistics(module), justify='left')
-                        continue
-                    self.list_text_definition_editor[level].configure(state='normal')
-                    self.list_text_definition_editor[level].delete('1.0', 'end')
-                    if isinstance(module[param], bool):
-                        self.list_text_definition_editor[level].insert('end', str(module[param]))
-                    else:
-                        self.list_text_definition_editor[level].insert('end', module[param])
-                    if 'active' in param:
-                        self.list_text_definition_editor[level].configure(state='disabled')
-                    level += 1
-        self.set_log_update('module definition edition feature loaded.')
-        self.current_window = 'definition'
-
-    def set_window_browser(self):
-        """ Loads the screen for browsing in modules directories. """
-        self.key_to_command_current = self.key_to_command_browser.copy()
-        self.clear_window()
-        self.retrieve(self.button_module_new, self.button_function_find, self.button_function_replace,
-                      self.button_menu_settings)
-        self.position(self.container_browser)
-        self.container_current.place_configure(height=UNIT_HEIGHT * 13)
-        self.container_command.place_configure(height=UNIT_HEIGHT * 2)
-        self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 2)
-        self.text_result.place_configure(height=int(UNIT_HEIGHT * 0.75))
-        self.button_run.configure(text='open'.upper(), command=self.command_browser_forward)
-        self.button_execute.configure(text='move file'.upper(), command=self.set_window_move)
-        self.button_menu_back.config(command=self.command_browser_back)
-        self.open_browser_item()
-        self.listbox_browser.focus()
-        self.current_window = 'browser'
-        self.set_log_update(f'File browser loaded. Path: {os.path.abspath(self.current_path)}')
-
-    def set_window_settings(self):
-        """ Loads the screen for settings edition. """
-        self.key_to_command_current = self.key_to_command_text.copy()
-        self.clear_window()
-        self.retrieve(self.button_run, self.button_execute, self.button_function_find, self.button_function_replace)
-        self.position(self.container_settings, self.text_result)
-        self.button_menu_settings.configure(text='save settings'.upper(), command=self.command_settings_save)
-        self.button_menu_modules.configure(text='return to modules'.upper())
-        self.command_settings_reload()
-        self.current_window = 'settings'
-        self.set_log_update('settings edition feature loaded')
-
-    def get_change_statistics(self, module):
-        if module['name']:
-            module_path = f"{s.LIBRARY}/{module['name']}"
-            output = (f"mentioned: {len(module['changes'])} ("
-                      f" removed: {len([_ for _ in module['changes'] if _[0] == 'removed'])}"
-                      f') | present in module: {count_files_recurrent(module_path)}')
-            return output
-        return ''
 
     def command_snapshot_take(self):
         """ Takes a snapshot of all files in the selected directory. """
@@ -1449,14 +1457,6 @@ class Window(tkinter.Tk):
             self.listbox_browser.selection_set((selected_item_index + 1) % list_length)
         else:
             print(self.focus_get())
-
-    def set_log_update(self, line=''):
-        """ Replaces the content of the result field with a given content. """
-        self.text_result.configure(state='normal')
-        self.text_result.delete('1.0', 'end')
-        self.text_result.insert('end', line)
-        self.text_result.configure(state='disabled')
-        self.update()
 
     def use_selected_text(self, event=None):
         """ Binds key presses with functions in the file editor. """
