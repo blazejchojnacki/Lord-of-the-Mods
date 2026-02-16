@@ -19,14 +19,14 @@ UNIT_HEIGHT = 40
 TEXT_WIDTH = UNIT_WIDTH * 12
 FULL_WIDTH = UNIT_WIDTH * 15
 LIST_WIDTH = 160
-# MODULE_COLUMNS = ('name', 'class', 'progress', 'description')
+
 MODULE_COLUMNS = {'name': 1, 'class': 1, 'progress': 1, 'description': 5}
 
 
 class ColumnedListbox(tkinter.ttk.Treeview):
     """ a Tk/Tcl Treeview-based class with predefined columns"""
 
-    def __init__(self, master, width=0, height=0, columns=None, show='tree headings'):  # , **kw
+    def __init__(self, master, width=0, height=0, columns=None, show='tree headings'):
         super().__init__(master=master, height=height, show=show)
         if columns is None:
             columns = MODULE_COLUMNS
@@ -82,6 +82,7 @@ def count_files_recurrent(path, counter: int = -1):
         elif os.path.isfile(f'{path}/{item}'):
             counter += 1
     return counter
+
 
 def get_change_statistics(module):
     if module['name']:
@@ -495,7 +496,6 @@ class Window(tkinter.Tk):
             self.button_menu_settings: dict(x=UNIT_WIDTH * 3, y=0),
             self.button_run: dict(x=UNIT_WIDTH * 5, y=0),
             self.button_execute: dict(x=UNIT_WIDTH * 7, y=0),
-            # button_function_duplicate: dict(x=UNIT_WIDTH * 9, y=0),
             self.button_function_find: dict(x=UNIT_WIDTH * 11, y=0),
             self.button_function_replace: dict(x=UNIT_WIDTH * 13, y=0),
 
@@ -511,8 +511,6 @@ class Window(tkinter.Tk):
             self.container_settings: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 11),
             self.container_definition: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 11),
             self.container_browser: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 12),
-            # container_select_file: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 2),
-            # container_folder_select: dict(x=0, y=UNIT_HEIGHT * 2, width=FULL_WIDTH, height=UNIT_HEIGHT * 3),
             self.container_scope_select: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 2),
             self.container_file_content: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 13),
             self.container_find: dict(x=0, y=int(UNIT_HEIGHT * 7.5), width=FULL_WIDTH, height=UNIT_HEIGHT * 1),
