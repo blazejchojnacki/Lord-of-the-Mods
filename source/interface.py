@@ -66,6 +66,24 @@ def open_children(tree, parent):
         pass
 
 
+DIR_EXCEPTIONS = ['.git']
+
+
+def count_files_recurrent(path, counter: int = -1):
+    """ Counts the number of files in a directory. """
+    if counter == -1:
+        items = [_ for _ in os.listdir(path) if os.path.isdir(f'{path}/{_}')]
+        counter = 0
+    else:
+        items = os.listdir(path)
+    for item in items:
+        if os.path.isdir(f'{path}/{item}') and item not in DIR_EXCEPTIONS:
+            counter = count_files_recurrent(f'{path}/{item}', counter)
+        elif os.path.isfile(f'{path}/{item}'):
+            counter += 1
+    return counter
+
+
 main_window = None
 
 
@@ -78,11 +96,9 @@ class Window(tkinter.Tk):
         main_window = self
         self.current_path = ''
         self.current_window = ''
-
         self.global_modules = []
         self.current_levels = []
         self.current_file_content_backup = ''
-
         self.new_module_name = ''
         self.new_module_source = ''
 
@@ -195,12 +211,12 @@ class Window(tkinter.Tk):
         self.treeview_modules_active.bind('<Double-1>', self.command_module_browse)
 
         self.container_definition = tkinter.Frame(master=self.container_current)
-        list_labels_module_editor = []
+        self.list_labels_module_editor = []
         self.list_text_definition_editor = []
         for key in DEFINITION_EXAMPLE:
             if key == 'comment' or key == 'changes':
                 continue
-            list_labels_module_editor.append(tkinter.Label(master=self.container_definition, text=key))
+            self.list_labels_module_editor.append(tkinter.Label(master=self.container_definition, text=key))
             self.list_text_definition_editor.append(tkinter.Text(master=self.container_definition))
 
         # # # new module screen
@@ -318,7 +334,7 @@ class Window(tkinter.Tk):
         ]
         for setting_label in list_labels_settings:
             labels.append(setting_label)
-        for parameter_label in list_labels_module_editor:
+        for parameter_label in self.list_labels_module_editor:
             labels.append(parameter_label)
         texts = [
             self.text_result,
@@ -410,7 +426,7 @@ class Window(tkinter.Tk):
                                                width=UNIT_WIDTH, height=UNIT_HEIGHT)
 
         for index in range(len(DEFINITION_EXAMPLE) - 2):
-            list_labels_module_editor[index].place(x=0, y=UNIT_HEIGHT * index, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT)
+            self.list_labels_module_editor[index].place(x=0, y=UNIT_HEIGHT * index, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT)
             self.list_text_definition_editor[index].place(
                 x=UNIT_WIDTH * 2 + 10, y=UNIT_HEIGHT * index, width=TEXT_WIDTH, height=UNIT_HEIGHT)
         self.list_text_definition_editor[-1].place_configure(height=UNIT_HEIGHT * 4)
@@ -530,6 +546,9 @@ class Window(tkinter.Tk):
         self.warning_file_save()
         self.quit()
 
+    def clear_container(self, container):
+        self.retrieve(container.winfo_children())
+
     def clear_window(self):
         """ Cleans the screen of all containers. """
         if self.current_window == 'file_editor':
@@ -543,7 +562,7 @@ class Window(tkinter.Tk):
         self.clear_window()
         self.retrieve(self.button_menu_modules, self.button_menu_settings, self.button_execute)
         self.position(self.container_module_new, self.button_menu_back, self.button_run)
-        self.button_run.configure(text='create', command=self.command_module_new)
+        self.button_run.configure(text='create'.upper(), command=self.command_module_new)
         self.button_menu_back.configure(command=self.command_module_new_cancel)
         if start_name:
             self.entry_module_new_name.insert('end', start_name)
@@ -553,19 +572,21 @@ class Window(tkinter.Tk):
         """ Loads the screen for finding text. """
         self.key_to_command_current = self.key_to_command_text.copy()
         self.clear_window()
+        self.retrieve(self.button_menu_settings, self.button_function_find)
+        self.position(self.container_file_content, self.container_scope_select, self.container_find,
+                      self.button_function_replace,
+                      self.button_scope_select_folder, self.button_scope_except_file)
         self.container_current.place_configure(height=UNIT_HEIGHT * 10)
         self.text_file_content.place_configure(height=UNIT_HEIGHT * 5)
         self.container_command.place_configure(height=UNIT_HEIGHT * 5)
         self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 5)
         self.text_result.place_configure(height=UNIT_HEIGHT * 4)
-        self.position(self.container_file_content, self.container_scope_select, self.container_find,
-                      self.button_function_replace,
-                      self.button_scope_select_folder, self.button_scope_except_file)
         self.container_file_content.place_configure(height=UNIT_HEIGHT * 5)
         self.container_scope_select.place_configure(y=int(UNIT_HEIGHT * 5.5))
         self.button_menu_back.config(command=self.set_window_file)
         self.button_menu_modules.configure(text='return to modules'.upper())
-        self.retrieve(self.button_menu_settings, self.button_function_find)
+        self.button_run.configure(text='find text'.upper(), command=self.command_run_find)
+        self.button_execute.configure(text='clear logs'.upper(), command=self.set_log_update)
         try:
             selection = reformat_string(self.text_file_content.selection_get(), direction='display')
             self.text_find.delete('1.0', 'end')
@@ -574,10 +595,8 @@ class Window(tkinter.Tk):
             print('set_window_find error: UnboundLocalError')
         except _tkinter.TclError:
             print('set_window_find warning: no text selected')
-        self.button_run.configure(text='find text'.upper(), command=self.command_run_find)
-        self.button_execute.configure(text='clear logs'.upper(), command=self.set_log_update)
         self.text_result.focus()
-        self.current_window = 'self.text_find'
+        self.current_window = 'text_find'
         self.set_log_update('find feature loaded')
         self.command_run_find()
 
@@ -585,17 +604,22 @@ class Window(tkinter.Tk):
         """ Loads the screen for replacing text. """
         self.key_to_command_current = self.key_to_command_text.copy()
         self.clear_window()
+        self.retrieve(self.button_menu_settings, self.button_function_replace)
+        self.position(self.container_file_content, self.container_scope_select, self.container_find,
+                      self.container_replace,
+                      self.button_function_find, self.button_scope_select_folder, self.button_scope_except_file)
         self.text_file_content.place_configure(height=UNIT_HEIGHT * 5)
         self.container_current.place_configure(height=UNIT_HEIGHT * 11)
         self.container_command.place_configure(height=UNIT_HEIGHT * 4)
         self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 4)
         self.text_result.place_configure(height=UNIT_HEIGHT * 3)
-        self.position(self.container_file_content, self.container_scope_select, self.container_find,
-                      self.container_replace,
-                      self.button_function_find, self.button_scope_select_folder, self.button_scope_except_file)
         self.container_file_content.place_configure(height=UNIT_HEIGHT * 5)
         self.container_scope_select.place_configure(y=int(UNIT_HEIGHT * 5.5))
-        self.retrieve(self.button_menu_settings, self.button_function_replace)
+        self.button_menu_back.config(command=self.set_window_file)
+        self.button_menu_modules.configure(text='return to modules'.upper())
+        self.button_run.configure(text='replace text'.upper(), command=self.command_run_replace)
+        self.button_run.focus()
+        self.button_execute.configure(text='clear logs'.upper(), command=self.set_log_update)
         try:
             selection = reformat_string(self.text_file_content.selection_get(), direction='display')
             self.text_find.delete('1.0', 'end')
@@ -604,11 +628,6 @@ class Window(tkinter.Tk):
             print('set_window_find error: UnboundLocalError')
         except _tkinter.TclError:
             print('set_window_find warning: no text selected')
-        self.button_menu_back.config(command=self.set_window_file)
-        self.button_menu_modules.configure(text='return to modules'.upper())
-        self.button_run.configure(text='replace text'.upper(), command=self.command_run_replace)
-        self.button_run.focus()
-        self.button_execute.configure(text='clear logs'.upper(), command=self.set_log_update)
         self.current_window = 'self.text_replace'
         self.set_log_update('replace feature loaded')
 
@@ -616,17 +635,21 @@ class Window(tkinter.Tk):
         """ Loads the screen for moving files. """
         self.key_to_command_current = self.key_to_command_text.copy()
         self.clear_window()
+        self.retrieve(self.button_scope_select_folder, self.button_scope_except_file)
+        self.position(self.container_scope_select)
         self.container_current.place_configure(height=UNIT_HEIGHT * 5)
         self.container_command.place_configure(height=UNIT_HEIGHT * 10)
         self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 10)
+        self.button_menu_back.configure(command=self.command_browser_back)
+        self.button_run.configure(text='move the file'.upper(), command=self.command_run_move)
+        self.button_run.focus()
+        self.button_execute.configure(text='clear logs'.upper(), command=self.set_log_update)
         self.text_result.place_configure(height=UNIT_HEIGHT * 9)
-        self.position(self.container_scope_select)  # , container_folder_select
         try:
             self.current_path = f"{self.label_browser.cget('text')}/{self.listbox_browser.selection_get()}".replace(
                 '\\', '/')
         except _tkinter.TclError:
             print('file not selected')
-        self.button_menu_back.configure(command=self.command_browser_back)
         self.label_scope_select.configure(text='file')
         self.text_scope_select.delete('1.0', 'end')
         try:
@@ -635,10 +658,6 @@ class Window(tkinter.Tk):
         except _tkinter.TclError:
             self.text_scope_select.insert('end', self.current_path)
         self.label_scope_except.configure(text='to folder')
-        self.retrieve(self.button_scope_select_folder, self.button_scope_except_file)
-        self.button_run.configure(text='move the file'.upper(), command=self.command_run_move)
-        self.button_run.focus()
-        self.button_execute.configure(text='clear logs'.upper(), command=self.set_log_update)
         self.current_window = 'file_move'
         self.set_log_update(f'move feature loaded. file: {self.current_path}')
 
@@ -647,14 +666,14 @@ class Window(tkinter.Tk):
         if self.command_file_load():
             self.clear_window()
             self.key_to_command_current = self.key_to_command_text.copy()
+            self.retrieve(self.button_execute)
+            self.position(self.container_file_content, self.button_run, self.button_function_find,
+                          self.button_function_replace)
             self.container_current.place_configure(height=UNIT_HEIGHT * 13)
             self.text_file_content.place_configure(height=UNIT_HEIGHT * 12)
             self.container_command.place_configure(height=UNIT_HEIGHT * 2)
             self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 2)
             self.text_result.place_configure(height=int(UNIT_HEIGHT * 0.75))
-            self.position(self.container_file_content, self.button_run, self.button_function_find,
-                          self.button_function_replace)
-            self.retrieve(self.button_execute)
             self.text_file_content.focus()
             self.button_menu_back.configure(command=self.command_browser_back)
             self.button_run.configure(text='save file'.upper(), command=self.command_file_save, state='normal')
@@ -668,17 +687,16 @@ class Window(tkinter.Tk):
         """ Loads the screen for managing modules. """
         self.key_to_command_current = self.key_to_command_module.copy()
         self.clear_window()
-        self.container_current.place_configure(height=UNIT_HEIGHT * 13)
+        self.retrieve(self.button_module_copy, self.button_definition_edit, self.button_function_find,
+                      self.button_function_replace, self.button_menu_back)
         self.position(self.container_modules, self.button_module_new, self.container_command, self.button_run,
                       self.button_execute,
                       self.button_menu_settings, self.container_command_buttons, self.text_result)
+        self.container_current.place_configure(height=UNIT_HEIGHT * 13)
         self.button_run.configure(text='take snapshot'.upper(), command=self.command_snapshot_take)
         self.button_execute.configure(text='compare snapshots'.upper(), command=self.command_snapshot_compare)
         self.button_menu_settings.configure(text='edit settings'.upper(), command=self.set_window_settings)
         self.button_menu_modules.configure(text='refresh modules'.upper())
-        self.retrieve(self.button_module_copy, self.button_definition_edit, self.button_function_find,
-                      self.button_function_replace,
-                      self.button_menu_back)
         self.refresh_definitions()
         self.treeview_modules_idle.focus_set()
         try:
@@ -695,8 +713,8 @@ class Window(tkinter.Tk):
             self.global_modules = modules_filter(return_type='definitions')
         self.key_to_command_current = self.key_to_command_text.copy()
         self.clear_window()
-        self.position(self.container_definition, self.button_menu_back)
         self.retrieve(self.button_menu_settings, self.button_execute)
+        self.position(self.container_definition, self.button_menu_back)
         self.button_menu_back.configure(command=self.set_window_modules)
         self.button_run.configure(text='save parameters'.upper(), command=self.command_definition_save)
         self.button_menu_modules.configure(text='return to modules'.upper())
@@ -708,7 +726,7 @@ class Window(tkinter.Tk):
                     if param == 'comment':
                         continue
                     elif param == 'changes':
-                        # TODO later: reformat the changes into a listbox
+                        self.list_labels_module_editor[-1].configure(text=self.get_change_statistics(module), justify='left')
                         continue
                     self.list_text_definition_editor[level].configure(state='normal')
                     self.list_text_definition_editor[level].delete('1.0', 'end')
@@ -716,7 +734,7 @@ class Window(tkinter.Tk):
                         self.list_text_definition_editor[level].insert('end', str(module[param]))
                     else:
                         self.list_text_definition_editor[level].insert('end', module[param])
-                    if 'active' in param or param == 'path':  # or param == 'class':
+                    if 'active' in param:
                         self.list_text_definition_editor[level].configure(state='disabled')
                     level += 1
         self.set_log_update('module definition edition feature loaded.')
@@ -726,17 +744,17 @@ class Window(tkinter.Tk):
         """ Loads the screen for browsing in modules directories. """
         self.key_to_command_current = self.key_to_command_browser.copy()
         self.clear_window()
+        self.retrieve(self.button_module_new, self.button_function_find, self.button_function_replace,
+                      self.button_menu_settings)
+        self.position(self.container_browser)
         self.container_current.place_configure(height=UNIT_HEIGHT * 13)
         self.container_command.place_configure(height=UNIT_HEIGHT * 2)
         self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 2)
         self.text_result.place_configure(height=int(UNIT_HEIGHT * 0.75))
-        self.position(self.container_browser)
-        self.retrieve(self.button_module_new, self.button_function_find, self.button_function_replace,
-                      self.button_menu_settings)
         self.button_run.configure(text='open'.upper(), command=self.command_browser_forward)
         self.button_execute.configure(text='move file'.upper(), command=self.set_window_move)
-        self.open_browser_item()
         self.button_menu_back.config(command=self.command_browser_back)
+        self.open_browser_item()
         self.listbox_browser.focus()
         self.current_window = 'browser'
         self.set_log_update(f'File browser loaded. Path: {os.path.abspath(self.current_path)}')
@@ -745,13 +763,22 @@ class Window(tkinter.Tk):
         """ Loads the screen for settings edition. """
         self.key_to_command_current = self.key_to_command_text.copy()
         self.clear_window()
+        self.retrieve(self.button_run, self.button_execute, self.button_function_find, self.button_function_replace)
         self.position(self.container_settings, self.text_result)
-        self.command_settings_reload()
         self.button_menu_settings.configure(text='save settings'.upper(), command=self.command_settings_save)
         self.button_menu_modules.configure(text='return to modules'.upper())
-        self.retrieve(self.button_run, self.button_execute, self.button_function_find, self.button_function_replace)
+        self.command_settings_reload()
         self.current_window = 'settings'
         self.set_log_update('settings edition feature loaded')
+
+    def get_change_statistics(self, module):
+        if module['name']:
+            module_path = f"{s.LIBRARY}/{module['name']}"
+            output = (f"mentioned: {len(module['changes'])} ("
+                      f" removed: {len([_ for _ in module['changes'] if _[0] == 'removed'])}"
+                      f') | present in module: {count_files_recurrent(module_path)}')
+            return output
+        return ''
 
     def command_snapshot_take(self):
         """ Takes a snapshot of all files in the selected directory. """
