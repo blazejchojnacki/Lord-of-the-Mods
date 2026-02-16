@@ -113,8 +113,8 @@ class Window(tkinter.Tk):
 
         self.key_to_command_module = {
             '<Return>': self.command_browser_forward,
-            '<Right>': self.focus_on_next_item,
-            '<Left>': self.focus_on_next_item,
+            '<Right>': self.switch_modules_list,
+            '<Left>': self.switch_modules_list,
         }
         self.key_to_command_browser = {
             '<Return>': self.command_browser_forward,
@@ -563,6 +563,20 @@ class Window(tkinter.Tk):
                     self.command_file_save()
         self.current_file_content_backup = ''
 
+    def position(self, *elements):
+        for element in elements:
+            try:
+                element.place(self.dict_position[element])
+            except AttributeError as err:
+                print(f'element {element} not predefined\n{err}')
+
+    def retrieve(self, *elements):
+        for element in elements:
+            try:
+                element.place_forget()
+            except NameError:
+                print(element)
+
     def clear_container(self, container):
         self.retrieve(container.winfo_children())
 
@@ -788,25 +802,32 @@ class Window(tkinter.Tk):
         self.current_window = 'self.text_replace'
         self.set_log_update('replace feature loaded')
 
-    def command_snapshot_take(self):
-        """ Takes a snapshot of all files in the selected directory. """
-        self.set_log_update('generating snapshot - please wait')
-        try:
-            result_path = snapshot_take()
-        except s.InternalError:
-            self.set_log_update(f'snapshot not generated. path not selected')
+    def settings_select_new_directory(self, index_funct):
+        """ Prompts to select a directory and replaces the old one with it in a settings entry field. """
+        added = askdirectory(title=f'{s.PROGRAM_NAME}: select a new directory', initialdir='../')
+        if added:
+            self.list_entry_settings[index_funct].delete(0, 'end')
+            if '/' == added[-1]:
+                added = added[:-1]
+            new_path = os.path.relpath(added).replace('\\', '/')
+            self.list_entry_settings[index_funct].insert('end', new_path)
+            self.set_log_update('setting configuration successful')
         else:
-            self.set_log_update(f'snapshot generated. path: {result_path}')
+            self.set_log_update('setting configuration aborted')
 
-    def command_snapshot_compare(self):
-        """ Runs a comparison between selected snapshots. """
-        self.set_log_update('generating snapshot comparison - please wait')
-        try:
-            result_path = snapshot_compare(return_type='path')
-        except s.InternalError:
-            self.set_log_update(f'snapshot comparison not generated. Snapshots not selected.')
+    def settings_select_add_directory(self, index_funct):
+        """ Prompts to select a directory and adds it to a settings entry field. """
+        present = self.list_entry_settings[index_funct].get()
+        added = f"{askdirectory(title=f'{s.PROGRAM_NAME}: select a new directory', initialdir='../')}"
+        if added:
+            new_path = os.path.relpath(added).replace('\\', '/')
+            if not present:
+                self.list_entry_settings[index_funct].insert('end', new_path)
+            else:
+                self.list_entry_settings[index_funct].insert('end', f', {new_path}')
+            self.set_log_update('setting configuration successful')
         else:
-            self.set_log_update(f'snapshot comparison generated. path: {result_path}')
+            self.set_log_update('setting configuration aborted')
 
     def command_settings_save(self):
         """ Reads the values inserted in the settings text fields and saves them to the SETTINGS_FILE. """
@@ -853,248 +874,6 @@ class Window(tkinter.Tk):
                 self.list_entry_settings[counter].insert('end', s.current[setting_key])
             counter += 1
 
-    def command_select_folder(self, text_widget):
-        """ Launches a window for selecting a folder and pastes it into the folder text field. """
-        selected_folder = askdirectory(
-            title=f'{s.PROGRAM_NAME}: select a folder',
-            initialdir=self.current_path if os.path.isdir(self.current_path) else self.current_path[
-                                                                                  :self.current_path.rfind('/')])
-        if len(text_widget.get('1.0', 'end')) > 1:
-            text_widget.insert('end', f', {selected_folder}')
-        else:
-            text_widget.insert('end', selected_folder)
-        self.set_log_update(f'folder {selected_folder} selected')
-
-    def command_select_file(self, text_widget):
-        """ Launches a window for selecting one or more file(s) and pastes it into the file text field. """
-        selected_files = askopenfilenames(
-            title=f'{s.PROGRAM_NAME}: select one or multiple files',
-            initialdir=self.current_path if os.path.isdir(self.current_path) else self.current_path[
-                                                                                  :self.current_path.rfind('/')])
-        if selected_files:
-            strip_chars = "(),'"
-            if len(text_widget.get('1.0', 'end')) > 1:
-                text_widget.insert('end', f', {str(selected_files).strip(strip_chars)}')
-            else:
-                text_widget.insert('end', f"{str(selected_files).strip(strip_chars)}")
-        self.set_log_update(f'file(s) {selected_files} selected')
-
-    def set_text_color(self, event=None):
-        """ Provides colors to elements of an edited text file that are defined as its delimiters. """
-        if event:
-            pass
-        for tag_name in self.text_file_content.tag_names():
-            self.text_file_content.tag_delete(tag_name)
-        text_lines = self.text_file_content.get('1.0', 'end').split('\n')
-        for line_index in range(1, len(text_lines) + 1):
-            line = text_lines[line_index - 1]
-            rest_of_line = line
-            if line.strip() == '':
-                continue
-            elif line.strip()[0] in s.INI_COMMENTS:
-                self.text_file_content.tag_add('comment', f'{line_index}.0', f'{line_index}.end')
-                rest_of_line = ''
-            elif s.INI_COMMENTS[0] in line:
-                self.text_file_content.tag_add('comment', f'{line_index}.{line.index(s.INI_COMMENTS[0])}',
-                                               f'{line_index}.end')
-                rest_of_line = line[:line.index(s.INI_COMMENTS[0])]
-            elif s.INI_COMMENTS[1] * 2 in line:
-                self.text_file_content.tag_add('comment', f'{line_index}.{line.index(s.INI_COMMENTS[1] * 2)}',
-                                               f'{line_index}.end')
-                rest_of_line = line[:line.index(s.INI_COMMENTS[1] * 2)]
-            self.text_file_content.tag_config('comment', foreground='grey')
-            if rest_of_line:
-                level = rest_of_line.rstrip().count(s.LEVEL_INDENT)
-                self.text_file_content.tag_config(f'level{level}', foreground=s.INI_LEVEL_COLORS[level])
-                if rest_of_line.split()[0].strip() in self.current_levels[level]:
-                    self.text_file_content.tag_add(f'level{level}', f'{line_index}.0',
-                                                   f'{line_index}.{len(rest_of_line)}')
-                elif rest_of_line.strip() in s.INI_ENDS:
-                    self.text_file_content.tag_add(f'level{level}', f'{line_index}.0',
-                                                   f'{line_index}.{len(rest_of_line)}')
-
-    def command_text_comment(self):
-        """ Comments the text selected in the text editor """
-        text_to_comment = ''
-        try:
-            text_to_comment += self.text_file_content.get('insert linestart', 'sel.last lineend')
-        except _tkinter.TclError:
-            text_to_comment += self.text_file_content.get('insert linestart', 'insert lineend')
-            self.text_file_content.tag_add('sel', 'insert linestart', 'insert lineend')
-        lines_to_comment = text_to_comment.split('\n')
-        text_commented = ''
-        for line in lines_to_comment:
-            for level in range(7):
-                if line.startswith(s.LEVEL_INDENT * (6 - level)):
-                    text_commented += f'{s.LEVEL_INDENT * (6 - level)}; {line.strip()}\n'
-                    break
-        if text_commented:
-            self.text_file_content.replace('sel.first linestart', 'sel.last lineend + 1 chars', text_commented)
-        self.set_text_color()
-        self.set_log_update('selected text has been commented out')
-
-    def command_text_uncomment(self):
-        """ Uncomments the text selected in the text editor """
-        text_to_comment = ''
-        try:
-            text_to_comment += self.text_file_content.get('insert linestart', 'sel.last lineend')
-        except _tkinter.TclError:
-            self.text_file_content.tag_add('sel', 'insert linestart', 'insert lineend')
-            text_to_comment += self.text_file_content.get('insert linestart', 'insert lineend')
-        lines_to_comment = text_to_comment.split('\n')
-        text_commented = ''
-        for line in lines_to_comment:
-            for level in range(7):
-                if line.startswith(s.LEVEL_INDENT * (6 - level)):
-                    if '; ' in line:
-                        text_commented += f"{s.LEVEL_INDENT * (6 - level)}{line.strip()[len('; '):]}\n"
-                    elif '//' in line:
-                        text_commented += f"{s.LEVEL_INDENT * (6 - level)}{line.strip()[len('//'):]}\n"
-                    break
-        if text_commented:
-            self.text_file_content.replace('sel.first linestart', 'sel.last lineend + 1 chars', text_commented)
-        self.set_text_color()
-        self.set_log_update('selected text has been uncommented')
-
-    def command_file_load(self):  # not a command anymore
-        """
-        Loads the selected file into the text editor and into a variable.
-        :return: True if the file is readable | False if the file could not be read
-        """
-        self.text_file_content.delete('1.0', 'end')
-        file_loaded = self.text_scope_select.get('1.0', 'end').replace('\\', '/').strip('\n\t {}')
-        self.current_path = file_loaded
-        try:
-            self.current_file_content_backup, self.current_levels = load_file(full_path=file_loaded)
-            self.text_file_content.insert('end', self.current_file_content_backup)
-            self.set_text_color()
-            self.set_log_update(f'file {file_loaded} loaded successfully')
-            return True
-        except TypeError:
-            self.command_browser_back()
-            self.set_log_update('cannot open this type of file')
-        except s.InternalError as error:
-            self.command_browser_back()
-            self.set_log_update(error.message)
-        return False
-
-    def command_file_save(self):
-        """ Saves the text edited in the application back into its original file. """
-        content_to_save = self.text_file_content.get('1.0', 'end')
-        file_named = self.text_scope_select.get('1.0', 'end').replace('/', '\\').strip().replace('{', '').replace('}',
-                                                                                                                  '')
-        with open(file_named, 'w') as file_overwritten:
-            file_overwritten.write(content_to_save)
-        self.set_log_update(f'file {file_named} saved')
-
-    def command_copy_find(self):
-        """ Copies the string to find into the field of the string to replace it with. """
-        find = self.text_find.get('1.0', 'end').strip()
-        self.text_replace.delete('1.0', 'end')
-        self.text_replace.insert('1.0', find)
-
-    def command_run_find(self):
-        """ Runs the find_text function. """
-        find = reformat_string(self.text_find.get('1.0', 'end').strip(), direction='display')
-        scope = self.text_scope_select.get('1.0', 'end').replace('/', '\\').strip()
-        exception_string = self.text_scope_except.get('1.0', 'end').replace('/', '\\').strip()
-        exceptions = exception_string.split(', ')
-        if find and scope:
-            output = text_find_replace(find=find, scope=scope, exceptions=exceptions, mode='initiate')
-            self.set_log_update(output)
-
-    def command_run_replace(self):
-        """ Runs the replace_text function. """
-        find = reformat_string(self.text_find.get('1.0', 'end').strip(), direction='display')
-        replace_with = reformat_string(self.text_replace.get('1.0', 'end').strip(), direction='display')
-        scope = self.text_scope_select.get('1.0', 'end').replace('/', '\\').strip()
-        exception_string = self.text_scope_except.get('1.0', 'end').replace('/', '\\').strip()
-        exceptions = exception_string.split(', ')
-        output = text_find_replace(find=find, replace_with=replace_with, scope=scope, exceptions=exceptions)
-        self.set_log_update(output)
-        self.text_file_content.delete('1.0', 'end')
-        self.text_file_content.insert('end', load_file(scope)[0])
-        self.set_text_color()
-
-    def command_run_move(self):
-        """ Runs the move_file function. """
-        files_named = self.text_scope_select.get('1.0', 'end').replace('\\', '/').strip()
-        to_folder = self.text_scope_except.get('1.0', 'end').replace('\\', '/').strip()
-        output = ''
-        for file_named in files_named.split('} {'):
-            file_named = file_named.replace('{', '').replace('}', '')
-            try:
-                output += move_file(file_named, to_folder)
-            except s.InternalError as error:
-                output += error.message
-            else:
-                module_index_start = self.current_path.find(s.LIBRARY) + len(s.LIBRARY) + 1
-                module_index_end = self.current_path.replace('\\', '/').find('/', module_index_start)
-                current_module_name = self.current_path[module_index_start: module_index_end]
-                current_module_list = modules_filter(name=current_module_name)
-                if current_module_list:
-                    current_module = current_module_list[0]
-                else:
-                    module_index_start = self.current_path.find(s.MAIN_DIRECTORY) + len(s.MAIN_DIRECTORY) + 1
-                    module_index_end = self.current_path.replace('\\', '/').find('/', module_index_start)
-                    current_module_name = self.current_path[module_index_start: module_index_end]
-                    current_module_list = modules_filter(name=current_module_name)
-                    if current_module_list:
-                        current_module = current_module_list[0]
-                    else:
-                        output += '\nmodule not found - definition not updated.\n'
-                        return self.set_log_update(output)
-                new_changes = {}
-                for file_path in current_module['changes']:
-                    file_name = file_named.replace('\\', '/').split('/')[-1]
-                    if file_path.split('/')[-1] == file_name:
-                        file_rel_path = '..' + to_folder[module_index_end + 1:].replace('\\', '/')
-                        new_changes[f'{file_rel_path}/{file_name}'] = current_module['changes'][file_path]
-                    else:
-                        new_changes[file_path] = current_module['changes'][file_path]
-                definition_edit(current_module, changes=new_changes)
-        self.set_log_update(output)
-
-    def command_run_duplicate(self):
-        """ Runs the duplicates_commenter function. """
-        file_named = self.text_scope_select.get('1.0', 'end').replace('/', '\\').strip()
-        output = duplicates_find(of_object_or_file=file_named)
-        self.set_log_update(output)
-
-    def command_definition_save(self):
-        """ Saves the current module definition. """
-        output = 'module data edition failed'
-        module_selected = self.current_path.split('/')[-1]
-        for module in self.global_modules:
-            if module_selected == module['name']:
-                edited_parameters = {}
-                expected_definition = module.copy()
-                level = 0
-                for param in DEFINITION_EXAMPLE:
-                    if param == 'comment':
-                        continue
-                    elif param == 'changes':
-                        # TODO later: reformat the changes
-                        continue
-                    value = self.list_text_definition_editor[level].get('1.0', 'end').strip()
-                    if value != module[param]:
-                        if param == 'class' and value not in DEFINITION_CLASSES:
-                            break
-                        elif param != 'active':
-                            edited_parameters[param] = value
-                            expected_definition[param] = value
-                    level += 1
-                try:
-                    new_definition = definition_edit(module, **edited_parameters)
-                    if new_definition == expected_definition:
-                        output = 'new definition saved'
-                    if 'class' in edited_parameters and module['active'] is True:
-                        module.reload_after_class_change()
-                    break
-                except s.InternalError as error:
-                    output = error.message
-        self.set_log_update(output)
-
     def on_select_module_idle(self, event):
         """ Triggered on selection of a non-active module, shows or hides the desired buttons"""
         if event:
@@ -1128,12 +907,46 @@ class Window(tkinter.Tk):
         self.key_to_command_current['<Return>'] = self.command_module_browse
         self.position(self.button_module_retrieve, self.button_module_reload, self.button_module_browse,
                       self.button_definition_edit)
+        # # todo later: add launch button if mod has a launch command
         self.retrieve(self.button_module_attach)
+
+    def switch_modules_list(self):
+        """ Binds arrow pressing with the change between the lists of active and non-active modules. """
+        if self.focus_get() == self.treeview_modules_idle:
+            self.treeview_modules_idle.selection_remove(self.treeview_modules_idle.selection())
+            self.treeview_modules_active.focus_set()
+            if self.treeview_modules_active.focus():
+                module_selected = self.treeview_modules_active.focus()
+            elif self.treeview_modules_active.selection():
+                module_selected = self.treeview_modules_active.selection()
+            elif len(self.treeview_modules_active.get_children()) > 0:
+                module_selected = self.treeview_modules_active.get_children()[0]
+            else:
+                return
+            self.treeview_modules_active.selection_set(module_selected)
+        elif self.focus_get() == self.treeview_modules_active:
+            self.treeview_modules_active.selection_remove(self.treeview_modules_active.selection())
+            self.treeview_modules_idle.focus_set()
+            self.treeview_modules_idle.selection_set(self.treeview_modules_idle.focus())
+            if self.treeview_modules_idle.focus():
+                module_selected = self.treeview_modules_idle.focus()
+            elif self.treeview_modules_idle.selection():
+                module_selected = self.treeview_modules_idle.selection()
+            elif self.treeview_modules_idle.get_children():
+                module_selected = self.treeview_modules_idle.get_children()[0]
+            else:
+                return
+            self.treeview_modules_idle.selection_set(module_selected)
+        elif self.focus_get() == self.listbox_browser:
+            list_length = len(self.listbox_browser.get('0', 'end'))
+            selected_item_index = self.listbox_browser.get('0', 'end').index(self.listbox_browser.selection_get())
+            self.listbox_browser.selection_set((selected_item_index + 1) % list_length)
+        else:
+            print(self.focus_get())
 
     def refresh_definitions(self):
         """ Refreshes the lists of active and non-active modules. """
         try:
-            # self.set_log_update(detect_new_modules())
             self.treeview_modules_active.delete(*self.treeview_modules_active.get_children())
             library_folders = [_ for _ in os.listdir(s.LIBRARY) if _ not in s.current[s.KEY_EXCEPTIONS]]
             for folder in library_folders:
@@ -1290,6 +1103,40 @@ class Window(tkinter.Tk):
         except _tkinter.TclError:
             self.set_log_update('command_module_reload error: no mod selected')
 
+    def command_definition_save(self):
+        """ Saves the current module definition. """
+        output = 'module data edition failed'
+        module_selected = self.current_path.split('/')[-1]
+        for module in self.global_modules:
+            if module_selected == module['name']:
+                edited_parameters = {}
+                expected_definition = module.copy()
+                level = 0
+                for param in DEFINITION_EXAMPLE:
+                    if param == 'comment':
+                        continue
+                    elif param == 'changes':
+                        # TODO later: reformat the changes
+                        continue
+                    value = self.list_text_definition_editor[level].get('1.0', 'end').strip()
+                    if value != module[param]:
+                        if param == 'class' and value not in DEFINITION_CLASSES:
+                            break
+                        elif param != 'active':
+                            edited_parameters[param] = value
+                            expected_definition[param] = value
+                    level += 1
+                try:
+                    new_definition = definition_edit(module, **edited_parameters)
+                    if new_definition == expected_definition:
+                        output = 'new definition saved'
+                    if 'class' in edited_parameters and module['active'] is True:
+                        module.reload_after_class_change()
+                    break
+                except s.InternalError as error:
+                    output = error.message
+        self.set_log_update(output)
+
     def command_module_browse(self, event=None):
         """ Allows to start browsing from the object folder if it can be found. """
         if event:
@@ -1424,39 +1271,233 @@ class Window(tkinter.Tk):
         self.label_browser.configure(text=os.path.abspath(self.current_path))
         self.position(self.button_menu_back)
 
-    def focus_on_next_item(self):
-        """ Binds arrow pressing with the change between the lists of active and non-active modules. """
-        if self.focus_get() == self.treeview_modules_idle:
-            self.treeview_modules_idle.selection_remove(self.treeview_modules_idle.selection())
-            self.treeview_modules_active.focus_set()
-            if self.treeview_modules_active.focus():
-                module_selected = self.treeview_modules_active.focus()
-            elif self.treeview_modules_active.selection():
-                module_selected = self.treeview_modules_active.selection()
-            elif len(self.treeview_modules_active.get_children()) > 0:
-                module_selected = self.treeview_modules_active.get_children()[0]
-            else:
-                return
-            self.treeview_modules_active.selection_set(module_selected)
-        elif self.focus_get() == self.treeview_modules_active:
-            self.treeview_modules_active.selection_remove(self.treeview_modules_active.selection())
-            self.treeview_modules_idle.focus_set()
-            self.treeview_modules_idle.selection_set(self.treeview_modules_idle.focus())
-            if self.treeview_modules_idle.focus():
-                module_selected = self.treeview_modules_idle.focus()
-            elif self.treeview_modules_idle.selection():
-                module_selected = self.treeview_modules_idle.selection()
-            elif self.treeview_modules_idle.get_children():
-                module_selected = self.treeview_modules_idle.get_children()[0]
-            else:
-                return
-            self.treeview_modules_idle.selection_set(module_selected)
-        elif self.focus_get() == self.listbox_browser:
-            list_length = len(self.listbox_browser.get('0', 'end'))
-            selected_item_index = self.listbox_browser.get('0', 'end').index(self.listbox_browser.selection_get())
-            self.listbox_browser.selection_set((selected_item_index + 1) % list_length)
+    def command_file_load(self):  # not a command anymore
+        """
+        Loads the selected file into the text editor and into a variable.
+        :return: True if the file is readable | False if the file could not be read
+        """
+        self.text_file_content.delete('1.0', 'end')
+        file_loaded = self.text_scope_select.get('1.0', 'end').replace('\\', '/').strip('\n\t {}')
+        self.current_path = file_loaded
+        try:
+            self.current_file_content_backup, self.current_levels = load_file(full_path=file_loaded)
+            self.text_file_content.insert('end', self.current_file_content_backup)
+            self.set_text_color()
+            self.set_log_update(f'file {file_loaded} loaded successfully')
+            return True
+        except TypeError:
+            self.command_browser_back()
+            self.set_log_update('cannot open this type of file')
+        except s.InternalError as error:
+            self.command_browser_back()
+            self.set_log_update(error.message)
+        return False
+
+    def command_file_save(self):
+        """ Saves the text edited in the application back into its original file. """
+        content_to_save = self.text_file_content.get('1.0', 'end')
+        file_named = self.text_scope_select.get('1.0', 'end').replace('/', '\\').strip().replace('{', '').replace('}',
+                                                                                                                  '')
+        with open(file_named, 'w') as file_overwritten:
+            file_overwritten.write(content_to_save)
+        self.set_log_update(f'file {file_named} saved')
+
+    def command_select_folder(self, text_widget):
+        """ Launches a window for selecting a folder and pastes it into the folder text field. """
+        selected_folder = askdirectory(
+            title=f'{s.PROGRAM_NAME}: select a folder',
+            initialdir=self.current_path if os.path.isdir(self.current_path) else self.current_path[
+                                                                                  :self.current_path.rfind('/')])
+        if len(text_widget.get('1.0', 'end')) > 1:
+            text_widget.insert('end', f', {selected_folder}')
         else:
-            print(self.focus_get())
+            text_widget.insert('end', selected_folder)
+        self.set_log_update(f'folder {selected_folder} selected')
+
+    def command_select_file(self, text_widget):
+        """ Launches a window for selecting one or more file(s) and pastes it into the file text field. """
+        selected_files = askopenfilenames(
+            title=f'{s.PROGRAM_NAME}: select one or multiple files',
+            initialdir=self.current_path if os.path.isdir(self.current_path) else self.current_path[
+                                                                                  :self.current_path.rfind('/')])
+        if selected_files:
+            strip_chars = "(),'"
+            if len(text_widget.get('1.0', 'end')) > 1:
+                text_widget.insert('end', f', {str(selected_files).strip(strip_chars)}')
+            else:
+                text_widget.insert('end', f"{str(selected_files).strip(strip_chars)}")
+        self.set_log_update(f'file(s) {selected_files} selected')
+
+    def set_text_color(self, event=None):
+        """ Provides colors to elements of an edited text file that are defined as its delimiters. """
+        if event:
+            pass
+        for tag_name in self.text_file_content.tag_names():
+            self.text_file_content.tag_delete(tag_name)
+        text_lines = self.text_file_content.get('1.0', 'end').split('\n')
+        for line_index in range(1, len(text_lines) + 1):
+            line = text_lines[line_index - 1]
+            rest_of_line = line
+            if line.strip() == '':
+                continue
+            elif line.strip()[0] in s.INI_COMMENTS:
+                self.text_file_content.tag_add('comment', f'{line_index}.0', f'{line_index}.end')
+                rest_of_line = ''
+            elif s.INI_COMMENTS[0] in line:
+                self.text_file_content.tag_add('comment', f'{line_index}.{line.index(s.INI_COMMENTS[0])}',
+                                               f'{line_index}.end')
+                rest_of_line = line[:line.index(s.INI_COMMENTS[0])]
+            elif s.INI_COMMENTS[1] * 2 in line:
+                self.text_file_content.tag_add('comment', f'{line_index}.{line.index(s.INI_COMMENTS[1] * 2)}',
+                                               f'{line_index}.end')
+                rest_of_line = line[:line.index(s.INI_COMMENTS[1] * 2)]
+            self.text_file_content.tag_config('comment', foreground='grey')
+            if rest_of_line:
+                level = rest_of_line.rstrip().count(s.LEVEL_INDENT)
+                self.text_file_content.tag_config(f'level{level}', foreground=s.INI_LEVEL_COLORS[level])
+                if rest_of_line.split()[0].strip() in self.current_levels[level]:
+                    self.text_file_content.tag_add(f'level{level}', f'{line_index}.0',
+                                                   f'{line_index}.{len(rest_of_line)}')
+                elif rest_of_line.strip() in s.INI_ENDS:
+                    self.text_file_content.tag_add(f'level{level}', f'{line_index}.0',
+                                                   f'{line_index}.{len(rest_of_line)}')
+
+    def command_text_comment(self):
+        """ Comments the text selected in the text editor """
+        text_to_comment = ''
+        try:
+            text_to_comment += self.text_file_content.get('insert linestart', 'sel.last lineend')
+        except _tkinter.TclError:
+            text_to_comment += self.text_file_content.get('insert linestart', 'insert lineend')
+            self.text_file_content.tag_add('sel', 'insert linestart', 'insert lineend')
+        lines_to_comment = text_to_comment.split('\n')
+        text_commented = ''
+        for line in lines_to_comment:
+            for level in range(7):
+                if line.startswith(s.LEVEL_INDENT * (6 - level)):
+                    text_commented += f'{s.LEVEL_INDENT * (6 - level)}; {line.strip()}\n'
+                    break
+        if text_commented:
+            self.text_file_content.replace('sel.first linestart', 'sel.last lineend + 1 chars', text_commented)
+        self.set_text_color()
+        self.set_log_update('selected text has been commented out')
+
+    def command_text_uncomment(self):
+        """ Uncomments the text selected in the text editor """
+        text_to_comment = ''
+        try:
+            text_to_comment += self.text_file_content.get('insert linestart', 'sel.last lineend')
+        except _tkinter.TclError:
+            self.text_file_content.tag_add('sel', 'insert linestart', 'insert lineend')
+            text_to_comment += self.text_file_content.get('insert linestart', 'insert lineend')
+        lines_to_comment = text_to_comment.split('\n')
+        text_commented = ''
+        for line in lines_to_comment:
+            for level in range(7):
+                if line.startswith(s.LEVEL_INDENT * (6 - level)):
+                    if '; ' in line:
+                        text_commented += f"{s.LEVEL_INDENT * (6 - level)}{line.strip()[len('; '):]}\n"
+                    elif '//' in line:
+                        text_commented += f"{s.LEVEL_INDENT * (6 - level)}{line.strip()[len('//'):]}\n"
+                    break
+        if text_commented:
+            self.text_file_content.replace('sel.first linestart', 'sel.last lineend + 1 chars', text_commented)
+        self.set_text_color()
+        self.set_log_update('selected text has been uncommented')
+
+    def command_copy_find(self):
+        """ Copies the string to find into the field of the string to replace it with. """
+        find = self.text_find.get('1.0', 'end').strip()
+        self.text_replace.delete('1.0', 'end')
+        self.text_replace.insert('1.0', find)
+
+    def command_run_find(self):
+        """ Runs the find_text function. """
+        find = reformat_string(self.text_find.get('1.0', 'end').strip(), direction='display')
+        scope = self.text_scope_select.get('1.0', 'end').replace('/', '\\').strip()
+        exception_string = self.text_scope_except.get('1.0', 'end').replace('/', '\\').strip()
+        exceptions = exception_string.split(', ')
+        if find and scope:
+            output = text_find_replace(find=find, scope=scope, exceptions=exceptions, mode='initiate')
+            self.set_log_update(output)
+
+    def command_run_replace(self):
+        """ Runs the replace_text function. """
+        find = reformat_string(self.text_find.get('1.0', 'end').strip(), direction='display')
+        replace_with = reformat_string(self.text_replace.get('1.0', 'end').strip(), direction='display')
+        scope = self.text_scope_select.get('1.0', 'end').replace('/', '\\').strip()
+        exception_string = self.text_scope_except.get('1.0', 'end').replace('/', '\\').strip()
+        exceptions = exception_string.split(', ')
+        output = text_find_replace(find=find, replace_with=replace_with, scope=scope, exceptions=exceptions)
+        self.set_log_update(output)
+        self.text_file_content.delete('1.0', 'end')
+        self.text_file_content.insert('end', load_file(scope)[0])
+        self.set_text_color()
+
+    def command_run_move(self):
+        """ Runs the move_file function. """
+        files_named = self.text_scope_select.get('1.0', 'end').replace('\\', '/').strip()
+        to_folder = self.text_scope_except.get('1.0', 'end').replace('\\', '/').strip()
+        output = ''
+        for file_named in files_named.split('} {'):
+            file_named = file_named.replace('{', '').replace('}', '')
+            try:
+                output += move_file(file_named, to_folder)
+            except s.InternalError as error:
+                output += error.message
+            else:
+                module_index_start = self.current_path.find(s.LIBRARY) + len(s.LIBRARY) + 1
+                module_index_end = self.current_path.replace('\\', '/').find('/', module_index_start)
+                current_module_name = self.current_path[module_index_start: module_index_end]
+                current_module_list = modules_filter(name=current_module_name)
+                if current_module_list:
+                    current_module = current_module_list[0]
+                else:
+                    module_index_start = self.current_path.find(s.MAIN_DIRECTORY) + len(s.MAIN_DIRECTORY) + 1
+                    module_index_end = self.current_path.replace('\\', '/').find('/', module_index_start)
+                    current_module_name = self.current_path[module_index_start: module_index_end]
+                    current_module_list = modules_filter(name=current_module_name)
+                    if current_module_list:
+                        current_module = current_module_list[0]
+                    else:
+                        output += '\nmodule not found - definition not updated.\n'
+                        return self.set_log_update(output)
+                new_changes = {}
+                for file_path in current_module['changes']:
+                    file_name = file_named.replace('\\', '/').split('/')[-1]
+                    if file_path.split('/')[-1] == file_name:
+                        file_rel_path = '..' + to_folder[module_index_end + 1:].replace('\\', '/')
+                        new_changes[f'{file_rel_path}/{file_name}'] = current_module['changes'][file_path]
+                    else:
+                        new_changes[file_path] = current_module['changes'][file_path]
+                definition_edit(current_module, changes=new_changes)
+        self.set_log_update(output)
+
+    def command_run_duplicate(self):
+        """ Runs the duplicates_commenter function. """
+        file_named = self.text_scope_select.get('1.0', 'end').replace('/', '\\').strip()
+        output = duplicates_find(of_object_or_file=file_named)
+        self.set_log_update(output)
+
+    def command_snapshot_take(self):
+        """ Takes a snapshot of all files in the selected directory. """
+        self.set_log_update('generating snapshot - please wait')
+        try:
+            result_path = snapshot_take()
+        except s.InternalError:
+            self.set_log_update(f'snapshot not generated. path not selected')
+        else:
+            self.set_log_update(f'snapshot generated. path: {result_path}')
+
+    def command_snapshot_compare(self):
+        """ Runs a comparison between selected snapshots. """
+        self.set_log_update('generating snapshot comparison - please wait')
+        try:
+            result_path = snapshot_compare(return_type='path')
+        except s.InternalError:
+            self.set_log_update(f'snapshot comparison not generated. Snapshots not selected.')
+        else:
+            self.set_log_update(f'snapshot comparison generated. path: {result_path}')
 
     def use_selected_text(self, event=None):
         """ Binds key presses with functions in the file editor. """
@@ -1480,44 +1521,3 @@ class Window(tkinter.Tk):
             self.key_to_command_current[f'<{event.keysym}>']()
         else:
             pass
-
-    def settings_select_new_directory(self, index_funct):
-        """ Prompts to select a directory and replaces the old one with it in a settings entry field. """
-        added = askdirectory(title=f'{s.PROGRAM_NAME}: select a new directory', initialdir='../')
-        if added:
-            self.list_entry_settings[index_funct].delete(0, 'end')
-            if '/' == added[-1]:
-                added = added[:-1]
-            new_path = os.path.relpath(added).replace('\\', '/')
-            self.list_entry_settings[index_funct].insert('end', new_path)
-            self.set_log_update('setting configuration successful')
-        else:
-            self.set_log_update('setting configuration aborted')
-
-    def settings_select_add_directory(self, index_funct):
-        """ Prompts to select a directory and adds it to a settings entry field. """
-        present = self.list_entry_settings[index_funct].get()
-        added = f"{askdirectory(title=f'{s.PROGRAM_NAME}: select a new directory', initialdir='../')}"
-        if added:
-            new_path = os.path.relpath(added).replace('\\', '/')
-            if not present:
-                self.list_entry_settings[index_funct].insert('end', new_path)
-            else:
-                self.list_entry_settings[index_funct].insert('end', f', {new_path}')
-            self.set_log_update('setting configuration successful')
-        else:
-            self.set_log_update('setting configuration aborted')
-
-    def position(self, *elements):
-        for element in elements:
-            try:
-                element.place(self.dict_position[element])
-            except AttributeError as err:
-                print(f'element {element} not predefined\n{err}')
-
-    def retrieve(self, *elements):
-        for element in elements:
-            try:
-                element.place_forget()
-            except NameError:
-                print(element)
