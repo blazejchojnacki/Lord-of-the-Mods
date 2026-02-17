@@ -27,6 +27,7 @@ DEFINITION_CLASS_TEMPLATE = {
     'class': '',
     'name': '',
     'game': '',
+    "launch": "",
     'active': False,
     'progress': '',
     'ancestor': '',

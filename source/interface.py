@@ -1,5 +1,6 @@
 import os.path
 import shutil
+import subprocess
 import tkinter
 import _tkinter
 from tkinter.messagebox import askquestion
@@ -282,6 +283,8 @@ class Window(tkinter.Tk):
             master=container_module_buttons, text='open module'.upper(), command=self.command_module_browse)
         self.button_module_copy = s.ReactiveButton(
             master=container_module_buttons, text='copy module'.upper(), command=self.command_module_copy)
+        self.button_module_launch = s.ReactiveButton(
+            master=container_module_buttons, text='launch'.upper(), command=self.command_module_launch)
         self.button_module_new = s.ReactiveButton(
             master=container_module_buttons, text='new module'.upper(), command=self.set_window_module_new)
         self.button_definition_edit = s.ReactiveButton(
@@ -406,6 +409,7 @@ class Window(tkinter.Tk):
             self.button_module_retrieve,
             self.button_module_reload,
             self.button_module_browse,
+            self.button_module_launch,
             self.button_module_new,
             self.button_definition_edit,
             button_replace_copy,
@@ -538,6 +542,7 @@ class Window(tkinter.Tk):
             container_module_buttons: dict(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT * 5 + 5, width=FULL_WIDTH,
                                            height=UNIT_HEIGHT + 10),
             self.button_module_new: dict(x=UNIT_WIDTH * 0, y=0),
+            self.button_module_launch: dict(x=UNIT_WIDTH * 10, y=0, width=s.DOUBLE_WIDTH, height=UNIT_HEIGHT),
             self.button_module_attach: dict(x=UNIT_WIDTH * 2, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
             label_modules_active: dict(x=0, y=int(UNIT_HEIGHT * 9), width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
             self.treeview_modules_active: dict(x=UNIT_WIDTH * 2, y=int(UNIT_HEIGHT * 6.5), width=TEXT_WIDTH,
@@ -1038,7 +1043,7 @@ class Window(tkinter.Tk):
             pass
         self.key_to_command_current['<Return>'] = self.command_module_browse
         self.position(self.button_module_attach, self.button_module_browse, self.button_definition_edit)
-        self.retrieve(self.button_module_retrieve, self.button_module_reload)
+        self.retrieve(self.button_module_retrieve, self.button_module_reload, self.button_module_launch)
         self.treeview_modules_idle.focus()
 
     def on_select_module_active(self, event):
@@ -1058,7 +1063,10 @@ class Window(tkinter.Tk):
         self.key_to_command_current['<Return>'] = self.command_module_browse
         self.position(self.button_module_retrieve, self.button_module_reload, self.button_module_browse,
                       self.button_definition_edit)
-        # # todo later: add launch button if mod has a launch command
+        if self.loaded_module['launch']:
+            self.position(self.button_module_launch)
+        else:
+            self.retrieve(self.button_module_launch)
         self.retrieve(self.button_module_attach)
 
     def switch_modules_list(self):
@@ -1253,6 +1261,47 @@ class Window(tkinter.Tk):
             self.set_log_update(f'command_module_reload error: mod {module_selected} not found')
         except _tkinter.TclError:
             self.set_log_update('command_module_reload error: no mod selected')
+
+    def command_module_launch(self, event=None):
+        if event:
+            pass
+        if self.loaded_module is DEFINITION_EXAMPLE:
+            self.loaded_module = modules_filter(name=self.current_path.split('/')[-1])[0]
+        if self.loaded_module['launch']:
+            # # # restricting commands to launch an exe with a mod at best
+            try:
+                for command in self.loaded_module['launch'].split('\n'):
+                    command_mod = ''
+                    if '.exe' in command:
+                        # # # OPTIMIZE: mount disk if not mounted
+                        if command.endswith('.exe') and os.path.isfile(command):
+                            command_exe = command
+                        elif os.path.isfile(command[:command.index('.exe') + len('.exe')]) and ' -mod ' in command:
+                            if os.path.isdir(command.split(' -mod ')[1].strip('"')):
+                                command_exe = command[:command.index('.exe') + len('.exe')]
+                                command_mod = command.split(' -mod ')[1]
+                            else:
+                                raise s.InternalError
+                        else:
+                            raise s.InternalError
+                        if command_exe:
+                            # # # OPTIMIZE: allow using LotM commands
+                            if command_mod:
+                                self.set_log_update(
+                                    f'Launching {command_exe} -mod {command_mod}. The application will be paused.')
+                                subprocess.run(f"{command_exe} -mod {command_mod}")
+                                self.set_log_update('Application resumed.')
+                            # # # OPTIMIZE: mount disk if not mounted
+                            else:
+                                self.set_log_update(f'Launching {command_exe}. The application will be paused.')
+                                subprocess.run(f"{command_exe}")
+                                self.set_log_update('Application resumed.')
+                        else:
+                            raise s.InternalError
+                    else:
+                        raise s.InternalError
+            except s.InternalError:
+                return self.set_log_update('launch command is incorrect')
 
     def command_definition_save(self):
         """ Saves the current module definition. """
