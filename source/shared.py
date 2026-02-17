@@ -40,6 +40,7 @@ UNIT_HEIGHT = 40
 DOUBLE_WIDTH = UNIT_WIDTH * 2
 TEXT_WIDTH = UNIT_WIDTH * 12
 FULL_WIDTH = UNIT_WIDTH * 15
+LIST_WIDTH = 160
 
 # # # default aesthetic
 FONT_TEXT = ('Lato', 11, 'normal')

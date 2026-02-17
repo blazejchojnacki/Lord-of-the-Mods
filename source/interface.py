@@ -13,19 +13,13 @@ from source.initiator import initiate
 from source.constructor import load_file, load_directories
 from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
 from source.module_control import modules_filter, modules_sort, snapshot_take, snapshot_compare, \
-    module_detect_changes, module_copy, module_new, detect_new_modules, hash_file, \
+    module_detect_changes, module_copy, module_new, hash_file, \
     definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES, CHANGES_TYPES, check_relative
 
 main_window = None
 current_info: tkinter.Toplevel
 popping_list_deployed = False
 popping_list_chosen = ''
-
-UNIT_WIDTH = 80
-UNIT_HEIGHT = 40
-TEXT_WIDTH = UNIT_WIDTH * 12
-FULL_WIDTH = UNIT_WIDTH * 15
-LIST_WIDTH = 160
 
 MODULE_COLUMNS = {'name': 1, 'class': 1, 'progress': 1, 'description': 5}
 CHANGES_COLUMNS = {'path': 6, 'type': 1}
@@ -91,7 +85,6 @@ class PoppingList(tkinter.Toplevel):
         self.option_list = choices
         for option_name in self.option_list:
             self.option_listbox.insert('end', option_name)
-            # self.option_listbox.itemconfig('end', foreground='grey' if version_dict[version_name] else 'green')
 
         self.option_listbox.bind('<<ListboxSelect>>', self.on_select_option)
         self.master.bind('<Configure>', self.keep_track)
@@ -239,7 +232,7 @@ class Window(tkinter.Tk):
         self.container_current = tkinter.Frame(master=self)
 
         self.container_file_content = tkinter.Frame(master=self.container_current)
-        self.text_file_content = tkinter.Text(master=self.container_file_content, width=TEXT_WIDTH, height=30,
+        self.text_file_content = tkinter.Text(master=self.container_file_content, width=s.TEXT_WIDTH, height=30,
                                               undo=True)
         numeration = TkLineNumbers(self.container_file_content, self.text_file_content, justify='right')
         self.event_delete('<<SelectAll>>', '<Control-Key-/>')
@@ -268,7 +261,7 @@ class Window(tkinter.Tk):
 
         self.container_modules = tkinter.Frame(master=self.container_current)
         label_modules_idle = tkinter.Label(master=self.container_modules, text='available modules:')
-        self.treeview_modules_idle = ColumnedListbox(master=self.container_modules, width=LIST_WIDTH, height=10)
+        self.treeview_modules_idle = ColumnedListbox(master=self.container_modules, width=s.LIST_WIDTH, height=10)
         self.treeview_modules_idle.bind('<<TreeviewSelect>>', self.on_select_module_idle)
         self.treeview_modules_idle.bind('<Double-1>', self.command_module_browse)
         container_module_buttons = tkinter.Frame(master=self.container_modules, pady=7)
@@ -289,9 +282,9 @@ class Window(tkinter.Tk):
         self.button_definition_edit = s.ReactiveButton(
             master=container_module_buttons, text='edit module data'.upper(), command=self.set_window_definition)
 
-        label_modules_active = tkinter.Label(master=self.container_modules, text='active modules:',
-                                             width=UNIT_WIDTH * 2)
-        self.treeview_modules_active = ColumnedListbox(master=self.container_modules, width=LIST_WIDTH, height=10)
+        label_modules_active = tkinter.Label(
+            master=self.container_modules, text='active modules:', width=s.UNIT_WIDTH * 2)
+        self.treeview_modules_active = ColumnedListbox(master=self.container_modules, width=s.LIST_WIDTH, height=10)
         self.treeview_modules_active.bind('<<TreeviewSelect>>', self.on_select_module_active)
         self.treeview_modules_active.bind('<Double-1>', self.command_module_browse)
 
@@ -309,11 +302,11 @@ class Window(tkinter.Tk):
         self.label_changes = tkinter.Label(master=self.container_changes, text='changes')
         self.proportions_changes = (6, 1)
         self.treeview_changes = ColumnedListbox(
-            master=self.container_changes, width=TEXT_WIDTH, height=20, show='headings', columns=CHANGES_COLUMNS)
+            master=self.container_changes, width=s.TEXT_WIDTH, height=20, show='headings', columns=CHANGES_COLUMNS)
         self.treeview_changes.bind('<<TreeviewSelect>>', self.on_select_change)
         self.container_changes_new = tkinter.Frame(master=self.container_current)
         self.treeview_changes_new = ColumnedListbox(
-            master=self.container_changes_new, width=TEXT_WIDTH, height=10, show='headings', columns=CHANGES_COLUMNS)
+            master=self.container_changes_new, width=s.TEXT_WIDTH, height=10, show='headings', columns=CHANGES_COLUMNS)
         self.treeview_changes_new.bind('<<TreeviewSelect>>', self.on_select_change)
         self.treeview_changes_new.bind('<Double-1>', self.on_double_click_change_new)
 
@@ -345,7 +338,7 @@ class Window(tkinter.Tk):
 
         self.container_browser = tkinter.Frame(master=self.container_current)
         self.label_browser = tkinter.Label(master=self.container_browser)
-        self.listbox_browser = tkinter.Listbox(master=self.container_browser, width=LIST_WIDTH, height=20)
+        self.listbox_browser = tkinter.Listbox(master=self.container_browser, width=s.LIST_WIDTH, height=20)
         self.listbox_browser.bind('<<ListboxSelect>>', self.on_select_browser_item)
         self.listbox_browser.bind('<Double-1>', self.command_browser_forward)
 
@@ -455,15 +448,15 @@ class Window(tkinter.Tk):
             entries.append(setting_entry)
 
         for button in small_buttons:
-            button.place_configure(width=UNIT_WIDTH, height=UNIT_HEIGHT)
+            button.place_configure(width=s.UNIT_WIDTH, height=s.UNIT_HEIGHT)
         for button in large_buttons:
-            button.place_configure(width=UNIT_WIDTH * 2, height=UNIT_HEIGHT)
+            button.place_configure(width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT)
         for label in labels:
-            label.place_configure(width=UNIT_WIDTH * 2, height=UNIT_HEIGHT)
+            label.place_configure(width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT)
         for text in texts:
-            text.place_configure(width=TEXT_WIDTH)
+            text.place_configure(width=s.TEXT_WIDTH)
         for entry in entries:
-            entry.place_configure(width=TEXT_WIDTH)
+            entry.place_configure(width=s.TEXT_WIDTH)
 
         try:
             for button in small_buttons:
@@ -508,7 +501,7 @@ class Window(tkinter.Tk):
         current_style = tkinter.ttk.Style(master=self)
         current_style.theme_use('clam')
         tkinter.ttk.Style().configure(
-            '.', width=UNIT_WIDTH * 2, font=s.FONT_TEXT, foreground=s.TEXT_COLORS[0],
+            '.', width=s.UNIT_WIDTH * 2, font=s.FONT_TEXT, foreground=s.TEXT_COLORS[0],
             background=s.ENTRY_BACKGROUND_COLOR)
         tkinter.ttk.Style().configure(
             'Treeview', background=s.ENTRY_BACKGROUND_COLOR, fieldbackground=s.ENTRY_BACKGROUND_COLOR, fieldbw=0,
@@ -517,103 +510,107 @@ class Window(tkinter.Tk):
             'Treeview.Heading', borderwidth=0, overbackground=s.TEXT_COLORS[0], overforeground=s.TEXT_COLORS[-1])
 
         for index in range(len(s.current) - 1):
-            list_labels_settings[index].place(x=0, y=UNIT_HEIGHT * index, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT)
-            self.list_entry_settings[index].place(x=UNIT_WIDTH * 2 + 10, y=UNIT_HEIGHT * index,
-                                                  width=TEXT_WIDTH - UNIT_WIDTH,
-                                                  height=UNIT_HEIGHT)
+            list_labels_settings[index].place(x=0, y=s.UNIT_HEIGHT * index, width=s.UNIT_WIDTH*2, height=s.UNIT_HEIGHT)
+            self.list_entry_settings[index].place(x=s.UNIT_WIDTH * 2 + 10, y=s.UNIT_HEIGHT * index,
+                                                  width=s.TEXT_WIDTH - s.UNIT_WIDTH,
+                                                  height=s.UNIT_HEIGHT)
             if index < 2:
                 self.list_entry_settings[index].configure(state='disabled')
                 continue
-            list_buttons_settings[index].place(x=TEXT_WIDTH + UNIT_WIDTH + 10, y=UNIT_HEIGHT * index,
-                                               width=UNIT_WIDTH, height=UNIT_HEIGHT)
+            list_buttons_settings[index].place(x=s.TEXT_WIDTH + s.UNIT_WIDTH + 10, y=s.UNIT_HEIGHT * index,
+                                               width=s.UNIT_WIDTH, height=s.UNIT_HEIGHT)
 
         for index in range(len(DEFINITION_EXAMPLE) - 2):
-            self.list_labels_module_editor[index].place(x=0, y=UNIT_HEIGHT * index, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT)
+            self.list_labels_module_editor[index].place(x=0, y=s.UNIT_HEIGHT * index, width=s.UNIT_WIDTH * 2,
+                                                        height=s.UNIT_HEIGHT)
             self.list_text_definition_editor[index].place(
-                x=UNIT_WIDTH * 2 + 10, y=UNIT_HEIGHT * index, width=TEXT_WIDTH, height=UNIT_HEIGHT)
-        self.list_text_definition_editor[-1].place_configure(height=UNIT_HEIGHT * 4)
+                x=s.UNIT_WIDTH * 2 + 10, y=s.UNIT_HEIGHT * index, width=s.TEXT_WIDTH, height=s.UNIT_HEIGHT)
+        self.list_text_definition_editor[-1].place_configure(height=s.UNIT_HEIGHT * 4)
 
         self.dict_position = {
-            self.container_current: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 13),
+            self.container_current: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 13),
 
-            label_modules_idle: dict(x=0, y=int(UNIT_HEIGHT * 2.5), width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
-            self.treeview_modules_idle: dict(x=UNIT_WIDTH * 2, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT * 5),
-            container_module_buttons: dict(x=UNIT_WIDTH * 0, y=UNIT_HEIGHT * 5 + 5, width=FULL_WIDTH,
-                                           height=UNIT_HEIGHT + 10),
-            self.button_module_new: dict(x=UNIT_WIDTH * 0, y=0),
-            self.button_module_launch: dict(x=UNIT_WIDTH * 10, y=0, width=s.DOUBLE_WIDTH, height=UNIT_HEIGHT),
-            self.button_module_attach: dict(x=UNIT_WIDTH * 2, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
-            label_modules_active: dict(x=0, y=int(UNIT_HEIGHT * 9), width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
-            self.treeview_modules_active: dict(x=UNIT_WIDTH * 2, y=int(UNIT_HEIGHT * 6.5), width=TEXT_WIDTH,
-                                               height=UNIT_HEIGHT * 5),
+            label_modules_idle: dict(x=0, y=int(s.UNIT_HEIGHT * 2.5), width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
+            self.treeview_modules_idle: dict(x=s.UNIT_WIDTH * 2, y=0, width=s.TEXT_WIDTH, height=s.UNIT_HEIGHT * 5),
+            container_module_buttons: dict(x=s.UNIT_WIDTH * 0, y=s.UNIT_HEIGHT * 5 + 5, width=s.FULL_WIDTH,
+                                           height=s.UNIT_HEIGHT + 10),
+            self.button_module_new: dict(x=s.UNIT_WIDTH * 0, y=0),
+            self.button_module_launch: dict(x=s.UNIT_WIDTH * 10, y=0, width=s.DOUBLE_WIDTH, height=s.UNIT_HEIGHT),
+            self.button_module_attach: dict(x=s.UNIT_WIDTH * 2, y=0, width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
+            label_modules_active: dict(x=0, y=int(s.UNIT_HEIGHT * 9), width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
+            self.treeview_modules_active: dict(x=s.UNIT_WIDTH * 2, y=int(s.UNIT_HEIGHT * 6.5), width=s.TEXT_WIDTH,
+                                               height=s.UNIT_HEIGHT * 5),
 
-            self.label_browser: dict(x=0, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT),
-            self.listbox_browser: dict(x=UNIT_WIDTH * 1, y=UNIT_HEIGHT, width=TEXT_WIDTH, height=UNIT_HEIGHT * 10),
+            self.label_browser: dict(x=0, y=0, width=s.TEXT_WIDTH, height=s.UNIT_HEIGHT),
+            self.listbox_browser: dict(x=s.UNIT_WIDTH * 1, y=s.UNIT_HEIGHT, width=s.TEXT_WIDTH,
+                                       height=s.UNIT_HEIGHT * 10),
             # # # container_module_new
-            self.container_module_new: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 13),
-            self.label_module_new_name: dict(x=0, y=0, width=UNIT_WIDTH * 4, height=UNIT_HEIGHT),
-            self.entry_module_new_name: dict(x=int(UNIT_WIDTH * 0.5), y=UNIT_HEIGHT * 1, width=UNIT_WIDTH * 3,
-                                             height=UNIT_HEIGHT),
-            self.container_module_new_options: dict(x=int(UNIT_WIDTH * 0.5), y=UNIT_HEIGHT * 4, width=UNIT_WIDTH * 3,
-                                                    height=UNIT_HEIGHT * 4),
-            self.label_module_new_options: dict(x=0, y=UNIT_HEIGHT * 3, width=UNIT_WIDTH * 4, height=UNIT_HEIGHT),
-            self.option_button_0: dict(x=0, y=UNIT_HEIGHT * 0, width=s.DOUBLE_WIDTH, height=UNIT_HEIGHT),
-            self.option_button_a: dict(x=0, y=UNIT_HEIGHT * 1, width=s.DOUBLE_WIDTH, height=UNIT_HEIGHT),
-            self.option_button_b: dict(x=0, y=UNIT_HEIGHT * 2, width=s.DOUBLE_WIDTH, height=UNIT_HEIGHT),
-            self.option_button_c: dict(x=0, y=UNIT_HEIGHT * 3, width=s.DOUBLE_WIDTH, height=UNIT_HEIGHT),
+            self.container_module_new: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 13),
+            self.label_module_new_name: dict(x=0, y=0, width=s.UNIT_WIDTH * 4, height=s.UNIT_HEIGHT),
+            self.entry_module_new_name: dict(x=int(s.UNIT_WIDTH * 0.5), y=s.UNIT_HEIGHT * 1, width=s.UNIT_WIDTH * 3,
+                                             height=s.UNIT_HEIGHT),
+            self.container_module_new_options: dict(x=int(s.UNIT_WIDTH * 0.5), y=s.UNIT_HEIGHT * 4,
+                                                    width=s.UNIT_WIDTH * 3, height=s.UNIT_HEIGHT * 4),
+            self.label_module_new_options: dict(x=0, y=s.UNIT_HEIGHT * 3, width=s.UNIT_WIDTH * 4, height=s.UNIT_HEIGHT),
+            self.option_button_0: dict(x=0, y=s.UNIT_HEIGHT * 0, width=s.DOUBLE_WIDTH, height=s.UNIT_HEIGHT),
+            self.option_button_a: dict(x=0, y=s.UNIT_HEIGHT * 1, width=s.DOUBLE_WIDTH, height=s.UNIT_HEIGHT),
+            self.option_button_b: dict(x=0, y=s.UNIT_HEIGHT * 2, width=s.DOUBLE_WIDTH, height=s.UNIT_HEIGHT),
+            self.option_button_c: dict(x=0, y=s.UNIT_HEIGHT * 3, width=s.DOUBLE_WIDTH, height=s.UNIT_HEIGHT),
 
-            self.container_changes: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 12),
-            self.label_changes: dict(x=0, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT),
-            self.treeview_changes: dict(x=UNIT_WIDTH * 1, y=UNIT_HEIGHT, width=TEXT_WIDTH, height=UNIT_HEIGHT * 10),
-            self.container_changes_new: dict(x=0, y=UNIT_HEIGHT * 6, width=FULL_WIDTH, height=UNIT_HEIGHT * 6),
-            self.treeview_changes_new: dict(x=UNIT_WIDTH, y=UNIT_HEIGHT * 0, width=TEXT_WIDTH, height=UNIT_HEIGHT * 5),
+            self.container_changes: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 12),
+            self.label_changes: dict(x=0, y=0, width=s.TEXT_WIDTH, height=s.UNIT_HEIGHT),
+            self.treeview_changes: dict(x=s.UNIT_WIDTH * 1, y=s.UNIT_HEIGHT, width=s.TEXT_WIDTH,
+                                        height=s.UNIT_HEIGHT * 10),
+            self.container_changes_new: dict(x=0, y=s.UNIT_HEIGHT * 6, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 6),
+            self.treeview_changes_new: dict(x=s.UNIT_WIDTH, y=s.UNIT_HEIGHT * 0, width=s.TEXT_WIDTH,
+                                            height=s.UNIT_HEIGHT * 5),
 
             self.label_scope_select: dict(x=0, y=0),
-            self.text_scope_select: dict(x=UNIT_WIDTH * 2, y=UNIT_HEIGHT * 0, width=TEXT_WIDTH - UNIT_WIDTH * 4,
-                                         height=UNIT_HEIGHT),
-            button_scope_select_file: dict(x=TEXT_WIDTH - UNIT_WIDTH * 2, y=UNIT_HEIGHT * 0),
-            self.button_scope_select_folder: dict(x=TEXT_WIDTH, y=UNIT_HEIGHT * 0),
-            self.label_scope_except: dict(x=0, y=UNIT_HEIGHT * 1),
-            self.text_scope_except: dict(x=UNIT_WIDTH * 2, y=UNIT_HEIGHT * 1, width=TEXT_WIDTH - UNIT_WIDTH * 4,
-                                         height=UNIT_HEIGHT),
-            self.button_scope_except_file: dict(x=TEXT_WIDTH - UNIT_WIDTH * 2, y=UNIT_HEIGHT * 1),
-            button_scope_except_folder: dict(x=TEXT_WIDTH, y=UNIT_HEIGHT * 1),
+            self.text_scope_select: dict(x=s.UNIT_WIDTH * 2, y=s.UNIT_HEIGHT * 0, width=s.TEXT_WIDTH - s.UNIT_WIDTH * 4,
+                                         height=s.UNIT_HEIGHT),
+            button_scope_select_file: dict(x=s.TEXT_WIDTH - s.UNIT_WIDTH * 2, y=s.UNIT_HEIGHT * 0),
+            self.button_scope_select_folder: dict(x=s.TEXT_WIDTH, y=s.UNIT_HEIGHT * 0),
+            self.label_scope_except: dict(x=0, y=s.UNIT_HEIGHT * 1),
+            self.text_scope_except: dict(x=s.UNIT_WIDTH * 2, y=s.UNIT_HEIGHT * 1, width=s.TEXT_WIDTH - s.UNIT_WIDTH * 4,
+                                         height=s.UNIT_HEIGHT),
+            self.button_scope_except_file: dict(x=s.TEXT_WIDTH - s.UNIT_WIDTH * 2, y=s.UNIT_HEIGHT * 1),
+            button_scope_except_folder: dict(x=s.TEXT_WIDTH, y=s.UNIT_HEIGHT * 1),
 
-            self.text_file_content: dict(x=UNIT_WIDTH * 1, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT * 12),
-            numeration: dict(x=0, y=0, width=UNIT_WIDTH - 1, height=UNIT_HEIGHT * 12),
-            label_find: dict(x=0, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
-            self.text_find: dict(x=UNIT_WIDTH * 2, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT),
+            self.text_file_content: dict(x=s.UNIT_WIDTH * 1, y=0, width=s.TEXT_WIDTH, height=s.UNIT_HEIGHT * 12),
+            numeration: dict(x=0, y=0, width=s.UNIT_WIDTH - 1, height=s.UNIT_HEIGHT * 12),
+            label_find: dict(x=0, y=0, width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
+            self.text_find: dict(x=s.UNIT_WIDTH * 2, y=0, width=s.TEXT_WIDTH, height=s.UNIT_HEIGHT),
             button_replace_copy: dict(x=0, y=0),
-            label_replace: dict(x=0, y=UNIT_HEIGHT),
-            self.text_replace: dict(x=UNIT_WIDTH * 2, y=0, width=TEXT_WIDTH, height=UNIT_HEIGHT * 2),
+            label_replace: dict(x=0, y=s.UNIT_HEIGHT),
+            self.text_replace: dict(x=s.UNIT_WIDTH * 2, y=0, width=s.TEXT_WIDTH, height=s.UNIT_HEIGHT * 2),
             # self.container_command:
-            self.text_result: dict(x=0, y=0, width=FULL_WIDTH, height=int(UNIT_HEIGHT * 0.75)),
-            self.container_command_buttons: dict(x=0, y=UNIT_HEIGHT * 2, anchor='sw', width=FULL_WIDTH,
-                                                 height=UNIT_HEIGHT),
+            self.text_result: dict(x=0, y=0, width=s.FULL_WIDTH, height=int(s.UNIT_HEIGHT * 0.75)),
+            self.container_command_buttons: dict(x=0, y=s.UNIT_HEIGHT * 2, anchor='sw', width=s.FULL_WIDTH,
+                                                 height=s.UNIT_HEIGHT),
             self.button_menu_back: dict(x=0, y=0),
-            self.button_menu_modules: dict(x=UNIT_WIDTH * 1, y=0),
-            self.button_menu_settings: dict(x=UNIT_WIDTH * 3, y=0),
-            self.button_run: dict(x=UNIT_WIDTH * 5, y=0),
-            self.button_execute: dict(x=UNIT_WIDTH * 7, y=0),
-            self.button_function_find: dict(x=UNIT_WIDTH * 11, y=0),
-            self.button_function_replace: dict(x=UNIT_WIDTH * 13, y=0),
+            self.button_menu_modules: dict(x=s.UNIT_WIDTH * 1, y=0),
+            self.button_menu_settings: dict(x=s.UNIT_WIDTH * 3, y=0),
+            self.button_run: dict(x=s.UNIT_WIDTH * 5, y=0),
+            self.button_execute: dict(x=s.UNIT_WIDTH * 7, y=0),
+            self.button_function_find: dict(x=s.UNIT_WIDTH * 11, y=0),
+            self.button_function_replace: dict(x=s.UNIT_WIDTH * 13, y=0),
 
             # non-default
-            self.container_modules: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 13),
-            self.button_module_browse: dict(x=UNIT_WIDTH * 8, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
-            self.button_definition_edit: dict(x=UNIT_WIDTH * 12, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
-            self.button_module_retrieve: dict(x=UNIT_WIDTH * 4, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
-            self.button_module_reload: dict(x=UNIT_WIDTH * 6, y=0, width=UNIT_WIDTH * 2, height=UNIT_HEIGHT),
+            self.container_modules: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 13),
+            self.button_module_browse: dict(x=s.UNIT_WIDTH * 8, y=0, width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
+            self.button_definition_edit: dict(x=s.UNIT_WIDTH * 12, y=0, width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
+            self.button_module_retrieve: dict(x=s.UNIT_WIDTH * 4, y=0, width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
+            self.button_module_reload: dict(x=s.UNIT_WIDTH * 6, y=0, width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
 
-            self.container_command: dict(x=0, y=UNIT_HEIGHT * 15, anchor='sw', width=FULL_WIDTH,
-                                         height=UNIT_HEIGHT * 2),
-            self.container_settings: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 11),
-            self.container_definition: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 11),
-            self.container_browser: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 12),
-            self.container_scope_select: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 2),
-            self.container_file_content: dict(x=0, y=0, width=FULL_WIDTH, height=UNIT_HEIGHT * 13),
-            self.container_find: dict(x=0, y=int(UNIT_HEIGHT * 7.5), width=FULL_WIDTH, height=UNIT_HEIGHT * 1),
-            self.container_replace: dict(x=0, y=int(UNIT_HEIGHT * 8.5), width=FULL_WIDTH, height=UNIT_HEIGHT * 2),
+            self.container_command: dict(x=0, y=s.UNIT_HEIGHT * 15, anchor='sw', width=s.FULL_WIDTH,
+                                         height=s.UNIT_HEIGHT * 2),
+            self.container_settings: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 11),
+            self.container_definition: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 11),
+            self.container_browser: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 12),
+            self.container_scope_select: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 2),
+            self.container_file_content: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 13),
+            self.container_find: dict(x=0, y=int(s.UNIT_HEIGHT * 7.5), width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 1),
+            self.container_replace: dict(x=0, y=int(s.UNIT_HEIGHT * 8.5), width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 2),
         }
 
         self.position(
@@ -721,7 +718,7 @@ class Window(tkinter.Tk):
         self.position(self.container_modules, self.button_module_new, self.container_command, self.button_run,
                       self.button_execute,
                       self.button_menu_settings, self.container_command_buttons, self.text_result)
-        self.container_current.place_configure(height=UNIT_HEIGHT * 13)
+        self.container_current.place_configure(height=s.UNIT_HEIGHT * 13)
         self.button_run.configure(text='take snapshot'.upper(), command=self.command_snapshot_take)
         self.button_execute.configure(text='compare snapshots'.upper(), command=self.command_snapshot_compare)
         self.button_menu_settings.configure(text='edit settings'.upper(), command=self.set_window_settings)
@@ -813,8 +810,8 @@ class Window(tkinter.Tk):
         self.button_run.configure(text='delete change(s)', command=self.command_change_delete)
         self.button_execute.configure(text='apply change(s)', command=self.command_change_confirm)
         self.button_function_find.configure(text='change type', command=self.change_type)
-        self.container_changes.place_configure(height=UNIT_HEIGHT * 6)
-        self.treeview_changes.place_configure(height=UNIT_HEIGHT * 5)
+        self.container_changes.place_configure(height=s.UNIT_HEIGHT * 6)
+        self.treeview_changes.place_configure(height=s.UNIT_HEIGHT * 5)
         self.treeview_changes.bind('<Double-1>', self.on_double_click_change_old)
         self.current_window = 'changes_new'
         self.set_log_update('Changes edition screen loaded')
@@ -826,10 +823,10 @@ class Window(tkinter.Tk):
         self.retrieve(self.button_module_new, self.button_function_find, self.button_function_replace,
                       self.button_menu_settings)
         self.position(self.container_browser)
-        self.container_current.place_configure(height=UNIT_HEIGHT * 13)
-        self.container_command.place_configure(height=UNIT_HEIGHT * 2)
-        self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 2)
-        self.text_result.place_configure(height=int(UNIT_HEIGHT * 0.75))
+        self.container_current.place_configure(height=s.UNIT_HEIGHT * 13)
+        self.container_command.place_configure(height=s.UNIT_HEIGHT * 2)
+        self.container_command_buttons.place_configure(y=s.UNIT_HEIGHT * 2)
+        self.text_result.place_configure(height=int(s.UNIT_HEIGHT * 0.75))
         self.button_run.configure(text='open'.upper(), command=self.command_browser_forward)
         self.button_execute.configure(text='move file'.upper(), command=self.set_window_move)
         self.button_menu_back.config(command=self.command_browser_back)
@@ -844,14 +841,14 @@ class Window(tkinter.Tk):
         self.clear_window()
         self.retrieve(self.button_scope_select_folder, self.button_scope_except_file)
         self.position(self.container_scope_select)
-        self.container_current.place_configure(height=UNIT_HEIGHT * 5)
-        self.container_command.place_configure(height=UNIT_HEIGHT * 10)
-        self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 10)
+        self.container_current.place_configure(height=s.UNIT_HEIGHT * 5)
+        self.container_command.place_configure(height=s.UNIT_HEIGHT * 10)
+        self.container_command_buttons.place_configure(y=s.UNIT_HEIGHT * 10)
         self.button_menu_back.configure(command=self.command_browser_back)
         self.button_run.configure(text='move the file'.upper(), command=self.command_run_move)
         self.button_run.focus()
         self.button_execute.configure(text='clear logs'.upper(), command=self.set_log_update)
-        self.text_result.place_configure(height=UNIT_HEIGHT * 9)
+        self.text_result.place_configure(height=s.UNIT_HEIGHT * 9)
         try:
             self.current_path = f"{self.label_browser.cget('text')}/{self.listbox_browser.selection_get()}".replace(
                 '\\', '/')
@@ -876,11 +873,11 @@ class Window(tkinter.Tk):
             self.retrieve(self.button_execute)
             self.position(self.container_file_content, self.button_run, self.button_function_find,
                           self.button_function_replace)
-            self.container_current.place_configure(height=UNIT_HEIGHT * 13)
-            self.text_file_content.place_configure(height=UNIT_HEIGHT * 12)
-            self.container_command.place_configure(height=UNIT_HEIGHT * 2)
-            self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 2)
-            self.text_result.place_configure(height=int(UNIT_HEIGHT * 0.75))
+            self.container_current.place_configure(height=s.UNIT_HEIGHT * 13)
+            self.text_file_content.place_configure(height=s.UNIT_HEIGHT * 12)
+            self.container_command.place_configure(height=s.UNIT_HEIGHT * 2)
+            self.container_command_buttons.place_configure(y=s.UNIT_HEIGHT * 2)
+            self.text_result.place_configure(height=int(s.UNIT_HEIGHT * 0.75))
             self.text_file_content.focus()
             self.button_menu_back.configure(command=self.command_browser_back)
             self.button_run.configure(text='save file'.upper(), command=self.command_file_save, state='normal')
@@ -898,13 +895,13 @@ class Window(tkinter.Tk):
         self.position(self.container_file_content, self.container_scope_select, self.container_find,
                       self.button_function_replace,
                       self.button_scope_select_folder, self.button_scope_except_file)
-        self.container_current.place_configure(height=UNIT_HEIGHT * 10)
-        self.text_file_content.place_configure(height=UNIT_HEIGHT * 5)
-        self.container_command.place_configure(height=UNIT_HEIGHT * 5)
-        self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 5)
-        self.text_result.place_configure(height=UNIT_HEIGHT * 4)
-        self.container_file_content.place_configure(height=UNIT_HEIGHT * 5)
-        self.container_scope_select.place_configure(y=int(UNIT_HEIGHT * 5.5))
+        self.container_current.place_configure(height=s.UNIT_HEIGHT * 10)
+        self.text_file_content.place_configure(height=s.UNIT_HEIGHT * 5)
+        self.container_command.place_configure(height=s.UNIT_HEIGHT * 5)
+        self.container_command_buttons.place_configure(y=s.UNIT_HEIGHT * 5)
+        self.text_result.place_configure(height=s.UNIT_HEIGHT * 4)
+        self.container_file_content.place_configure(height=s.UNIT_HEIGHT * 5)
+        self.container_scope_select.place_configure(y=int(s.UNIT_HEIGHT * 5.5))
         self.button_menu_back.config(command=self.set_window_file)
         self.button_menu_modules.configure(text='return to modules'.upper())
         self.button_run.configure(text='find text'.upper(), command=self.command_run_find)
@@ -930,13 +927,13 @@ class Window(tkinter.Tk):
         self.position(self.container_file_content, self.container_scope_select, self.container_find,
                       self.container_replace,
                       self.button_function_find, self.button_scope_select_folder, self.button_scope_except_file)
-        self.text_file_content.place_configure(height=UNIT_HEIGHT * 5)
-        self.container_current.place_configure(height=UNIT_HEIGHT * 11)
-        self.container_command.place_configure(height=UNIT_HEIGHT * 4)
-        self.container_command_buttons.place_configure(y=UNIT_HEIGHT * 4)
-        self.text_result.place_configure(height=UNIT_HEIGHT * 3)
-        self.container_file_content.place_configure(height=UNIT_HEIGHT * 5)
-        self.container_scope_select.place_configure(y=int(UNIT_HEIGHT * 5.5))
+        self.text_file_content.place_configure(height=s.UNIT_HEIGHT * 5)
+        self.container_current.place_configure(height=s.UNIT_HEIGHT * 11)
+        self.container_command.place_configure(height=s.UNIT_HEIGHT * 4)
+        self.container_command_buttons.place_configure(y=s.UNIT_HEIGHT * 4)
+        self.text_result.place_configure(height=s.UNIT_HEIGHT * 3)
+        self.container_file_content.place_configure(height=s.UNIT_HEIGHT * 5)
+        self.container_scope_select.place_configure(y=int(s.UNIT_HEIGHT * 5.5))
         self.button_menu_back.config(command=self.set_window_file)
         self.button_menu_modules.configure(text='return to modules'.upper())
         self.button_run.configure(text='replace text'.upper(), command=self.command_run_replace)
@@ -1400,10 +1397,10 @@ class Window(tkinter.Tk):
                 self.retrieve(self.button_execute)
                 pass
 
-    def change_type(self, x=s.DOUBLE_WIDTH * 5, y=UNIT_HEIGHT * 8, tree='old and new'):
+    def change_type(self, x=s.DOUBLE_WIDTH * 5, y=s.UNIT_HEIGHT * 8, tree='old and new'):
         """"""
         global popping_list_chosen
-        PoppingList(master=self, focus_point=(x + s.DOUBLE_WIDTH, y + UNIT_HEIGHT * 2), choices=CHANGES_TYPES)
+        PoppingList(master=self, focus_point=(x + s.DOUBLE_WIDTH, y + s.UNIT_HEIGHT * 2), choices=CHANGES_TYPES)
         try:
             if self.treeview_changes.selection() and 'old' in tree:
                 for selected in self.treeview_changes.selection():
@@ -1428,7 +1425,7 @@ class Window(tkinter.Tk):
 
     def on_double_click_change_new(self, event=None):
         """ - """
-        self.change_type(event.x, event.y + UNIT_HEIGHT * 5, 'new')
+        self.change_type(event.x, event.y + s.UNIT_HEIGHT * 5, 'new')
 
     def command_change_path(self):
         """ - """
