@@ -164,7 +164,7 @@ def get_change_statistics(module):
 class Window(tkinter.Tk):
     """ Tk-based app Window """
 
-    def __init__(self):
+    def __init__(self, start_file=None):
         super().__init__()
 
         initiate()
@@ -652,6 +652,15 @@ class Window(tkinter.Tk):
 
         self.set_window_modules()
         self.protocol("WM_DELETE_WINDOW", self.on_app_close)
+        if start_file:
+            self.current_path = start_file
+            if self.set_window_file():
+                pass
+            else:
+                self.set_window_modules()
+                self.set_log_update(self.current_path)
+        else:
+            self.set_window_modules()
         self.mainloop()
 
     def on_app_close(self):
