@@ -117,7 +117,7 @@ def cancel_initiation():
 def initiate():
     """ Initiates the application settings by asking for directories needed by the application. """
     initiator = tkinter.Tk()
-    initiator.iconbitmap('aesthetic/icon.ico')
+    initiator.iconbitmap(source.shared.ICON_PATH)
     initiator.title(f'{source.shared.PROGRAM_NAME} initiator')
     initiator.minsize(width=500, height=200)
     initiator_label = tkinter.Label(master=initiator, text='Looking for game paths. Please wait...')

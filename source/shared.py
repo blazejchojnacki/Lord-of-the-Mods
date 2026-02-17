@@ -53,6 +53,7 @@ BUTTON_SMALL_IDLE = None
 BUTTON_SMALL_HOVER = None
 BUTTON_LARGE_IDLE = None
 BUTTON_LARGE_HOVER = None
+ICON_PATH = ''
 KEY_LABEL = 'label'
 KEY_RETURN = 'command'
 KEY_INFO = 'info'
@@ -305,7 +306,9 @@ def load_aesthetic():
     Loads the aesthetic variables from the .json file into the application.
     """
     global APP_BACKGROUND_COLOR, ENTRY_BACKGROUND_COLOR, TEXT_COLORS, INI_LEVEL_COLORS, FONT_TEXT, FONT_BUTTON, \
-        BUTTON_SMALL_IDLE, BUTTON_SMALL_HOVER, BUTTON_LARGE_IDLE, BUTTON_LARGE_HOVER
+        BUTTON_SMALL_IDLE, BUTTON_SMALL_HOVER, BUTTON_LARGE_IDLE, BUTTON_LARGE_HOVER, ICON_PATH
+    if os.path.isfile('./aesthetic/icon.ico'):
+        ICON_PATH = './aesthetic/icon.ico'
     if os.path.isfile('./aesthetic/aesthetic.json'):
         with open('./aesthetic/aesthetic.json') as aesthetic_buffer:
             aesthetic_json = json.load(aesthetic_buffer)
@@ -339,7 +342,7 @@ class ChoiceWindow(tkinter.Toplevel):
         load_aesthetic()
         set_title_bar_color(self)
         if os.path.isfile('./aesthetic/icon.ico'):
-            self.iconbitmap('./aesthetic/icon.ico')
+            self.iconbitmap(ICON_PATH)
         self.width = DOUBLE_WIDTH*4
         self.height = UNIT_HEIGHT*6
         self.geometry(f'{self.width}x{self.height}')
