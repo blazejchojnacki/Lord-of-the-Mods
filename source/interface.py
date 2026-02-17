@@ -14,8 +14,7 @@ from source.constructor import load_file, load_directories
 from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
 from source.module_control import modules_filter, modules_sort, snapshot_take, snapshot_compare, \
     module_detect_changes, module_copy, module_new, detect_new_modules, hash_file, \
-    definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES, CHANGES_TYPES
-
+    definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES, CHANGES_TYPES, check_relative
 
 main_window = None
 current_info: tkinter.Toplevel
@@ -1194,14 +1193,40 @@ class Window(tkinter.Tk):
         if not self.global_modules:
             self.global_modules = modules_filter(return_type='definitions')
         try:
-            module_selected = self.treeview_modules_idle.item(self.treeview_modules_idle.focus(), 'values')[0]
-            self.set_log_update(f'loading module {module_selected} ...')
-            for module in self.global_modules:
-                if module['name'] == module_selected:
-                    module.attach()
-                    self.set_log_update(f'module {module_selected} loaded')
-                    return self.refresh_definitions()
-            self.set_log_update(f'command_module_attach error: module {module_selected} not found')
+            name_module_selected = self.treeview_modules_idle.item(self.treeview_modules_idle.focus(), 'values')[0]
+            self.set_log_update(f'loading module {name_module_selected} ...')
+            try:
+                module = modules_filter(name=name_module_selected)[0]
+                if ancestor_module := check_relative(module, 'ancestor'):
+                    answer = tkinter.messagebox.askokcancel(
+                        title=s.PROGRAM_NAME,
+                        message=f'This module depends on another that is not active.\n'
+                                f'Do you wish to attach the ancestor mod and continue?\n{ancestor_module['name']}'
+                    )
+                    if answer is True or answer == 'yes' or answer == 'ok':
+                        ancestor_module.attach()
+                    elif answer is None or answer == 'cancel' or answer is False:
+                        self.set_log_update('module loading aborted')
+                        return
+                if changes := module_detect_changes(module):
+                    answer = tkinter.messagebox.askyesnocancel(
+                        title=s.PROGRAM_NAME,
+                        message=f'Changes have been detected.\nDo you wish to update the mod and continue?\n{changes}'
+                    )
+                    if answer is True or answer == 'yes':
+                        module.edit(changes=module['changes'].update(changes))
+                    elif answer is False or answer == 'no':
+                        pass
+                    elif answer is None or answer == 'cancel':
+                        self.set_log_update('module loading aborted')
+                        return
+                if module.attach():
+                    self.set_log_update(f'module {name_module_selected} loaded')
+                else:
+                    self.set_log_update(f'module {name_module_selected} not loaded')
+                return self.refresh_definitions()
+            except IndexError:
+                self.set_log_update(f'command_module_attach error: module {name_module_selected} not found')
         except _tkinter.TclError:
             self.set_log_update('command_module_attach warning: TclError')
         except s.InternalError as err:
@@ -1214,30 +1239,53 @@ class Window(tkinter.Tk):
         try:
             module_selected = self.treeview_modules_active.item(self.treeview_modules_active.focus(), 'values')[0]
             self.set_log_update(f'unloading mod {module_selected} ...')
-            for module in self.global_modules:
-                if module['name'] == module_selected:
-                    changes = module_detect_changes(module=module)
-                    # TODO: test changes
-                    if changes:
-                        do_proceed = tkinter.messagebox.askokcancel(
-                            title=f'{s.PROGRAM_NAME}: module retrieval:',
-                            message='Files have been changed since the module have been attached.\n'
-                                    f'They will be deleted if the module is a {DEFINITION_CLASSES[1]}'
-                                    f' or incorporated if it is a {DEFINITION_CLASSES[0]}'
-                                    ' Do you wish to proceed?\n'
-                                    f'{changes}'
-                        )
-                        if do_proceed is True:
-                            changes = ''
-                    if not changes:
-                        module.retrieve()
+            try:
+                module = modules_filter(name=module_selected)[0]
+                if heir_module := check_relative(module, 'heir'):
+                    answer = tkinter.messagebox.askokcancel(
+                        title=s.PROGRAM_NAME,
+                        message=f'This module depends on another that is still active.\n'
+                                f'Do you wish to detach the heir mod and continue?\n{heir_module['name']}'
+                    )
+                    if answer is True or answer == 'yes' or answer == 'ok':
+                        heir_module.retrieve()
+                    elif answer is None or answer == 'cancel' or answer is False:
+                        self.set_log_update('module retrieval aborted')
+                        return
+
+                # OPTIMIZE: save changes in the definition
+                if changes := module_detect_changes(module=module):
+                    file_fate = ''
+                    if module['class'] == DEFINITION_CLASSES[1]:
+                        file_fate = f"Since the module is a '{DEFINITION_CLASSES[1]}', they will be deleted.\n"
+                    elif module['class'] == DEFINITION_CLASSES[0]:
+                        file_fate = f"Since the module is a '{DEFINITION_CLASSES[0]}', they will be incorporated.\n"
+                    do_proceed = tkinter.messagebox.askyesnocancel(
+                        title=f'{s.PROGRAM_NAME}: module retrieval:',
+                        message=f'Files have been changed since the module have been attached.\n{file_fate}'
+                                ' Do you wish to proceed and save the file [Yes] or [no] ?\n'
+                                f'{str(changes)[:1000]}'
+                    )  # # # too big changes crash the message box: it will not display and return False directly
+                    if do_proceed is True:
+                        module.edit(changes=module['changes'].update(changes))
+                        changes = {}
+                    elif do_proceed is False:
+                        changes = {}
+                    elif do_proceed is None:
+                        pass
+                if not changes:
+                    if module.retrieve():
                         self.refresh_definitions()
                         self.set_log_update(f"module {module['name']} deactivated")
-                        return
                     else:
                         self.set_log_update(
                             f'command_module_retrieve error: module {module_selected} retrieval aborted')
-            self.set_log_update(f'command_module_retrieve error: module {module_selected} not found')
+                    return
+                else:
+                    self.set_log_update(f'command_module_retrieve error: module {module_selected} retrieval aborted')
+                    return
+            except IndexError:
+                self.set_log_update(f'command_module_retrieve error: module {module_selected} not found')
         except _tkinter.TclError:
             self.set_log_update('command_module_retrieve error: module not selected')
         except s.InternalError as err:
