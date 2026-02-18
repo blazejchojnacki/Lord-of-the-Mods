@@ -344,7 +344,7 @@ def snapshot_take(game_paths=None, add_paths=False, return_type='path', name=Non
                 game_paths[game_paths.index('>no_path<')] = game_path
                 if add_paths:
                     game_paths.append('>no_path<')
-            elif len(game_paths) == 0:
+            elif len(game_paths) == 0 or game_paths == ['>no_path<']:
                 raise s.InternalError('directory not selected')
         mod_dir = f'{s.MAIN_DIRECTORY}/{game_path}'
         if not os.path.isdir(mod_dir):
