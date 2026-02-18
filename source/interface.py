@@ -16,7 +16,6 @@ from source.module_control import modules_filter, modules_sort, snapshot_take, s
     module_detect_changes, module_copy, module_new, hash_file, \
     definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES, CHANGES_TYPES, check_relative
 
-# main_window = None
 current_info: tkinter.Toplevel
 popping_list_deployed = False
 popping_list_chosen = ''
@@ -217,7 +216,8 @@ class Window(tkinter.Tk):
         # # # main menu
         self.container_command = tkinter.Frame(master=self)
         self.container_command_buttons = tkinter.Frame(master=self.container_command)
-        self.button_menu_back = s.ReactiveButton(master=self.container_command_buttons, text='back'.upper())
+        self.button_menu_back = s.ReactiveButton(master=self.container_command_buttons, small=True, text='back'.upper(),
+                                                 command=self.set_window_modules)
         self.button_menu_modules = s.ReactiveButton(
             master=self.container_command_buttons, text='modules'.upper(), command=self.set_window_modules)
         self.button_menu_settings = s.ReactiveButton(
@@ -250,11 +250,10 @@ class Window(tkinter.Tk):
         self.list_entry_settings = []
         list_buttons_settings = []
         for setting in s.current:
-            if setting == 'comment':
-                continue
             list_labels_settings.append(tkinter.Label(master=self.container_settings, text=setting))
             self.list_entry_settings.append(tkinter.Entry(master=self.container_settings))
-            list_buttons_settings.append(s.ReactiveButton(master=self.container_settings, text='select'.upper()))
+            list_buttons_settings.append(s.ReactiveButton(master=self.container_settings, small=True,
+                                                          text='select'.upper()))
         try:
             list_buttons_settings[2].configure(command=lambda: self.settings_select_new_directory(2))
             list_buttons_settings[3].configure(command=lambda: self.settings_select_new_directory(3))
@@ -469,28 +468,7 @@ class Window(tkinter.Tk):
         for entry in entries:
             entry.place_configure(width=s.TEXT_WIDTH)
 
-        try:
-            for button in small_buttons:
-                button.configure(
-                    image=s.BUTTON_SMALL_IDLE, compound='center', foreground=s.TEXT_COLORS[0], font=s.FONT_BUTTON,
-                    border=0, background=s.APP_BACKGROUND_COLOR, activebackground=s.APP_BACKGROUND_COLOR)
-                button.default_image = s.BUTTON_SMALL_IDLE
-                button.active_image = s.BUTTON_SMALL_HOVER
-            for button in large_buttons:
-                button.configure(
-                    image=s.BUTTON_LARGE_IDLE, compound='center', foreground=s.TEXT_COLORS[0], font=s.FONT_BUTTON,
-                    border=0, background=s.APP_BACKGROUND_COLOR, activebackground=s.APP_BACKGROUND_COLOR)
-                button.default_image = s.BUTTON_LARGE_IDLE
-                button.active_image = s.BUTTON_LARGE_HOVER
-        except _tkinter.TclError:
-            for button in small_buttons:
-                button.configure(
-                    foreground=s.TEXT_COLORS[0], font=s.FONT_BUTTON,
-                    border=1, background=s.APP_BACKGROUND_COLOR, activebackground=s.APP_BACKGROUND_COLOR)
-            for button in large_buttons:
-                button.configure(
-                    foreground=s.TEXT_COLORS[0], font=s.FONT_BUTTON,
-                    border=1, background=s.APP_BACKGROUND_COLOR, activebackground=s.APP_BACKGROUND_COLOR)
+        # # # buttons configured on creation
 
         for container in containers:
             container.configure(background=s.APP_BACKGROUND_COLOR)
@@ -524,12 +502,10 @@ class Window(tkinter.Tk):
         tkinter.ttk.Style().configure(
             'Treeview.Heading', borderwidth=0, overbackground=s.TEXT_COLORS[0], overforeground=s.TEXT_COLORS[-1])
 
-        for index in range(len(s.current) - 1):
-            list_labels_settings[index].place(x=0, y=s.UNIT_HEIGHT * index, width=s.UNIT_WIDTH * 2,
-                                              height=s.UNIT_HEIGHT)
-            self.list_entry_settings[index].place(x=s.UNIT_WIDTH * 2 + 10, y=s.UNIT_HEIGHT * index,
-                                                  width=s.TEXT_WIDTH - s.UNIT_WIDTH,
-                                                  height=s.UNIT_HEIGHT)
+        for index in range(len(s.current)):
+            list_labels_settings[index].place(x=0, y=s.UNIT_HEIGHT * index, width=s.UNIT_WIDTH*2, height=s.UNIT_HEIGHT)
+            self.list_entry_settings[index].place(
+                x=s.UNIT_WIDTH*2 + 10, y=s.UNIT_HEIGHT * index, width=s.TEXT_WIDTH - s.UNIT_WIDTH, height=s.UNIT_HEIGHT)
             if index < 2:
                 self.list_entry_settings[index].configure(state='disabled')
                 continue
@@ -742,7 +718,7 @@ class Window(tkinter.Tk):
         """ Loads the screen for managing modules. """
         self.key_to_command_current = self.key_to_command_module.copy()
         self.clear_window()
-        self.retrieve(self.button_module_copy, self.button_definition_edit, self.button_function_find,
+        self.retrieve(self.button_definition_edit, self.button_function_find,
                       self.button_function_replace, self.button_menu_back)
         self.position(self.container_modules, self.button_module_new, self.container_command, self.button_run,
                       self.button_execute,
@@ -1017,7 +993,6 @@ class Window(tkinter.Tk):
             if setting_key == 'comment':
                 continue
             if s.current[setting_key] != setting_value[counter]:
-                # TODO later: check for empty settings list
                 if isinstance(s.current[setting_key], list):
                     setting_dict_list = setting_value[counter].split(', ')
                     if s.current[setting_key] and setting_dict_list:
@@ -1032,8 +1007,10 @@ class Window(tkinter.Tk):
             counter += 1
         if new_settings:
             try:
-                output = s.settings_set(new_settings)
-                self.set_log_update(output)
+                if s.settings_set(new_settings):
+                    self.set_log_update('Settings saved and checked.')
+                else:
+                    self.set_log_update('The provided value seems to be incorrect.')
             except s.InternalError as error:
                 self.set_log_update(error.message)
                 self.command_settings_reload()
@@ -1214,7 +1191,6 @@ class Window(tkinter.Tk):
         self.refresh_definitions()
 
     def command_module_attach(self):
-        # TODO: if the module overrides another, ask if save it as ancestor / heir
         """ Activates the selected module """
         if not self.global_modules:
             self.global_modules = modules_filter(return_type='definitions')
@@ -1390,7 +1366,6 @@ class Window(tkinter.Tk):
                     if param == 'comment':
                         continue
                     elif param == 'changes':
-                        # TODO later: reformat the changes
                         continue
                     value = self.list_text_definition_editor[level].get('1.0', 'end').strip()
                     if value != module[param]:
