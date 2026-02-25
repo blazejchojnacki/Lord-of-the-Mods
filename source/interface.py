@@ -16,7 +16,6 @@ from source.module_control import modules_filter, modules_sort, snapshot_take, s
     module_detect_changes, module_copy, module_new, hash_file, \
     definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES, CHANGES_TYPES, check_relative
 
-current_info: tkinter.Toplevel
 popping_list_deployed = False
 popping_list_chosen = ''
 
@@ -27,44 +26,35 @@ CHANGES_COLUMNS = {'path': 6, 'type': 1}
 class ColumnedListbox(tkinter.ttk.Treeview):
     """ a Tk/Tcl Treeview-based class with predefined columns"""
 
-    def __init__(self, master, width=0, height=0, columns=None, show='tree headings'):
+    def __init__(self, master, width=s.LIST_WIDTH, height=s.UNIT_HEIGHT*3, columns_dict=None, show='tree headings'):
         super().__init__(master=master, height=height, show=show)
-        if columns is None:
-            columns = MODULE_COLUMNS
-        self.width = width
-        self.columns_list = list(columns.keys())
-        self.configure(columns=self.columns_list)
-        for column in self.columns_list:
-            self.heading(column, text=column)
-        self.set_columns_proportions(list(columns.values()))
+        self.width = width * 6  # # # required for columns widths to set properly
+        if columns_dict:
+            self.set_columns(columns_dict)
 
-    def set_columns_proportions(self, proportions):
-        total_quotient = sum(proportions, 1)
-        self.column('#0', width=int(self.width / total_quotient))
-        for column_index in range(len(proportions)):
+    def set_columns(self, columns_dict):
+        self.configure(columns=list(columns_dict.keys()))
+        total_quotient = sum(list(columns_dict.values()), 1)
+        column_unit_width = int(self.width / total_quotient)
+        self.column('#0', width=column_unit_width)
+        for column_name in columns_dict:
+            self.heading(column_name, text=column_name)
             self.column(
-                self.columns_list[column_index],
-                width=int(self.width / total_quotient * proportions[column_index])
+                column_name, width=column_unit_width * columns_dict[column_name]
             )
-            if column_index == len(proportions) - 1:
-                self.column(
-                    self.columns_list[column_index],
-                    width=int(self.width / total_quotient * proportions[column_index]) - 5
-                )
 
     def open_children(self):
         for search_index in range(10):
-            open_children(self, parent=str(search_index))
+            self.open_children_recursive(parent=str(search_index))
 
-
-def open_children(tree, parent):
-    """ Recurring function to display all modules hierarchically. """
-    try:
-        tree.item(parent, open=True)
-        for child in tree.get_children(parent):
-            open_children(tree, child)
-    except _tkinter.TclError:
-        pass
+    def open_children_recursive(self, parent):
+        """ Recursive function to display all items hierarchically. """
+        try:
+            self.item(parent, open=True)
+            for child in self.get_children(parent):
+                self.open_children_recursive(child)
+        except _tkinter.TclError:
+            pass
 
 
 class PoppingList(tkinter.Toplevel):
@@ -96,6 +86,7 @@ class PoppingList(tkinter.Toplevel):
         self.mainloop()
 
     def keep_track(self, event=None):
+        """ moves the object along with its master"""
         if event:
             pass
         self.master.update()
@@ -132,19 +123,17 @@ class PoppingList(tkinter.Toplevel):
             pass
 
 
-DIR_EXCEPTIONS = ['.git']
-
-
-def count_files_recurrent(path, counter: int = -1):
-    """ Counts the number of files in a directory. """
+def count_files_recursive(path, counter: int = -1):
+    """ Recursively counts the number of files in a directory. """
     if counter == -1:
         items = [_ for _ in os.listdir(path) if os.path.isdir(f'{path}/{_}')]
         counter = 0
     else:
         items = os.listdir(path)
+    dir_exceptions = ['.git']
     for item in items:
-        if os.path.isdir(f'{path}/{item}') and item not in DIR_EXCEPTIONS:
-            counter = count_files_recurrent(f'{path}/{item}', counter)
+        if os.path.isdir(f'{path}/{item}') and item not in dir_exceptions:
+            counter = count_files_recursive(f'{path}/{item}', counter)
         elif os.path.isfile(f'{path}/{item}'):
             counter += 1
     return counter
@@ -155,7 +144,7 @@ def get_change_statistics(module):
         module_path = f"{s.LIBRARY}/{module['name']}"
         output = (f"mentioned: {len(module['changes'])} ("
                   f" removed: {len([_ for _ in module['changes'] if _[0] == 'removed'])}"
-                  f') | present in module: {count_files_recurrent(module_path)}')
+                  f') | present in module: {count_files_recursive(module_path)}')
         return output
     return ''
 
@@ -264,7 +253,8 @@ class Window(tkinter.Tk):
         # # # window modules
         self.container_modules = tkinter.Frame(master=self.container_current)
         label_modules_idle = tkinter.Label(master=self.container_modules, text='available modules:')
-        self.treeview_modules_idle = ColumnedListbox(master=self.container_modules, width=s.LIST_WIDTH, height=10)
+        self.treeview_modules_idle = ColumnedListbox(
+            master=self.container_modules, width=s.LIST_WIDTH, height=10, columns_dict=MODULE_COLUMNS)
         self.treeview_modules_idle.bind('<<TreeviewSelect>>', self.on_select_module_idle)
         self.treeview_modules_idle.bind('<Double-1>', self.command_module_browse)
         container_module_buttons = tkinter.Frame(master=self.container_modules, pady=7)
@@ -276,8 +266,6 @@ class Window(tkinter.Tk):
             master=container_module_buttons, text='reload module'.upper(), command=self.command_module_reload)
         self.button_module_browse = s.ReactiveButton(
             master=container_module_buttons, text='open module'.upper(), command=self.command_module_browse)
-        # self.button_module_copy = s.ReactiveButton(
-        #     master=container_module_buttons, text='copy module'.upper(), command=self.command_module_copy)
         self.button_module_launch = s.ReactiveButton(
             master=container_module_buttons, text='launch'.upper(), command=self.command_module_launch)
         self.button_module_new = s.ReactiveButton(
@@ -286,7 +274,8 @@ class Window(tkinter.Tk):
             master=container_module_buttons, text='edit module data'.upper(), command=self.set_window_definition)
         label_modules_active = tkinter.Label(
             master=self.container_modules, text='active modules:', width=s.UNIT_WIDTH * 2)
-        self.treeview_modules_active = ColumnedListbox(master=self.container_modules, width=s.LIST_WIDTH, height=10)
+        self.treeview_modules_active = ColumnedListbox(
+            master=self.container_modules, width=s.LIST_WIDTH, height=10, columns_dict=MODULE_COLUMNS)
         self.treeview_modules_active.bind('<<TreeviewSelect>>', self.on_select_module_active)
         self.treeview_modules_active.bind('<Double-1>', self.command_module_browse)
 
@@ -308,11 +297,12 @@ class Window(tkinter.Tk):
         self.label_changes = tkinter.Label(master=self.container_changes, text='changes')
         self.proportions_changes = (6, 1)
         self.treeview_changes = ColumnedListbox(
-            master=self.container_changes, width=s.TEXT_WIDTH, height=20, show='headings', columns=CHANGES_COLUMNS)
+            master=self.container_changes, width=s.TEXT_WIDTH, height=20, show='headings', columns_dict=CHANGES_COLUMNS)
         self.treeview_changes.bind('<<TreeviewSelect>>', self.on_select_change)
         self.container_changes_new = tkinter.Frame(master=self.container_current)
         self.treeview_changes_new = ColumnedListbox(
-            master=self.container_changes_new, width=s.TEXT_WIDTH, height=10, show='headings', columns=CHANGES_COLUMNS)
+            master=self.container_changes_new, width=s.TEXT_WIDTH, height=10, show='headings',
+            columns_dict=CHANGES_COLUMNS)
         self.treeview_changes_new.bind('<<TreeviewSelect>>', self.on_select_change)
         self.treeview_changes_new.bind('<Double-1>', self.on_double_click_change_new)
 
@@ -624,13 +614,13 @@ class Window(tkinter.Tk):
             label_find, self.text_find, button_replace_copy, label_replace, self.text_replace,
             self.container_changes, self.label_changes, self.treeview_changes, self.container_changes_new,
             self.treeview_changes_new,
-        )  #
+        )
 
         self.set_window_modules()
         self.protocol("WM_DELETE_WINDOW", self.on_app_close)
         if start_file:
             self.current_path = start_file
-            if self.set_window_file():
+            if self.try_set_window_file():
                 pass
             else:
                 self.set_window_modules()
@@ -870,27 +860,31 @@ class Window(tkinter.Tk):
         self.current_window = 'file_move'
         self.set_log_update(f'move feature loaded. file: {self.current_path}')
 
-    def set_window_file(self):
-        """ Loads the screen for file edition """
+    def try_set_window_file(self):
         if self.command_file_load():
-            self.clear_window()
-            self.key_to_command_current = self.key_to_command_text.copy()
-            self.retrieve(self.button_execute)
-            self.position(self.container_file_content, self.button_run, self.button_function_find,
-                          self.button_function_replace)
-            self.container_current.place_configure(height=s.UNIT_HEIGHT * 13)
-            self.text_file_content.place_configure(height=s.UNIT_HEIGHT * 12)
-            self.container_command.place_configure(height=s.UNIT_HEIGHT * 2)
-            self.container_command_buttons.place_configure(y=s.UNIT_HEIGHT * 2)
-            self.text_result.place_configure(height=int(s.UNIT_HEIGHT * 0.75))
-            self.text_file_content.focus()
-            self.button_menu_back.configure(command=self.command_browser_back)
-            self.button_run.configure(text='save file'.upper(), command=self.command_file_save, state='normal')
-            self.current_window = 'file_editor'
-            self.set_log_update(f'file editor loaded. file {self.current_path}')
+            self.set_window_file()
             return True
-        else:
-            return False
+        return False
+
+    def set_window_file(self, event=None):
+        """ Loads the screen for file edition """
+        if event:
+            pass
+        self.clear_window()
+        self.key_to_command_current = self.key_to_command_text.copy()
+        self.retrieve(self.button_execute)
+        self.position(self.container_file_content, self.button_run, self.button_function_find,
+                      self.button_function_replace)
+        self.container_current.place_configure(height=s.UNIT_HEIGHT * 13)
+        self.text_file_content.place_configure(height=s.UNIT_HEIGHT * 12)
+        self.container_command.place_configure(height=s.UNIT_HEIGHT * 2)
+        self.container_command_buttons.place_configure(y=s.UNIT_HEIGHT * 2)
+        self.text_result.place_configure(height=int(s.UNIT_HEIGHT * 0.75))
+        self.text_file_content.focus()
+        self.button_menu_back.configure(command=self.command_browser_back)
+        self.button_run.configure(text='save file'.upper(), command=self.command_file_save, state='normal')
+        self.current_window = 'file_editor'
+        self.set_log_update(f'file editor loaded. file {self.current_path}')
 
     def set_window_find(self):
         """ Loads the screen for finding text. """
@@ -1390,6 +1384,7 @@ class Window(tkinter.Tk):
         """ upon selecting a changed file, enables the 'open file' button """
         if event:
             pass
+        current_treeview: ColumnedListbox
         current_treeview = self.focus_get()
         if current_treeview == self.treeview_changes or current_treeview == self.treeview_changes_new:
             try:
@@ -1622,7 +1617,7 @@ class Window(tkinter.Tk):
         elif os.path.isfile(self.current_path):
             self.text_scope_select.delete('1.0', 'end')
             self.text_scope_select.insert('end', self.current_path)
-            if self.set_window_file():
+            if self.try_set_window_file():
                 self.listbox_browser.selection_clear(self.listbox_browser.curselection())
                 self.position(self.button_execute)
                 self.set_log_update(f'opened {os.path.abspath(self.current_path)}')
