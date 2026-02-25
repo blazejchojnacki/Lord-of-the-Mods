@@ -3,7 +3,6 @@ import shutil
 import subprocess
 import tkinter
 import _tkinter
-from tkinter.messagebox import askquestion
 from tkinter.filedialog import askopenfilenames, askdirectory
 from tkinter.ttk import Treeview
 from tklinenums import TkLineNumbers
@@ -648,15 +647,23 @@ class Window(tkinter.Tk):
         file_named = self.text_scope_select.get('1.0', 'end').replace('/', '\\').strip('\n\t {}')
         if file_named and self.current_file_content_backup:
             if self.text_file_content.get('1.0', 'end').strip() != self.current_file_content_backup.strip():
-                save_file = tkinter.messagebox.askquestion(f'{s.PROGRAM_NAME}:', 'Do you want to save the file?')
+                save_file = s.invoke_choice(
+                    title='closing program',
+                    text='Do you want to save the file?',
+                    buttons=({s.KEY_LABEL: 'yes', s.KEY_RETURN: True, s.KEY_INFO: ''},)
+                )
                 if save_file == 'yes':
                     self.command_file_save()
         self.current_file_content_backup = ''
 
     def warning_unsaved_changes(self):
         if self.treeview_changes_new.get_children():
-            do_proceed = tkinter.messagebox.askyesno(
-                title=s.PROGRAM_NAME, message='some changes have not been applied.\n Do you wish to apply then?')
+            do_proceed = s.invoke_choice(
+                title='unsaved changes',
+                text='some changes have not been applied.\n Do you wish to apply them?',
+                buttons=({s.KEY_LABEL: 'yes', s.KEY_RETURN: True, s.KEY_INFO: ''},
+                         {s.KEY_LABEL: 'no', s.KEY_RETURN: False, s.KEY_INFO: ''})
+            )
             if do_proceed is True:
                 self.command_change_confirm()
             elif do_proceed is False:
@@ -1107,10 +1114,12 @@ class Window(tkinter.Tk):
             for folder in library_folders:
                 if not os.path.isfile(f'{s.LIBRARY}/{folder}/{DEFINITION_NAME}'):
                     self.set_log_update(f'Detected a definition-less folder in the library - {folder}')
-                    do_initiate = tkinter.messagebox.askokcancel(
-                        title=s.PROGRAM_NAME,
-                        message=f'The folder {s.LIBRARY}/{folder}\n seems to have no definition.\n'
-                                'Do you wish it to become a module?\n'
+                    do_initiate = s.invoke_choice(
+                        title='unsaved changes',
+                        text=f'The folder {s.LIBRARY}/{folder}\n seems to have no properties.\n'
+                             'Do you wish it to become a mod?\n',
+                        buttons=({s.KEY_LABEL: 'yes', s.KEY_RETURN: True, s.KEY_INFO: ''},
+                                 {s.KEY_LABEL: 'no', s.KEY_RETURN: False, s.KEY_INFO: ''})
                     )
                     if do_initiate:
                         self.set_window_module_new(start_name=folder)
@@ -1194,10 +1203,12 @@ class Window(tkinter.Tk):
             try:
                 module = modules_filter(name=name_module_selected)[0]
                 if ancestor_module := check_relative(module, 'ancestor'):
-                    answer = tkinter.messagebox.askokcancel(
-                        title=s.PROGRAM_NAME,
-                        message=f'This module depends on another that is not active.\n'
-                                f'Do you wish to attach the ancestor mod and continue?\n{ancestor_module['name']}'
+                    answer = s.invoke_choice(
+                        title='override retrieval',
+                        text=f'This mod depends on another that is not active.\n'
+                             f'Do you wish to attach the ancestor mod and continue?\n{ancestor_module['name']}',
+                        buttons=({s.KEY_LABEL: 'yes', s.KEY_RETURN: True, s.KEY_INFO: ''},
+                                 {s.KEY_LABEL: 'no', s.KEY_RETURN: False, s.KEY_INFO: ''})
                     )
                     if answer is True or answer == 'yes' or answer == 'ok':
                         ancestor_module.attach()
@@ -1205,9 +1216,13 @@ class Window(tkinter.Tk):
                         self.set_log_update('module loading aborted')
                         return
                 if changes := module_detect_changes(module):
-                    answer = tkinter.messagebox.askyesnocancel(
-                        title=s.PROGRAM_NAME,
-                        message=f'Changes have been detected.\nDo you wish to update the mod and continue?\n{changes}'
+                    answer = s.invoke_choice(
+                        title='mod changes',
+                        text=f'Changes have been detected.\nDo you wish to update the mod and continue?\n'
+                             f'{str(changes)[:1000]}',
+                        buttons=({s.KEY_LABEL: 'update', s.KEY_RETURN: True, s.KEY_INFO: ''},
+                                 {s.KEY_LABEL: 'no update', s.KEY_RETURN: False, s.KEY_INFO: ''},
+                                 {s.KEY_LABEL: 'cancel', s.KEY_RETURN: None, s.KEY_INFO: ''})
                     )
                     if answer is True or answer == 'yes':
                         module.edit(changes=module['changes'].update(changes))
@@ -1238,10 +1253,12 @@ class Window(tkinter.Tk):
             try:
                 module = modules_filter(name=module_selected)[0]
                 if heir_module := check_relative(module, 'heir'):
-                    answer = tkinter.messagebox.askokcancel(
-                        title=s.PROGRAM_NAME,
-                        message=f'This module depends on another that is still active.\n'
-                                f'Do you wish to detach the heir mod and continue?\n{heir_module['name']}'
+                    answer = s.invoke_choice(
+                        title='override retrieval',
+                        text=f'This mod depends on another that is still active.\n'
+                             f'Do you wish to detach the heir mod and continue?\n{heir_module['name']}',
+                        buttons=({s.KEY_LABEL: 'yes', s.KEY_RETURN: True, s.KEY_INFO: ''},
+                                 {s.KEY_LABEL: 'no', s.KEY_RETURN: False, s.KEY_INFO: ''})
                     )
                     if answer is True or answer == 'yes' or answer == 'ok':
                         heir_module.retrieve()
@@ -1256,11 +1273,14 @@ class Window(tkinter.Tk):
                         file_fate = f"Since the module is a '{DEFINITION_CLASSES[1]}', they will be deleted.\n"
                     elif module['class'] == DEFINITION_CLASSES[0]:
                         file_fate = f"Since the module is a '{DEFINITION_CLASSES[0]}', they will be incorporated.\n"
-                    do_proceed = tkinter.messagebox.askyesnocancel(
-                        title=f'{s.PROGRAM_NAME}: module retrieval:',
-                        message=f'Files have been changed since the module have been attached.\n{file_fate}'
-                                ' Do you wish to proceed and save the file [Yes] or [no] ?\n'
-                                f'{str(changes)[:1000]}'
+                    do_proceed = s.invoke_choice(
+                        title='mod changes',
+                        text=f'Files have been changed since the mod have been attached.\n{file_fate}'
+                             ' Do you wish to proceed and update the file?\n'
+                             f'{str(changes)[:1000]}',
+                        buttons=({s.KEY_LABEL: 'update', s.KEY_RETURN: True, s.KEY_INFO: ''},
+                                 {s.KEY_LABEL: 'no update', s.KEY_RETURN: False, s.KEY_INFO: ''},
+                                 {s.KEY_LABEL: 'cancel', s.KEY_RETURN: None, s.KEY_INFO: ''})
                     )  # # # too big changes crash the message box: it will not display and return False directly
                     if do_proceed is True:
                         module.edit(changes=module['changes'].update(changes))
