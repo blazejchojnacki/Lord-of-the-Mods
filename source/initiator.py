@@ -131,6 +131,7 @@ def initiate():
         directories_dict = {}
         initiator_label.configure(text='Initiating functional directories.')
         initiator.update()
+        # TODO: replace with ChoiceWindow
         use_default_paths = askyesnocancel(
             title=f'{source.shared.PROGRAM_NAME} initiator:',
             message=f'Use default functional folder names? If not, you can choose your own.'

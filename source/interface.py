@@ -12,13 +12,13 @@ from source.initiator import initiate
 from source.constructor import load_file, load_directories
 from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
 from source.module_control import modules_filter, modules_sort, snapshot_take, snapshot_compare, \
-    module_detect_changes, module_copy, module_new, hash_file, \
-    definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES, CHANGES_TYPES, check_relative
+    module_detect_changes, module_copy, module_new, hash_file, Property, \
+    definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES, Change, check_relative
 
 popping_list_deployed = False
 popping_list_chosen = ''
 
-MODULE_COLUMNS = {'name': 1, 'class': 1, 'progress': 1, 'description': 5}
+MODULE_COLUMNS = {Property.NAME: 1, Property.TRANSFER_TYPE: 1, 'progress': 1, Property.DESCRIPTION: 5}
 CHANGES_COLUMNS = {'path': 6, 'type': 1}
 
 
@@ -139,10 +139,10 @@ def count_files_recursive(path, counter: int = -1):
 
 
 def get_change_statistics(module):
-    if module['name']:
-        module_path = f"{s.LIBRARY}/{module['name']}"
-        output = (f"mentioned: {len(module['changes'])} ("
-                  f" removed: {len([_ for _ in module['changes'] if _[0] == 'removed'])}"
+    if module[Property.NAME]:
+        module_path = f"{s.LIBRARY}/{module[Property.NAME]}"
+        output = (f"mentioned: {len(module[Property.CHANGES])} ("
+                  f" removed: {len([_ for _ in module[Property.CHANGES] if _[0] == Change.REMOVED])}"
                   f') | present in module: {count_files_recursive(module_path)}')
         return output
     return ''
@@ -283,10 +283,10 @@ class Window(tkinter.Tk):
         self.list_labels_module_editor = []
         self.list_text_definition_editor = []
         for key in DEFINITION_EXAMPLE:
-            if key == 'comment' or key == 'changes':
+            if key == 'comment' or key == Property.CHANGES:
                 continue
             self.list_labels_module_editor.append(tkinter.Label(master=self.container_definition, text=key))
-            if key == 'changes':
+            if key == Property.CHANGES:
                 self.list_labels_module_editor.append(tkinter.Label(master=self.container_definition))
                 continue
             self.list_text_definition_editor.append(tkinter.Text(master=self.container_definition))
@@ -758,12 +758,12 @@ class Window(tkinter.Tk):
         self.button_execute.configure(text='see changed files', command=self.set_window_changes)
         module_selected = self.current_path.split('/')[-1]
         for module in self.global_modules:
-            if module_selected == module['name']:
+            if module_selected == module[Property.NAME]:
                 level = 0
                 for param in DEFINITION_EXAMPLE:
                     if param == 'comment':
                         continue
-                    elif param == 'changes':
+                    elif param == Property.CHANGES:
                         self.list_labels_module_editor[-1].configure(text=get_change_statistics(module), justify='left')
                         continue
                     self.list_text_definition_editor[level].configure(state='normal')
@@ -772,7 +772,7 @@ class Window(tkinter.Tk):
                         self.list_text_definition_editor[level].insert('end', str(module[param]))
                     else:
                         self.list_text_definition_editor[level].insert('end', module[param])
-                    if 'active' in param:
+                    if Property.ACTIVE in param:
                         self.list_text_definition_editor[level].configure(state='disabled')
                     level += 1
                 self.loaded_module = module
@@ -793,11 +793,11 @@ class Window(tkinter.Tk):
         self.button_execute.configure(text='open file', command=self.set_window_file)
         self.treeview_changes.delete(*self.treeview_changes.get_children())
         change_index = 0
-        for change in self.loaded_module['changes']:
-            change_values = (change, self.loaded_module['changes'][change][0])
+        for change in self.loaded_module[Property.CHANGES]:
+            change_values = (change, self.loaded_module[Property.CHANGES][change][0])
             self.treeview_changes.insert(index=change_index, parent='', values=change_values, iid=change_index)
             change_index += 1
-        self.label_changes.configure(text=f"changes of {self.loaded_module['name']}")
+        self.label_changes.configure(text=f"changes of {self.loaded_module[Property.NAME]}")
         self.treeview_changes.bind('<Double-1>', self.set_window_file)
         self.current_window = 'changes'
         self.set_log_update('Changes screen loaded')
@@ -1066,7 +1066,7 @@ class Window(tkinter.Tk):
         self.key_to_command_current['<Return>'] = self.command_module_browse
         self.position(self.button_module_retrieve, self.button_module_reload, self.button_module_browse,
                       self.button_definition_edit)
-        if self.loaded_module['launch']:
+        if self.loaded_module[Property.LAUNCH]:
             self.position(self.button_module_launch)
         else:
             self.retrieve(self.button_module_launch)
@@ -1136,7 +1136,7 @@ class Window(tkinter.Tk):
                 self.global_modules.append(module)
             for module in active_modules:
                 try:
-                    parent_index = active_module_parent_dict[module['name']]
+                    parent_index = active_module_parent_dict[module[Property.NAME]]
                     self.treeview_modules_active.move(active_modules.index(module), parent_index, 0)
                 except KeyError:
                     pass
@@ -1153,7 +1153,7 @@ class Window(tkinter.Tk):
                 self.global_modules.append(module)
             for module in idle_modules:
                 try:
-                    parent_index = idle_module_parent_dict[module['name']]
+                    parent_index = idle_module_parent_dict[module[Property.NAME]]
                     self.treeview_modules_idle.move(idle_modules.index(module), parent_index, 0)
                 except KeyError:
                     pass
@@ -1202,11 +1202,11 @@ class Window(tkinter.Tk):
             self.set_log_update(f'loading module {name_module_selected} ...')
             try:
                 module = modules_filter(name=name_module_selected)[0]
-                if ancestor_module := check_relative(module, 'ancestor'):
+                if ancestor_module := check_relative(module, Property.OVERRIDES):
                     answer = s.invoke_choice(
                         title='override retrieval',
                         text=f'This mod depends on another that is not active.\n'
-                             f'Do you wish to attach the ancestor mod and continue?\n{ancestor_module['name']}',
+                             f'Do you wish to attach the ancestor mod and continue?\n{ancestor_module[Property.NAME]}',
                         buttons=({s.KEY_LABEL: 'yes', s.KEY_RETURN: True, s.KEY_INFO: ''},
                                  {s.KEY_LABEL: 'no', s.KEY_RETURN: False, s.KEY_INFO: ''})
                     )
@@ -1225,7 +1225,7 @@ class Window(tkinter.Tk):
                                  {s.KEY_LABEL: 'cancel', s.KEY_RETURN: None, s.KEY_INFO: ''})
                     )
                     if answer is True or answer == 'yes':
-                        module.edit(changes=module['changes'].update(changes))
+                        module.edit(changes=module[Property.CHANGES].update(changes))
                     elif answer is False or answer == 'no':
                         pass
                     elif answer is None or answer == 'cancel':
@@ -1252,11 +1252,11 @@ class Window(tkinter.Tk):
             self.set_log_update(f'unloading mod {module_selected} ...')
             try:
                 module = modules_filter(name=module_selected)[0]
-                if heir_module := check_relative(module, 'heir'):
+                if heir_module := check_relative(module, Property.OVERRODE_BY):
                     answer = s.invoke_choice(
                         title='override retrieval',
                         text=f'This mod depends on another that is still active.\n'
-                             f'Do you wish to detach the heir mod and continue?\n{heir_module['name']}',
+                             f'Do you wish to detach the heir mod and continue?\n{heir_module[Property.NAME]}',
                         buttons=({s.KEY_LABEL: 'yes', s.KEY_RETURN: True, s.KEY_INFO: ''},
                                  {s.KEY_LABEL: 'no', s.KEY_RETURN: False, s.KEY_INFO: ''})
                     )
@@ -1269,9 +1269,9 @@ class Window(tkinter.Tk):
                 # OPTIMIZE: save changes in the definition
                 if changes := module_detect_changes(module=module):
                     file_fate = ''
-                    if module['class'] == DEFINITION_CLASSES[1]:
+                    if module[Property.TRANSFER_TYPE] == DEFINITION_CLASSES[1]:
                         file_fate = f"Since the module is a '{DEFINITION_CLASSES[1]}', they will be deleted.\n"
-                    elif module['class'] == DEFINITION_CLASSES[0]:
+                    elif module[Property.TRANSFER_TYPE] == DEFINITION_CLASSES[0]:
                         file_fate = f"Since the module is a '{DEFINITION_CLASSES[0]}', they will be incorporated.\n"
                     do_proceed = s.invoke_choice(
                         title='mod changes',
@@ -1283,7 +1283,7 @@ class Window(tkinter.Tk):
                                  {s.KEY_LABEL: 'cancel', s.KEY_RETURN: None, s.KEY_INFO: ''})
                     )  # # # too big changes crash the message box: it will not display and return False directly
                     if do_proceed is True:
-                        module.edit(changes=module['changes'].update(changes))
+                        module.edit(changes=module[Property.CHANGES].update(changes))
                         changes = {}
                     elif do_proceed is False:
                         changes = {}
@@ -1292,7 +1292,7 @@ class Window(tkinter.Tk):
                 if not changes:
                     if module.retrieve():
                         self.refresh_definitions()
-                        self.set_log_update(f"module {module['name']} deactivated")
+                        self.set_log_update(f"module {module[Property.NAME]} deactivated")
                     else:
                         self.set_log_update(
                             f'command_module_retrieve error: module {module_selected} retrieval aborted')
@@ -1315,7 +1315,7 @@ class Window(tkinter.Tk):
             module_selected = self.treeview_modules_active.item(self.treeview_modules_active.focus(), 'values')[0]
             self.set_log_update(f'Reloading module {module_selected}. Please wait ...')
             for module in self.global_modules:
-                if module['name'] == module_selected:
+                if module[Property.NAME] == module_selected:
                     if module.reload():
                         self.refresh_definitions()
                         self.set_log_update(f'Module {module_selected} reloaded. Please wait ...')
@@ -1331,10 +1331,10 @@ class Window(tkinter.Tk):
             pass
         if self.loaded_module is DEFINITION_EXAMPLE:
             self.loaded_module = modules_filter(name=self.current_path.split('/')[-1])[0]
-        if self.loaded_module['launch']:
+        if self.loaded_module[Property.LAUNCH]:
             # # # restricting commands to launch an exe with a mod at best
             try:
-                for command in self.loaded_module['launch'].split('\n'):
+                for command in self.loaded_module[Property.LAUNCH].split('\n'):
                     command_mod = ''
                     if '.exe' in command:
                         # # # OPTIMIZE: mount disk if not mounted
@@ -1372,20 +1372,20 @@ class Window(tkinter.Tk):
         output = 'module data edition failed'
         module_selected = self.current_path.split('/')[-1]
         for module in self.global_modules:
-            if module_selected == module['name']:
+            if module_selected == module[Property.NAME]:
                 edited_parameters = {}
                 expected_definition = module.copy()
                 level = 0
                 for param in DEFINITION_EXAMPLE:
                     if param == 'comment':
                         continue
-                    elif param == 'changes':
+                    elif param == Property.CHANGES:
                         continue
                     value = self.list_text_definition_editor[level].get('1.0', 'end').strip()
                     if value != module[param]:
-                        if param == 'class' and value not in DEFINITION_CLASSES:
+                        if param == Property.TRANSFER_TYPE and value not in DEFINITION_CLASSES:
                             break
-                        elif param != 'active':
+                        elif param != Property.ACTIVE:
                             edited_parameters[param] = value
                             expected_definition[param] = value
                     level += 1
@@ -1393,7 +1393,7 @@ class Window(tkinter.Tk):
                     new_definition = definition_edit(module, **edited_parameters)
                     if new_definition == expected_definition:
                         output = 'new definition saved'
-                    if 'class' in edited_parameters and module['active'] is True:
+                    if Property.TRANSFER_TYPE in edited_parameters and module[Property.ACTIVE] is True:
                         module.reload_after_class_change()
                     break
                 except s.InternalError as error:
@@ -1409,7 +1409,7 @@ class Window(tkinter.Tk):
         if current_treeview == self.treeview_changes or current_treeview == self.treeview_changes_new:
             try:
                 self.current_path = (
-                    f"{s.LIBRARY}/{self.loaded_module['name']}/"
+                    f"{s.LIBRARY}/{self.loaded_module[Property.NAME]}/"
                     f"{current_treeview.item(current_treeview.selection()[0], 'values')[0]}")
                 self.position(self.button_execute)
             except IndexError:
@@ -1419,14 +1419,15 @@ class Window(tkinter.Tk):
     def change_type(self, x=s.DOUBLE_WIDTH * 5, y=s.UNIT_HEIGHT * 8, tree='old and new'):
         """"""
         global popping_list_chosen
-        PoppingList(master=self, focus_point=(x + s.DOUBLE_WIDTH, y + s.UNIT_HEIGHT * 2), choices=CHANGES_TYPES)
+        PoppingList(
+            master=self, focus_point=(x + s.DOUBLE_WIDTH, y + s.UNIT_HEIGHT * 2), choices=list(_.value for _ in Change))
         try:
             if self.treeview_changes.selection() and 'old' in tree:
                 for selected in self.treeview_changes.selection():
                     self.treeview_changes.set(
                         selected, CHANGES_COLUMNS[1], popping_list_chosen)
                     path_added = self.treeview_changes.item(selected, 'values')[0]
-                    self.loaded_module['changes'][path_added][0] = popping_list_chosen
+                    self.loaded_module[Property.CHANGES][path_added][0] = popping_list_chosen
             if self.treeview_changes_new.selection() and 'new' in tree:
                 for selected in self.treeview_changes_new.selection():
                     self.treeview_changes_new.set(
@@ -1448,21 +1449,21 @@ class Window(tkinter.Tk):
 
     def command_change_path(self):
         """ - """
-        module_path = f'{s.LIBRARY}/{self.loaded_module['name']}'
+        module_path = f'{s.LIBRARY}/{self.loaded_module[Property.NAME]}'
         paths_added = tkinter.filedialog.askopenfilenames(title=s.PROGRAM_NAME, initialdir=module_path)
         for path_added in paths_added:
             hash_value = hash_file(path_added)
             if module_path in path_added:
                 path_added = path_added[len(module_path) + 1:]
-            self.treeview_changes_new.insert('', 'end', values=(path_added, 'changed'))
+            self.treeview_changes_new.insert('', 'end', values=(path_added, Change.CHANGED))
             try:
-                self.new_changes[path_added] = ['changed', hash_value]
+                self.new_changes[path_added] = [Change.CHANGED, hash_value]
             except TypeError as error:
                 print(error)
 
     def command_change_copy(self):
         """ Copies selected files in the change list """
-        module_path = f'{s.LIBRARY}/{self.loaded_module['name']}'
+        module_path = f'{s.LIBRARY}/{self.loaded_module[Property.NAME]}'
         game_directory = os.path.abspath('../').replace('\\', '/')
         paths_added = tkinter.filedialog.askopenfilenames(title=s.PROGRAM_NAME, initialdir='../')
         for path_added in paths_added:
@@ -1471,8 +1472,8 @@ class Window(tkinter.Tk):
                 os.makedirs(f'{module_path}/{new_path[:new_path.rfind('/')]}', exist_ok=True)
                 shutil.copy2(src=path_added, dst=f'{module_path}/{new_path}')
                 hash_value = hash_file(f'{module_path}/{new_path}')
-                self.treeview_changes_new.insert('', 'end', values=(new_path, 'changed'))
-                self.new_changes[new_path] = ['changed', hash_value]
+                self.treeview_changes_new.insert('', 'end', values=(new_path, Change.CHANGED))
+                self.new_changes[new_path] = [Change.CHANGED, hash_value]
             else:
                 self.set_log_update(f'file {path_added} could be copied')
 
@@ -1485,8 +1486,8 @@ class Window(tkinter.Tk):
                 self.treeview_changes.see(self.treeview_changes.get_children()[-1])
                 self.treeview_changes_new.delete(change_new_id)
         # # # save changes:
-        self.loaded_module['changes'].update(self.new_changes)
-        self.loaded_module.edit(changes=self.loaded_module['changes'])
+        self.loaded_module[Property.CHANGES].update(self.new_changes)
+        self.loaded_module.edit(changes=self.loaded_module[Property.CHANGES])
         self.set_window_changes()
 
     def command_change_delete(self):
@@ -1495,9 +1496,9 @@ class Window(tkinter.Tk):
             if self.treeview_changes.selection():
                 for selected in self.treeview_changes.selection():
                     file_path = self.treeview_changes.item(selected, 'values')[0]
-                    self.loaded_module['changes'].pop(file_path)
+                    self.loaded_module[Property.CHANGES].pop(file_path)
                     self.treeview_changes.delete(selected)
-                self.loaded_module.edit(changes=self.loaded_module['changes'])
+                self.loaded_module.edit(changes=self.loaded_module[Property.CHANGES])
             if self.treeview_changes_new.selection():
                 for selected in self.treeview_changes_new.selection():
                     file_path = self.treeview_changes_new.item(selected, 'values')[0]
@@ -1516,23 +1517,23 @@ class Window(tkinter.Tk):
             pass
         self.loaded_module = modules_filter(name=self.current_path.split('/')[-1])[0]
         game_paths = s.current[s.KEY_GAMES]
-        if self.loaded_module['class'] == DEFINITION_CLASSES[0] and self.loaded_module['active']:
-            if not self.loaded_module['game']:
-                for change_key in self.loaded_module['changes']:
+        if self.loaded_module[Property.TRANSFER_TYPE] == DEFINITION_CLASSES[0] and self.loaded_module[Property.ACTIVE]:
+            if not self.loaded_module[Property.GAME]:
+                for change_key in self.loaded_module[Property.CHANGES]:
                     change_split = change_key.split('/')
                     if os.path.isdir('/'.join(change_split[:2])) and '/'.join(change_split[1:-1]) in game_paths:
                         self.current_path = '/'.join((change_split[0], game_paths[game_paths.index(change_split[1])]))
                         if os.path.isdir(f'{self.current_path}/data/ini/object'):
                             self.current_path = f'{self.current_path}/data/ini/object'
                         break
-            elif self.loaded_module['game'] in game_paths:
-                if os.path.isdir(f"../{game_paths[game_paths.index(self.loaded_module['game'])]}"):
-                    self.current_path = f"../{game_paths[game_paths.index(self.loaded_module['game'])]}"
-            elif f"{self.loaded_module['game']}/aotr" in game_paths:
-                if os.path.isdir(f"../{self.loaded_module['game']}/aotr/data/ini/object"):
-                    self.current_path = f"../{self.loaded_module['game']}/aotr/data/ini/object"
-                elif os.path.isdir(f"../{self.loaded_module['game']}/aotr"):
-                    self.current_path = f"../{self.loaded_module['game']}/aotr"
+            elif self.loaded_module[Property.GAME] in game_paths:
+                if os.path.isdir(f"../{game_paths[game_paths.index(self.loaded_module[Property.GAME])]}"):
+                    self.current_path = f"../{game_paths[game_paths.index(self.loaded_module[Property.GAME])]}"
+            elif f"{self.loaded_module[Property.GAME]}/aotr" in game_paths:
+                if os.path.isdir(f"../{self.loaded_module[Property.GAME]}/aotr/data/ini/object"):
+                    self.current_path = f"../{self.loaded_module[Property.GAME]}/aotr/data/ini/object"
+                elif os.path.isdir(f"../{self.loaded_module[Property.GAME]}/aotr"):
+                    self.current_path = f"../{self.loaded_module[Property.GAME]}/aotr"
         else:
             for game_name in game_paths:
                 if os.path.isdir(f'{self.current_path}/{game_name}/data/ini/object'):
@@ -1836,13 +1837,13 @@ class Window(tkinter.Tk):
                         output += '\nmodule not found - definition not updated.\n'
                         return self.set_log_update(output)
                 new_changes = {}
-                for file_path in self.loaded_module['changes']:
+                for file_path in self.loaded_module[Property.CHANGES]:
                     file_name = file_named.replace('\\', '/').split('/')[-1]
                     if file_path.split('/')[-1] == file_name:
                         file_rel_path = '..' + to_folder[module_index_end + 1:].replace('\\', '/')
-                        new_changes[f'{file_rel_path}/{file_name}'] = self.loaded_module['changes'][file_path]
+                        new_changes[f'{file_rel_path}/{file_name}'] = self.loaded_module[Property.CHANGES][file_path]
                     else:
-                        new_changes[file_path] = self.loaded_module['changes'][file_path]
+                        new_changes[file_path] = self.loaded_module[Property.CHANGES][file_path]
                 definition_edit(self.loaded_module, changes=new_changes)
         self.set_log_update(output)
 
