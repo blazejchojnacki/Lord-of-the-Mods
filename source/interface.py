@@ -283,12 +283,12 @@ class Window(tkinter.Tk):
         self.list_labels_module_editor = []
         self.list_text_definition_editor = []
         for key in DEFINITION_EXAMPLE:
-            if key == 'comment' or key == Property.CHANGES:
+            if key == 'comment':
                 continue
             self.list_labels_module_editor.append(tkinter.Label(master=self.container_definition, text=key))
-            if key == Property.CHANGES:
-                self.list_labels_module_editor.append(tkinter.Label(master=self.container_definition))
-                continue
+            # if key == Property.CHANGES:
+            #     # self.list_labels_module_editor.append(tkinter.Label(master=self.container_definition))
+            #     continue
             self.list_text_definition_editor.append(tkinter.Text(master=self.container_definition))
 
         # # # window changes
@@ -501,12 +501,14 @@ class Window(tkinter.Tk):
             list_buttons_settings[index].place(x=s.TEXT_WIDTH + s.UNIT_WIDTH + 10, y=s.UNIT_HEIGHT * index,
                                                width=s.UNIT_WIDTH, height=s.UNIT_HEIGHT)
 
-        for index in range(len(DEFINITION_EXAMPLE) - 2):
+        for index in range(len(DEFINITION_EXAMPLE) - 1):
             self.list_labels_module_editor[index].place(x=0, y=s.UNIT_HEIGHT * index, width=s.UNIT_WIDTH * 2,
                                                         height=s.UNIT_HEIGHT)
             self.list_text_definition_editor[index].place(
                 x=s.UNIT_WIDTH * 2 + 10, y=s.UNIT_HEIGHT * index, width=s.TEXT_WIDTH, height=s.UNIT_HEIGHT)
-        self.list_text_definition_editor[-1].place_configure(height=s.UNIT_HEIGHT * 4)
+        self.list_text_definition_editor[-2].place_configure(height=s.UNIT_HEIGHT * 3)
+        self.list_text_definition_editor[-1].place_configure(y=s.UNIT_HEIGHT * len(DEFINITION_EXAMPLE))
+        self.list_labels_module_editor[-1].place_configure(y=s.UNIT_HEIGHT * len(DEFINITION_EXAMPLE))
 
         self.dict_position = {
             self.container_current: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 13),
@@ -591,7 +593,7 @@ class Window(tkinter.Tk):
             self.container_command: dict(x=0, y=s.UNIT_HEIGHT * 15, anchor='sw', width=s.FULL_WIDTH,
                                          height=s.UNIT_HEIGHT * 2),
             self.container_settings: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 11),
-            self.container_definition: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 11),
+            self.container_definition: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 13),
             self.container_browser: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 12),
             self.container_scope_select: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 2),
             self.container_file_content: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 13),
@@ -615,7 +617,6 @@ class Window(tkinter.Tk):
             self.treeview_changes_new,
         )
 
-        self.set_window_modules()
         self.protocol("WM_DELETE_WINDOW", self.on_app_close)
         if start_file:
             self.current_path = start_file
@@ -751,8 +752,8 @@ class Window(tkinter.Tk):
             self.global_modules = modules_filter(return_type='definitions')
         self.key_to_command_current = self.key_to_command_text.copy()
         self.clear_window()
-        self.retrieve(self.button_menu_settings, self.button_function_find)
-        self.position(self.container_definition, self.button_menu_back, self.button_execute)
+        self.retrieve(self.button_menu_settings, self.button_function_find, self.button_menu_back)
+        self.position(self.container_definition, self.button_execute)
         self.button_menu_modules.configure(text='return to modules'.upper())
         self.button_run.configure(text='save parameters'.upper(), command=self.command_definition_save)
         self.button_execute.configure(text='see changed files', command=self.set_window_changes)
@@ -764,7 +765,9 @@ class Window(tkinter.Tk):
                     if param == 'comment':
                         continue
                     elif param == Property.CHANGES:
-                        self.list_labels_module_editor[-1].configure(text=get_change_statistics(module), justify='left')
+                        self.list_labels_module_editor[-1].configure(text='changes')
+                        self.list_text_definition_editor[-1].delete('1.0', 'end')
+                        self.list_text_definition_editor[-1].insert('end', get_change_statistics(module))
                         continue
                     self.list_text_definition_editor[level].configure(state='normal')
                     self.list_text_definition_editor[level].delete('1.0', 'end')
@@ -1420,7 +1423,7 @@ class Window(tkinter.Tk):
         """"""
         global popping_list_chosen
         PoppingList(
-            master=self, focus_point=(x + s.DOUBLE_WIDTH, y + s.UNIT_HEIGHT * 2), choices=list(_.value for _ in Change))
+            master=self, focus_point=(x + s.DOUBLE_WIDTH, y + s.UNIT_HEIGHT * 2), choices=list(_ for _ in Change))
         try:
             if self.treeview_changes.selection() and 'old' in tree:
                 for selected in self.treeview_changes.selection():

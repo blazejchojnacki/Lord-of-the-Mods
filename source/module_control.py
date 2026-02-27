@@ -7,7 +7,7 @@ from datetime import datetime
 import xxhash
 from glob import glob
 import json
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 import source.shared as s
@@ -19,14 +19,14 @@ SNAPSHOT_COMPARISON_DIRECTORY = './snapshot_comparisons'
 COMPARISON_NAME = 'comparison_'
 
 
-class Transfer(Enum):
+class Transfer(StrEnum):
     MOVE = 'move'
     COPY = 'copy'
     DELETE = 'delete'
     REMOVE = 'remove'
 
 
-class Property(Enum):
+class Property(StrEnum):
     TRANSFER_TYPE = "class"
     NAME = "name"
     GAME = "game"
@@ -55,7 +55,7 @@ DEFINITION_CLASS_TEMPLATE = {
 }
 
 
-class Change(Enum):
+class Change(StrEnum):
     ADDED = "added"
     REMOVED = "removed"
     CHANGED = "changed"
@@ -97,13 +97,16 @@ def log(output):
 
 class Definition(dict):
     """ A dictionary-based class with predefined keys and functions that manipulate modules. """
-    def __init__(self):
+    def __init__(self, initial_dict=None):
         super().__init__()
         for key in DEFINITION_CLASS_TEMPLATE:
             try:
                 self[key] = DEFINITION_CLASS_TEMPLATE[key].copy()
             except AttributeError:
                 self[key] = DEFINITION_CLASS_TEMPLATE[key]
+            if initial_dict is not None:
+                if key in initial_dict:
+                    self[key] = initial_dict[key]
 
     def edit(self, **key_args):
         return definition_edit(self, **key_args)
@@ -184,7 +187,7 @@ def definition_write(definition_object=None, module_directory=None, return_type=
         else:
             definition_object = Definition()
     if Property.TRANSFER_TYPE in key_args:
-        definition_object[Property.TRANSFER_TYPE] = key_args[Property.TRANSFER_TYPE.value]
+        definition_object[Property.TRANSFER_TYPE] = key_args[Property.TRANSFER_TYPE]
     else:
         definition_object[Property.TRANSFER_TYPE] = DEFINITION_CLASSES[0]
     try:
@@ -201,9 +204,9 @@ def definition_write(definition_object=None, module_directory=None, return_type=
     if not definition_object[Property.NAME] and module_directory:
         definition_object[Property.NAME] = module_directory.split('/')[-1]
     if Property.OVERRIDES in key_args:
-        definition_object[Property.OVERRIDES] = key_args[Property.OVERRIDES.value]
+        definition_object[Property.OVERRIDES] = key_args[Property.OVERRIDES]
     if Property.OVERRODE_BY in key_args:
-        definition_object[Property.OVERRODE_BY] = key_args[Property.OVERRODE_BY.value]
+        definition_object[Property.OVERRODE_BY] = key_args[Property.OVERRODE_BY]
     if not definition_object[Property.CHANGES]:
         try:
             definition_object[Property.ACTIVE], definition_object[Property.CHANGES] = initiate_comparison(
@@ -263,7 +266,7 @@ def definition_edit(definition_object=None, module_path=None, **key_args):
             if key == Property.NAME:
                 list_modules = modules_filter(return_type='names')
                 for module_name in list_modules:
-                    if key_args[Property.NAME.value] == module_name:
+                    if key_args[Property.NAME] == module_name:
                         raise s.InternalError('definition_edit: name already in use')
                 for module_name in list_modules:
                     module_definition = definition_read(module_path=f'{s.LIBRARY}/{module_name}')
@@ -271,16 +274,16 @@ def definition_edit(definition_object=None, module_path=None, **key_args):
                         definition_edit(
                             module_definition,
                             ancestor=module_definition[Property.OVERRIDES].replace(
-                                definition_object[Property.NAME], key_args[Property.NAME.value])
+                                definition_object[Property.NAME], key_args[Property.NAME])
                         )
                     if definition_object[Property.NAME] == module_definition[Property.OVERRODE_BY]:
                         definition_edit(
                             module_definition,
                             heir=module_definition[Property.OVERRODE_BY].replace(
-                                definition_object[Property.NAME], key_args[Property.NAME.value])
+                                definition_object[Property.NAME], key_args[Property.NAME])
                         )
                 os.rename(
-                    src=module_path, dst=f"{'/'.join(module_path.split('/')[:-1])}/{key_args[Property.NAME.value]}")
+                    src=module_path, dst=f"{'/'.join(module_path.split('/')[:-1])}/{key_args[Property.NAME]}")
             definition_object[key] = key_args[key]
         else:
             raise s.InternalWarning(f'key {key} not recognized')
@@ -301,8 +304,7 @@ def hash_file(file_path):
     """ Returns the hash value of a file. Non-cryptographic 128 hexadecimal hash value. """
     with open(file_path, 'rb') as file_buffer:
         file_content = file_buffer.read()
-    hash_value = xxhash.xxh128(file_content).hexdigest()
-    return hash_value
+    return xxhash.xxh128(file_content).hexdigest()
 
 
 def hash_directory(file_or_folder, path_to_omit=''):
@@ -310,10 +312,11 @@ def hash_directory(file_or_folder, path_to_omit=''):
     output = {}
     if os.path.isfile(file_or_folder):
         if path_to_omit:
-            path_to_register = file_or_folder[file_or_folder.index(path_to_omit) + len(path_to_omit) + 1:]
+            path_to_register = file_or_folder[file_or_folder.index(path_to_omit) + len(path_to_omit) + 1*0:]
         else:
             path_to_register = file_or_folder
-        output[os.path.relpath(path_to_register).replace('\\', '/')] = f'{hash_file(file_or_folder)}'
+        # output[os.path.relpath(path_to_register).replace('\\', '/')] = f'{hash_file(file_or_folder)}'
+        output[path_to_register] = hash_file(file_or_folder)
     elif os.path.isdir(file_or_folder):
         next_directory = os.listdir(file_or_folder)
         for next_folder in next_directory:
@@ -368,8 +371,8 @@ def snapshot_take(game_paths=None, add_paths=False, return_type='path', name=Non
             if game_full_path:
                 if s.LIBRARY in game_full_path:
                     path_to_omit += '/'.join(game_full_path.split('/')[:s.LIBRARY.count('/') + 2])
-                path_to_omit_locally = s.MAIN_DIRECTORY
-                game_path = game_full_path[len(path_to_omit_locally):]
+                else:
+                    path_to_omit = s.MAIN_DIRECTORY
                 game_paths[game_paths.index('>no_path<')] = game_path
                 if add_paths:
                     game_paths.append('>no_path<')
@@ -379,8 +382,6 @@ def snapshot_take(game_paths=None, add_paths=False, return_type='path', name=Non
         if not os.path.isdir(mod_dir):
             game_paths.remove(game_path)
     for game_path in game_paths:
-        if not game_path:
-            raise s.InternalError('directory not selected')
         game_snapshot.update(hash_directory(f'{s.MAIN_DIRECTORY}/{game_path}', path_to_omit=path_to_omit))
     if return_type == 'dict':
         log('snapshot_take successful')
@@ -506,7 +507,7 @@ def initiate_comparison(module_directory, start_module='', changes_source='direc
                         changes[new_file] = [Change.ADDED, new_files_dict[new_file]]
             elif start_module and not new_files_dict:
                 active = True
-                current_files = hash_directory(start_module)
+                current_files = hash_directory(start_module, path_to_omit=s.MAIN_DIRECTORY)
                 for new_file in current_files:
                     changes[new_file] = [Change.ADDED, current_files[new_file]]
             files_to_remove = askopenfilenames(title=f'{s.PROGRAM_NAME}: select files to remove',
@@ -708,7 +709,7 @@ def module_reverse(module_object, transfer: Transfer = Transfer.COPY, check_type
         raise s.InternalError('comparison missing')
 
     error_sensitivity = True
-    if Property.OVERRODE_BY.value in check_type:
+    if Property.OVERRODE_BY in check_type:
         if heir_module_object := check_relative(module_object, Property.OVERRODE_BY):
             if not module_reverse(heir_module_object, transfer=Transfer.REMOVE):
                 raise s.InternalError('heir module not retrieved')
@@ -800,7 +801,7 @@ def module_attach(module_object=None, module_directory=None, check_type='ancesto
     if ancestor_module := module_detect_override(module_object):
         module_object = definition_edit(module_object, ancestor=ancestor_module[Property.NAME])
         definition_edit(ancestor_module, heir=module_object[Property.NAME])
-    if Property.OVERRIDES.value in check_type:
+    if Property.OVERRIDES in check_type:
         if os.path.isdir(f"{s.LIBRARY}/{module_object[Property.NAME]}"):
             module_directory = f"{s.LIBRARY}/{module_object[Property.NAME]}"
         else:
