@@ -749,7 +749,7 @@ class Window(tkinter.Tk):
     def set_window_definition(self):
         """ Loads the screen for modification of module definitions. """
         if not self.global_modules:
-            self.global_modules = modules_filter(return_type='definitions')
+            self.global_modules = modules_filter()
         self.key_to_command_current = self.key_to_command_text.copy()
         self.clear_window()
         self.retrieve(self.button_menu_settings, self.button_function_find, self.button_menu_back)
@@ -1038,7 +1038,7 @@ class Window(tkinter.Tk):
             pass
         try:
             self.loaded_module = modules_filter(
-                name=self.treeview_modules_idle.item(self.treeview_modules_idle.selection()[0], 'values')[0])[0]
+                **{Property.NAME:self.treeview_modules_idle.item(self.treeview_modules_idle.selection()[0], 'values')[0]})[0]
             self.current_path = (
                 f"{s.LIBRARY}/"
                 f"{self.treeview_modules_idle.item(self.treeview_modules_idle.selection()[0], 'values')[0]}")
@@ -1058,7 +1058,7 @@ class Window(tkinter.Tk):
             pass
         try:
             self.loaded_module = modules_filter(
-                name=self.treeview_modules_active.item(self.treeview_modules_active.selection()[0], 'values')[0])[0]
+                **{Property.NAME:self.treeview_modules_active.item(self.treeview_modules_active.selection()[0], 'values')[0]})[0]
             self.current_path = (
                 f"{s.LIBRARY}/"
                 f"{self.treeview_modules_active.item(self.treeview_modules_active.selection()[0], 'values')[0]}")
@@ -1129,7 +1129,7 @@ class Window(tkinter.Tk):
                         return
                     if not do_initiate:
                         s.settings_set({s.KEY_EXCEPTIONS: folder})
-            active_modules = modules_filter('definitions', active=True)
+            active_modules = modules_filter(**{Property.ACTIVE: True})
             active_module_parent_dict = modules_sort(modules=active_modules)
             for module in active_modules:
                 self.treeview_modules_active.insert(
@@ -1146,7 +1146,7 @@ class Window(tkinter.Tk):
             self.treeview_modules_active.open_children()
 
             self.treeview_modules_idle.delete(*self.treeview_modules_idle.get_children())
-            idle_modules = modules_filter('definitions', active=False)
+            idle_modules = modules_filter(**{Property.ACTIVE: False})
             idle_module_parent_dict = modules_sort(modules=idle_modules)
             for module in idle_modules:
                 self.treeview_modules_idle.insert(
@@ -1172,7 +1172,8 @@ class Window(tkinter.Tk):
         """ Creates a new module after asking for a name and a way to create it. """
         self.new_module_name = self.entry_module_new_name.get()
         self.new_module_source = self.variable_option.get()
-        if self.new_module_name and self.new_module_name not in modules_filter(return_type='names'):
+        # TODO: test 'not in os.listdir(s.LIBRARY)'
+        if self.new_module_name and self.new_module_name not in os.listdir(s.LIBRARY):
             self.set_log_update(f'command_module_new: creating module {self.new_module_name}. Please wait ...')
             output = module_new(self.new_module_name, changes_source=self.new_module_source)
             self.set_window_modules()
@@ -1199,12 +1200,12 @@ class Window(tkinter.Tk):
     def command_module_attach(self):
         """ Activates the selected module """
         if not self.global_modules:
-            self.global_modules = modules_filter(return_type='definitions')
+            self.global_modules = modules_filter()
         try:
             name_module_selected = self.treeview_modules_idle.item(self.treeview_modules_idle.focus(), 'values')[0]
             self.set_log_update(f'loading module {name_module_selected} ...')
             try:
-                module = modules_filter(name=name_module_selected)[0]
+                module = modules_filter(**{Property.NAME:name_module_selected})[0]
                 if ancestor_module := check_relative(module, Property.OVERRIDES):
                     answer = s.invoke_choice(
                         title='override retrieval',
@@ -1249,12 +1250,12 @@ class Window(tkinter.Tk):
     def command_module_retrieve(self):
         """ Deactivates the selected module. """
         if not self.global_modules:
-            self.global_modules = modules_filter(return_type='definitions')
+            self.global_modules = modules_filter()
         try:
             module_selected = self.treeview_modules_active.item(self.treeview_modules_active.focus(), 'values')[0]
             self.set_log_update(f'unloading mod {module_selected} ...')
             try:
-                module = modules_filter(name=module_selected)[0]
+                module = modules_filter(**{Property.NAME:module_selected})[0]
                 if heir_module := check_relative(module, Property.OVERRODE_BY):
                     answer = s.invoke_choice(
                         title='override retrieval',
@@ -1313,7 +1314,7 @@ class Window(tkinter.Tk):
     def command_module_reload(self):
         """ Reloads the selected module by detaching it and attaching again. """
         if not self.global_modules:
-            self.global_modules = modules_filter(return_type='definitions')
+            self.global_modules = modules_filter()
         try:
             module_selected = self.treeview_modules_active.item(self.treeview_modules_active.focus(), 'values')[0]
             self.set_log_update(f'Reloading module {module_selected}. Please wait ...')
@@ -1333,7 +1334,7 @@ class Window(tkinter.Tk):
         if event:
             pass
         if self.loaded_module is DEFINITION_EXAMPLE:
-            self.loaded_module = modules_filter(name=self.current_path.split('/')[-1])[0]
+            self.loaded_module = modules_filter(**{Property.NAME:self.current_path.split('/')[-1]})[0]
         if self.loaded_module[Property.LAUNCH]:
             # # # restricting commands to launch an exe with a mod at best
             try:
@@ -1518,7 +1519,7 @@ class Window(tkinter.Tk):
         """ Allows to start browsing from the object folder if it can be found. """
         if event:
             pass
-        self.loaded_module = modules_filter(name=self.current_path.split('/')[-1])[0]
+        self.loaded_module = modules_filter(**{Property.NAME:self.current_path.split('/')[-1]})[0]
         game_paths = s.current[s.KEY_GAMES]
         if self.loaded_module[Property.TRANSFER_TYPE] == DEFINITION_CLASSES[0] and self.loaded_module[Property.ACTIVE]:
             if not self.loaded_module[Property.GAME]:
@@ -1826,14 +1827,14 @@ class Window(tkinter.Tk):
                 module_index_start = self.current_path.find(s.LIBRARY) + len(s.LIBRARY) + 1
                 module_index_end = self.current_path.replace('\\', '/').find('/', module_index_start)
                 current_module_name = self.current_path[module_index_start: module_index_end]
-                current_module_list = modules_filter(name=current_module_name)
+                current_module_list = modules_filter(**{Property.NAME: current_module_name})
                 if current_module_list:
                     self.loaded_module = current_module_list[0]
                 else:
                     module_index_start = self.current_path.find(s.MAIN_DIRECTORY) + len(s.MAIN_DIRECTORY) + 1
                     module_index_end = self.current_path.replace('\\', '/').find('/', module_index_start)
                     current_module_name = self.current_path[module_index_start: module_index_end]
-                    current_module_list = modules_filter(name=current_module_name)
+                    current_module_list = modules_filter(**{Property.NAME: current_module_name})
                     if current_module_list:
                         self.loaded_module = current_module_list[0]
                     else:

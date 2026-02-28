@@ -221,6 +221,7 @@ def definition_write(definition_object=None, module_directory=None, return_type=
         return definition_object
 
 
+# note in #lord_of_the_mods definition_write, definition_edit and initiate_comparison have been fused in properties_set
 def definition_read(module_path=None):
     """
     Reads the definition of an object and loads it into a dictionary.
@@ -235,11 +236,12 @@ def definition_read(module_path=None):
                                    initialdir=s.LIBRARY)
         if module_path == "":
             raise s.InternalError('directory not selected')
-    if os.path.exists(f'{module_path}/{DEFINITION_NAME}'):
+    if os.path.isfile(f'{module_path}/{DEFINITION_NAME}'):
         with open(f'{module_path}/{DEFINITION_NAME}') as definition_buffer:
-            return json.load(definition_buffer)
+            return Definition(initial_dict=json.load(definition_buffer))
     else:
-        return Definition()
+        # return Definition()
+        raise s.InternalError('no definition under given path')
 
 
 def definition_edit(definition_object=None, module_path=None, **key_args):
@@ -312,10 +314,9 @@ def hash_directory(file_or_folder, path_to_omit=''):
     output = {}
     if os.path.isfile(file_or_folder):
         if path_to_omit:
-            path_to_register = file_or_folder[file_or_folder.index(path_to_omit) + len(path_to_omit) + 1*0:]
+            path_to_register = file_or_folder[file_or_folder.index(path_to_omit) + len(path_to_omit):]
         else:
             path_to_register = file_or_folder
-        # output[os.path.relpath(path_to_register).replace('\\', '/')] = f'{hash_file(file_or_folder)}'
         output[path_to_register] = hash_file(file_or_folder)
     elif os.path.isdir(file_or_folder):
         next_directory = os.listdir(file_or_folder)
@@ -369,8 +370,9 @@ def snapshot_take(game_paths=None, add_paths=False, return_type='path', name=Non
             game_full_path = askdirectory(initialdir=f'{s.MAIN_DIRECTORY}',
                                           title=f'{s.PROGRAM_NAME}: select game directory to take a snapshot of')
             if game_full_path:
-                if s.LIBRARY in game_full_path:
-                    path_to_omit += '/'.join(game_full_path.split('/')[:s.LIBRARY.count('/') + 2])
+                if os.path.abspath(s.LIBRARY).replace('\\', '/') in game_full_path:
+                    mod_name = game_full_path[len(os.path.abspath(s.LIBRARY)):].split('/')[1]
+                    path_to_omit = f'{os.path.abspath(s.LIBRARY).replace('\\', '/')}/{mod_name}'
                 else:
                     path_to_omit = s.MAIN_DIRECTORY
                 game_paths[game_paths.index('>no_path<')] = game_path
@@ -378,11 +380,10 @@ def snapshot_take(game_paths=None, add_paths=False, return_type='path', name=Non
                     game_paths.append('>no_path<')
             elif len(game_paths) == 0 or game_paths == ['>no_path<']:
                 raise s.InternalError('directory not selected')
-        mod_dir = f'{s.MAIN_DIRECTORY}/{game_path}'
-        if not os.path.isdir(mod_dir):
+        if not os.path.isdir(f'{s.MAIN_DIRECTORY}/{game_path}'):
             game_paths.remove(game_path)
     for game_path in game_paths:
-        game_snapshot.update(hash_directory(f'{s.MAIN_DIRECTORY}/{game_path}', path_to_omit=path_to_omit))
+        game_snapshot.update(hash_directory(game_path, path_to_omit=path_to_omit))
     if return_type == 'dict':
         log('snapshot_take successful')
         return game_snapshot
@@ -398,19 +399,19 @@ def snapshot_take(game_paths=None, add_paths=False, return_type='path', name=Non
     with open(snapshot_path, 'w') as snapshot_buffer:
         json.dump(game_snapshot, snapshot_buffer, indent=4)
     log(f'snapshot successfully saved in file {snapshot_path}')
-    if 'dict' in return_type:
+    if 'dict' in return_type:  # # # if 'dict save'
         return game_snapshot
     elif 'path' in return_type:
         return snapshot_path
 
 
-def snapshot_compare(snap_anterior=None, snap_posterior=None, return_type='path'):
+def snapshot_compare(snap_anterior=None, snap_posterior=None, return_type: Literal['path', 'dict'] = 'path'):
     """
     Compares two snapshots, determining which files are different, unchanged, new or removed.
     :param snap_anterior: first snapshot to compare to
     :param snap_posterior: second snapshot to compare with
-    :param return_type: 'path' | 'lines' - If 'path', returns the path of the file, where the comparison has been saved.
-    If 'lines', does not save the result into a file, but returns it.
+    :param return_type: 'path' | 'dict' - If 'path', returns the path of the file, where the comparison has been saved.
+    If 'dict', does not save the result into a file, but returns it.
     :return: according to the return_type.
     """
     dict_anterior = {}
@@ -451,9 +452,18 @@ def snapshot_compare(snap_anterior=None, snap_posterior=None, return_type='path'
                                                   dict_anterior[key_name_anterior],
                                                   dict_posterior[key_name_anterior]]
         except KeyError:
-            dict_output[key_name_anterior] = [Change.REMOVED, dict_anterior[key_name_anterior]]
+            for key_name_posterior in dict_posterior:
+                if key_name_posterior.casefold() == key_name_anterior.casefold():
+                    if dict_anterior[key_name_anterior] == dict_posterior[key_name_posterior]:
+                        dict_output[key_name_posterior] = [Change.UNCHANGED, dict_anterior[key_name_anterior]]
+                    else:
+                        dict_output[key_name_posterior] = [
+                            Change.CHANGED, dict_anterior[key_name_anterior], dict_posterior[key_name_posterior]]
+                    break
+            else:
+                dict_output[key_name_anterior] = [Change.REMOVED, dict_anterior[key_name_anterior]]
     for key_name_posterior in dict_posterior:
-        if key_name_posterior not in dict_anterior:
+        if key_name_posterior not in dict_anterior and key_name_posterior not in dict_output:
             dict_output[key_name_posterior] = [Change.ADDED, dict_posterior[key_name_posterior]]
     if return_type == 'dict':
         return dict_output
@@ -602,9 +612,10 @@ def test_transfer(src, dst='', transfer: Transfer = Transfer.COPY, error_sensiti
     else:
         try:
             if transfer == Transfer.COPY:
-                ensure_path_exists(src, )
+                ensure_path_exists(src, dst)
                 copy2(src, dst)
             elif transfer == Transfer.MOVE:
+                ensure_path_exists(src, dst)
                 move(src, dst)
             elif transfer == Transfer.DELETE:
                 os.remove(src)
@@ -621,13 +632,21 @@ def test_transfer(src, dst='', transfer: Transfer = Transfer.COPY, error_sensiti
                 elif os.path.isfile(f'{src.replace('.big', '.disabled')}'):
                     return test_transfer(f'{src.replace('.big', '.disabled')}', dst, transfer, error_sensitive)
             if error_sensitive:
-                # TODO later: own message box - a self-explanatory one
-                do_proceed = tkinter.messagebox.askyesnocancel(
-                    title=f'{s.PROGRAM_NAME}: error',
-                    message=f'Error with {src}\n{err.strerror if err.strerror else ' - '}\n'
-                    'Click "Yes" to continue displaying each error and to proceed.\n'
-                    'Click "No" to skip all errors and to proceed.\n'
-                    'Click "Cancel" to stop and revert the changes made'
+                if err.strerror:
+                    error_message = err.strerror
+                elif err.args[0]:
+                    error_message = err.args[0]
+                else:
+                    error_message = ' - '
+                do_proceed = s.invoke_choice(
+                    title='file transfer error',
+                    text=f'Error with {src}\n{error_message}\n'
+                         ' Do you wish to continue displaying each error,\n'
+                         ' continue skipping errors or revert the mod transfer?',
+                    buttons=(
+                        {s.KEY_LABEL: 'continue', s.KEY_RETURN: True, s.KEY_INFO: ''},
+                        {s.KEY_LABEL: 'skip', s.KEY_RETURN: False, s.KEY_INFO: ''},
+                        {s.KEY_LABEL: 'revert', s.KEY_RETURN: None, s.KEY_INFO: ''})
                 )
                 if do_proceed is True:
                     pass
@@ -644,6 +663,7 @@ def ensure_path_exists(file_path, check_path='..'):
     if s.LIBRARY in file_path:
         check_path = '/'.join(file_path.split('/')[:s.LIBRARY.count('/') + 2])
         file_path = file_path[file_path.index(check_path) + len(check_path) + 1:]
+    # note: changed in #lord_of_the_mods
     if not os.path.exists(check_path):
         os.makedirs(check_path, exist_ok=True)
     path_folders = file_path.split('/')
@@ -658,8 +678,9 @@ def check_library(module_object):
     changes = module_object[Property.CHANGES]
     library_missing = False
     for file in changes:
-        if not os.path.isfile(file.replace('../', f"{s.LIBRARY}/{module_object[Property.NAME]}/")):
+        if not os.path.isfile(f"{s.LIBRARY}/{module_object[Property.NAME]}/{file}"):
             library_missing = True
+            break
     return library_missing
 
 
@@ -704,7 +725,6 @@ def module_reverse(module_object, transfer: Transfer = Transfer.COPY, check_type
             transfer = Transfer.MOVE
         elif module_object[Property.TRANSFER_TYPE] == DEFINITION_CLASSES[1]:
             transfer = Transfer.DELETE
-    module_directory = f'{s.LIBRARY}/{module_name}'
     if not comparison_dict:
         raise s.InternalError('comparison missing')
 
@@ -749,7 +769,7 @@ def module_reverse(module_object, transfer: Transfer = Transfer.COPY, check_type
                     pass
     except s.InternalError:
         log(f'module_reverse {module_name} CANCELLED\n{output}')
-        module_attach(module_directory=module_directory, check_type='pass')
+        module_attach(module_directory=f'{s.LIBRARY}/{module_name}', check_type='pass')
         return False
     if TEST:
         raise s.InternalError('under TEST phase: module_reverse not applied')
@@ -887,7 +907,7 @@ def module_copy(new_name, template_directory=None, changes_source=None):
     """
     if not template_directory:
         raise s.InternalError('template not selected')
-    all_modules_names = modules_filter(return_type='names')
+    all_modules_names = [_ for _ in os.listdir(s.LIBRARY)]
     if new_name in all_modules_names:
         raise s.InternalError('module_copy error: name already in use')
     os.mkdir(f'{s.LIBRARY}/{new_name}')
@@ -935,35 +955,31 @@ def module_detect_changes(module=None):
         module_directory = askdirectory(title=f'{s.PROGRAM_NAME}: select a module directory',
                                         initialdir=s.LIBRARY)
         if not module_directory:
-            raise s.InternalError('module_detect_changes error: no module selected')
+            raise s.InternalError('no module selected')
         module = definition_read(module_path=module_directory)
-    if module:
+    if not module:
+        raise s.InternalError('module not selected')
+    for module_file in module[Property.CHANGES]:
         if module[Property.ACTIVE]:
-            for module_file in module[Property.CHANGES]:
-                if os.path.isfile(f'{s.MAIN_DIRECTORY}/{module_file}'):
-                    if module[Property.CHANGES][module_file][1] == hash_file(f'{s.MAIN_DIRECTORY}/{module_file}'):
-                        pass
-                    else:
-                        changes_dict[module_file] = Change.CHANGED
-                else:
-                    changes_dict[module_file] = Change.REMOVED
+            file_path = f'{s.MAIN_DIRECTORY}/{module_file}'
         else:
-            module_directory = f'{s.LIBRARY}/{module[Property.NAME]}'
-            for module_file in module[Property.CHANGES]:
-                if os.path.isfile(f'{module_directory}/{module_file}'):
-                    if module[Property.CHANGES][module_file][1] == hash_file(f'{module_directory}/{module_file}'):
-                        pass
-                    else:
-                        changes_dict[module_file] = Change.CHANGED
+            file_path = f'{s.LIBRARY}/{module[Property.NAME]}/{module_file}'
+        if os.path.isfile(file_path):
+            file_hash = hash_file(file_path)
+            if not module[Property.CHANGES][module_file][1] == file_hash:
+                if len(module[Property.CHANGES][module_file]) == 3:
+                    if not module[Property.CHANGES][module_file][2] == file_hash:
+                        changes_dict[module_file] = [Change.CHANGED, file_hash]
                 else:
-                    changes_dict[module_file] = Change.REMOVED
+                    changes_dict[module_file] = [Change.CHANGED, file_hash]
+        else:
+            changes_dict[module_file] = [Change.REMOVED, '0']
     return changes_dict
 
 
-def modules_filter(return_type: Literal['definitions', 'names'] = 'definitions', **criteria):
+def modules_filter(**criteria):
     """
     Filters the modules definitions by given criteria
-    :param return_type: 'definitions' | 'names'
     :param criteria: key - argument pairs, where the keywords are Definition parameters to compare the value against
     :return: Definition objects or module names, according to the return_type.
     """
@@ -978,15 +994,9 @@ def modules_filter(return_type: Literal['definitions', 'names'] = 'definitions',
                     for criteria_key in criteria:
                         if criteria_key in DEFINITION_EXAMPLE:
                             if module_definition[criteria_key] == criteria[criteria_key]:
-                                if return_type == 'names':
-                                    game_modules_list.append(module_name)
-                                elif return_type == 'definitions':
-                                    game_modules_list.append(module_definition)
+                                game_modules_list.append(module_definition)
                 else:
-                    if return_type == 'names':
-                        game_modules_list.append(module_name)
-                    elif return_type == 'definitions':
-                        game_modules_list.append(module_definition)
+                    game_modules_list.append(module_definition)
     except s.InternalError:
         if game_modules_list:
             return game_modules_list
