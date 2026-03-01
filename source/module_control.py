@@ -738,32 +738,24 @@ def module_reverse(module_object, transfer: Transfer = Transfer.COPY, check_type
     output = ''
     try:
         for path_key in comparison_dict:
-            path_start = 0
             file_path_source = f"{s.MAIN_DIRECTORY}/{path_key}"
             file_path_game = f"{s.MAIN_DIRECTORY}/{'/'.join(path_key.split('/')[:-1])}"
             file_path_module = (f"{s.LIBRARY}/{module_name}/"
-                                f"{'/'.join(path_key.split('/')[path_start:-1])}")
-            file_path_archive = f"{s.ARCHIVE}/{module_name}/{'/'.join(path_key.split('/')[path_start:])}"
+                                f"{'/'.join(path_key.split('/')[0:-1])}")
+            file_path_archive = f"{s.ARCHIVE}/{module_name}/{path_key}"
             if 'hash' in check_type:
                 pass
             if comparison_dict[path_key][0] == Change.UNCHANGED:
                 pass
             elif comparison_dict[path_key][0] == Change.CHANGED:
                 if transfer in Transfer:
-                    ensure_path_exists(path_key, f'{s.LIBRARY}/{module_name}')
                     output += test_transfer(file_path_source, file_path_module, transfer, error_sensitivity)
                 if transfer == Transfer.MOVE or transfer == Transfer.DELETE:
-                    ensure_path_exists(path_key, f'{s.ARCHIVE}/{module_name}')
                     output += test_transfer(file_path_archive, file_path_game, Transfer.MOVE, error_sensitivity)
             elif comparison_dict[path_key][0] == Change.ADDED:
-                ensure_path_exists(path_key, f'{s.LIBRARY}/{module_name}')
-                try:
-                    output += test_transfer(file_path_source, file_path_module, transfer, error_sensitivity)
-                except FileExistsError:
-                    pass
+                output += test_transfer(file_path_source, file_path_module, transfer, error_sensitivity)
             elif comparison_dict[path_key][0] == Change.REMOVED:
                 if transfer == Transfer.MOVE or transfer == Transfer.DELETE:
-                    ensure_path_exists(file_path_source, f'{s.ARCHIVE}/{module_name}')
                     output += test_transfer(file_path_archive, file_path_game, Transfer.MOVE, error_sensitivity)
                 else:
                     pass
@@ -840,39 +832,26 @@ def module_attach(module_object=None, module_directory=None, check_type='ancesto
     module_name = module_directory.split('/')[-1]
     if not os.path.isdir(f'{s.ARCHIVE}/{module_name}'):
         os.mkdir(f'{s.ARCHIVE}/{module_name}')
-    comparison_dict = {}
-    try:
-        changes = module_object[Property.CHANGES]
-        for change_file in changes:
-            comparison_dict[change_file] = changes[change_file]
-    except s.InternalError:
-        pass
+    comparison_dict = module_object[Property.CHANGES].copy
     if not comparison_dict and os.path.isfile(f"{module_directory}/{COMPARISON_NAME}{module_name}.json"):
         with open(f"{module_directory}/{COMPARISON_NAME}{module_name}.json") as comparison_buffer:
             comparison_dict = json.load(comparison_buffer)
     if comparison_dict:
         output = ''
         try:
-            path_start = 0
             for path_key in comparison_dict:
                 file_path_source = f"{s.MAIN_DIRECTORY}{path_key}"
                 file_path_game = f"{s.MAIN_DIRECTORY}{'/'.join(path_key.split('/')[:-1])}"
-                file_path_archive = (f"{s.ARCHIVE}/{module_name}/"
-                                     f"{'/'.join(path_key.split('/')[path_start:-1])}")
-                file_path_module = (f"{s.LIBRARY}/{module_name}/"
-                                    f"{'/'.join(path_key.split('/')[path_start:])}")
+                file_path_archive = f"{s.ARCHIVE}/{module_name}/{'/'.join(path_key.split('/')[0:-1])}"
+                file_path_module = f"{s.LIBRARY}/{module_name}/{path_key}"
                 if comparison_dict[path_key][0] == Change.UNCHANGED:
                     pass
                 elif comparison_dict[path_key][0] == Change.CHANGED:
-                    ensure_path_exists(path_key)
-                    ensure_path_exists(path_key, f'{s.ARCHIVE}/{module_name}')
                     output += test_transfer(file_path_source, file_path_archive, transfer, error_sensitivity)
                     output += test_transfer(file_path_module, file_path_game, transfer, error_sensitivity)
                 elif comparison_dict[path_key][0] == Change.ADDED:
-                    ensure_path_exists(path_key)
                     output += test_transfer(file_path_module, file_path_game, transfer, error_sensitivity)
                 elif comparison_dict[path_key][0] == Change.REMOVED:
-                    ensure_path_exists(path_key)
                     output += test_transfer(file_path_source, file_path_archive, transfer, error_sensitivity)
         except s.InternalError:
             log(f'module_attach {module_name} CANCELLED\n{output}')
