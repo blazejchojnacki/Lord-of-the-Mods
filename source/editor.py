@@ -114,7 +114,7 @@ def text_find_replace(find, replace_with=None, scope='', exceptions=None, mode='
     """ replaces a given string by another in a given file or folder of files """
     output = ''
     if not find:
-        return f'{s.this_module()}.{s.this_object()} aborted - empty string to find'
+        return s.internal_message('aborted - empty string to find')
     if 'initiate' in mode:
         output += f'{datetime.now()}'
         if replace_with is not None:

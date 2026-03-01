@@ -96,7 +96,7 @@ class PoppingList(tkinter.Toplevel):
                     f'+{self.master.winfo_x() + self.offset_x}+{self.master.winfo_y() + self.offset_y}'
                 )
         except _tkinter.TclError:
-            print('selection aborted: window closed')
+            print(s.internal_message('selection aborted: window closed'))
 
     def on_select_option(self, event):
         global popping_list_chosen, popping_list_deployed
@@ -109,7 +109,7 @@ class PoppingList(tkinter.Toplevel):
             self.destroy()
             popping_list_deployed = False
         except _tkinter.TclError:
-            print('on_select_option error: TclError')
+            print(s.internal_message('TclError'))
 
     def on_select_cancel(self, event=None):
         global popping_list_deployed
@@ -859,7 +859,7 @@ class Window(tkinter.Tk):
             self.current_path = f"{self.label_browser.cget('text')}/{self.listbox_browser.selection_get()}".replace(
                 '\\', '/')
         except _tkinter.TclError:
-            print('file not selected')
+            print(s.internal_message('file not selected'))
         self.label_scope_select.configure(text='file')
         self.text_scope_select.delete('1.0', 'end')
         try:
@@ -921,9 +921,9 @@ class Window(tkinter.Tk):
             self.text_find.delete('1.0', 'end')
             self.text_find.insert('1.0', selection)
         except UnboundLocalError:
-            print('set_window_find error: UnboundLocalError')
+            print(s.internal_message('UnboundLocalError'))
         except _tkinter.TclError:
-            print('set_window_find warning: no text selected')
+            print(s.internal_message('no text selected'))
         self.text_result.focus()
         self.current_window = 'text_find'
         self.set_log_update('find feature loaded')
@@ -954,9 +954,9 @@ class Window(tkinter.Tk):
             self.text_find.delete('1.0', 'end')
             self.text_find.insert('1.0', selection)
         except UnboundLocalError:
-            print('set_window_find error: UnboundLocalError')
+            print(s.internal_message('UnboundLocalError'))
         except _tkinter.TclError:
-            print('set_window_find warning: no text selected')
+            print(s.internal_message('no text selected'))
         self.current_window = 'self.text_replace'
         self.set_log_update('replace feature loaded')
 
@@ -1512,11 +1512,11 @@ class Window(tkinter.Tk):
                     self.new_changes.pop(file_path)
                     self.treeview_changes_new.delete(selected)
         except _tkinter.TclError:
-            print('debug-1')
+            print(s.internal_message('TclError'))
         except IndexError:
-            print('debug-2')
+            print(s.internal_message('IndexError'))
         except KeyError:
-            print('command_change_delete: KeyError')
+            print(s.internal_message('KeyError'))
 
     def command_module_browse(self, event=None):
         """ Allows to start browsing from the object folder if it can be found. """
@@ -1606,7 +1606,7 @@ class Window(tkinter.Tk):
             self.set_log_update(f'going to {os.path.abspath(self.current_path)}')
             self.open_browser_item()
         except _tkinter.TclError:
-            print('command_browser_forward error: _tkinter.TclError - no selection')
+            print(s.internal_message('_tkinter.TclError - no selection'))
         except PermissionError as error:
             self.set_log_update(error.strerror)
             self.current_path = self.current_path[:self.current_path.rfind('/')]
@@ -1894,7 +1894,7 @@ class Window(tkinter.Tk):
             else:
                 print(event.keysym)
         except UnboundLocalError:
-            print("error use_selected_text: selection seems empty")
+            print(s.internal_message("selection seems empty"))
 
     def press_key_in_current_mode(self, event=None):
         """ Binds key presses to functions in the current dictionary of key-functions. """

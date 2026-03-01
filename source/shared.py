@@ -81,7 +81,7 @@ def log(output, file='file_changes.txt'):
             log_file.write(output + '\n')
 
 
-def this_module(steps: int = 2):
+def get_calling_module(steps: int = 2):
     frame = inspect.currentframe()
     for step_back in range(steps):
         frame = frame.f_back
@@ -89,7 +89,7 @@ def this_module(steps: int = 2):
     return module_name_full[module_name_full.rfind('\\') + len('\\'):module_name_full.rfind('.')]
 
 
-def this_object(steps: int = 1):
+def get_calling_object(steps: int = 1):
     frame = inspect.currentframe()
     for step_back in range(steps):
         frame = frame.f_back
@@ -102,7 +102,7 @@ class InternalError(Exception):
     :param: message (optional) - details conveyed after the module name and function name that called it
     """
     def __init__(self, message: str = ''):
-        self.message = f'{this_module()}.{this_object(2)} error: {message}'
+        self.message = f'{get_calling_module()}.{get_calling_object(2)} error: {message}'
         super().__init__(message)
 
 
@@ -112,8 +112,12 @@ class InternalWarning(Warning):
     :param: message (optional) - details conveyed after the module name and function name that called it
     """
     def __init__(self, message: str = ''):
-        self.message = f'{this_module()}.{this_object(2)} warning: {message}'
+        self.message = f'{get_calling_module()}.{get_calling_object(2)} warning: {message}'
         super().__init__(self.message)
+
+
+def internal_message(message):
+    return f'{get_calling_module()}.{get_calling_object(2)}: {message}'
 
 
 # # # load delimiters
