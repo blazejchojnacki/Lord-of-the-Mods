@@ -10,6 +10,7 @@ import json
 from enum import StrEnum
 from typing import Literal
 
+import source.core as core
 import source.shared as s
 
 
@@ -124,7 +125,7 @@ class Definition(dict):
             return True
         except s.InternalError:
             try:
-                module_attach(module_directory=f"{s.LIBRARY}/{self[Property.NAME]}")
+                module_attach(module_directory=f"{core.library}/{self[Property.NAME]}")
                 return True
             except s.InternalError:
                 # module_attach(module_directory=self['path'])
@@ -170,11 +171,11 @@ def definition_write(definition_object=None, module_directory=None, return_type=
     if module_directory is None:
         if definition_object is None:
             module_directory = askdirectory(title=f'{s.PROGRAM_NAME}: select the directory to define as a module',
-                                            initialdir=s.LIBRARY)
+                                            initialdir=core.library)
             if not module_directory:
                 raise s.InternalError('directory not selected')
-        elif os.path.isdir(f"{s.LIBRARY}/{definition_object[Property.NAME]}"):
-            module_directory = f"{s.LIBRARY}/{definition_object[Property.NAME]}"
+        elif os.path.isdir(f"{core.library}/{definition_object[Property.NAME]}"):
+            module_directory = f"{core.library}/{definition_object[Property.NAME]}"
     if definition_object is not None:
         module_name = definition_object[Property.NAME]
     elif module_directory is not None:
@@ -229,11 +230,11 @@ def definition_read(module_path=None):
     :return: a definition dictionary-like class
     """
     if module_path is not None:
-        if module_path in s.current[s.KEY_EXCEPTIONS]:
+        if module_path in core.exceptions:
             raise s.InternalError("the provided path is defined as exception")
     if module_path is None or module_path == "":
         module_path = askdirectory(title=f'{s.PROGRAM_NAME}: select the module directory',
-                                   initialdir=s.LIBRARY)
+                                   initialdir=core.library)
         if module_path == "":
             raise s.InternalError('directory not selected')
     if os.path.isfile(f'{module_path}/{DEFINITION_NAME}'):
@@ -255,14 +256,14 @@ def definition_edit(definition_object=None, module_path=None, **key_args):
     if definition_object is None:
         if module_path is None:
             module_path = askdirectory(title=f'{s.PROGRAM_NAME}: select the module directory',
-                                       initialdir=s.LIBRARY)
+                                       initialdir=core.library)
         if module_path:
             definition_object = definition_read(module_path=module_path)
         if not definition_object:
             raise s.InternalError('definition missing')
     else:
         if module_path is None:
-            module_path = f"{s.LIBRARY}/{definition_object[Property.NAME]}"
+            module_path = f"{core.library}/{definition_object[Property.NAME]}"
     for key in key_args:
         if key in DEFINITION_EXAMPLE:
             if key == Property.NAME:
@@ -271,7 +272,7 @@ def definition_edit(definition_object=None, module_path=None, **key_args):
                     if key_args[Property.NAME] == module_name:
                         raise s.InternalError('definition_edit: name already in use')
                 for module_name in list_modules:
-                    module_definition = definition_read(module_path=f'{s.LIBRARY}/{module_name}')
+                    module_definition = definition_read(module_path=f'{core.library}/{module_name}')
                     if definition_object[Property.NAME] == module_definition[Property.OVERRIDES]:
                         definition_edit(
                             module_definition,
@@ -295,9 +296,9 @@ def definition_edit(definition_object=None, module_path=None, **key_args):
 # TODO: check if correct business logic
 def detect_new_modules():
     output = ''
-    library_folders = [_ for _ in os.listdir(s.LIBRARY) if _ not in s.current[s.KEY_EXCEPTIONS]]
+    library_folders = [_ for _ in os.listdir(core.library) if _ not in core.exceptions]
     for folder in library_folders:
-        if not os.path.isfile(f'{s.LIBRARY}/{folder}/{DEFINITION_NAME}'):
+        if not os.path.isfile(f'{core.library}/{folder}/{DEFINITION_NAME}'):
             output += f'Registering a definition-less folder in the library - {folder}\n'
     return output
 
@@ -321,7 +322,7 @@ def hash_directory(file_or_folder, path_to_omit=''):
     elif os.path.isdir(file_or_folder):
         next_directory = os.listdir(file_or_folder)
         for next_folder in next_directory:
-            if next_folder in s.current[s.KEY_GAMES]:
+            if next_folder in core.games:
                 next_directory = [next_folder]
                 break
         for next_file_or_folder in next_directory:
@@ -370,9 +371,9 @@ def snapshot_take(game_paths=None, add_paths=False, return_type='path', name=Non
             game_full_path = askdirectory(initialdir=f'{s.MAIN_DIRECTORY}',
                                           title=f'{s.PROGRAM_NAME}: select game directory to take a snapshot of')
             if game_full_path:
-                if os.path.abspath(s.LIBRARY).replace('\\', '/') in game_full_path:
-                    mod_name = game_full_path[len(os.path.abspath(s.LIBRARY)):].split('/')[1]
-                    path_to_omit = f'{os.path.abspath(s.LIBRARY).replace('\\', '/')}/{mod_name}'
+                if os.path.abspath(core.library).replace('\\', '/') in game_full_path:
+                    mod_name = game_full_path[len(os.path.abspath(core.library)):].split('/')[1]
+                    path_to_omit = f'{os.path.abspath(core.library).replace('\\', '/')}/{mod_name}'
                 else:
                     path_to_omit = s.MAIN_DIRECTORY
                 game_paths[game_paths.index('>no_path<')] = game_path
@@ -660,8 +661,8 @@ def test_transfer(src, dst='', transfer: Transfer = Transfer.COPY, error_sensiti
 def ensure_path_exists(file_path, check_path='..'):
     """ Creates the directories in the ARCHIVE and LIBRARY folders where the files will be transferred. """
     # # # 'if' added for case of test_transfer - copy.
-    if s.LIBRARY in file_path:
-        check_path = '/'.join(file_path.split('/')[:s.LIBRARY.count('/') + 2])
+    if core.library in file_path:
+        check_path = '/'.join(file_path.split('/')[:core.library.count('/') + 2])
         file_path = file_path[file_path.index(check_path) + len(check_path) + 1:]
     # note: changed in #lord_of_the_mods
     if not os.path.exists(check_path):
@@ -678,7 +679,7 @@ def check_library(module_object):
     changes = module_object[Property.CHANGES]
     library_missing = False
     for file in changes:
-        if not os.path.isfile(f"{s.LIBRARY}/{module_object[Property.NAME]}/{file}"):
+        if not os.path.isfile(f"{core.library}/{module_object[Property.NAME]}/{file}"):
             library_missing = True
             break
     return library_missing
@@ -687,13 +688,13 @@ def check_library(module_object):
 def check_relative(module_object, relation):
     if Property.OVERRODE_BY == relation:
         if module_object[Property.OVERRODE_BY]:
-            if os.path.isfile(f"{s.LIBRARY}/{module_object[Property.OVERRODE_BY]}/{DEFINITION_NAME}"):
-                heir_module_object = definition_read(f"{s.LIBRARY}/{module_object[Property.OVERRODE_BY]}")
+            if os.path.isfile(f"{core.library}/{module_object[Property.OVERRODE_BY]}/{DEFINITION_NAME}"):
+                heir_module_object = definition_read(f"{core.library}/{module_object[Property.OVERRODE_BY]}")
                 if heir_module_object[Property.ACTIVE]:
                     return heir_module_object
     elif Property.OVERRIDES == relation:
         if module_object[Property.OVERRIDES]:
-            ancestor_directory = f"{s.LIBRARY}/{module_object[Property.OVERRIDES]}"
+            ancestor_directory = f"{core.library}/{module_object[Property.OVERRIDES]}"
             if os.path.isfile(f'{ancestor_directory}/{DEFINITION_NAME}'):
                 ancestor_module_object = definition_read(module_path=ancestor_directory)
                 if not ancestor_module_object[Property.ACTIVE]:
@@ -714,8 +715,8 @@ def module_reverse(module_object, transfer: Transfer = Transfer.COPY, check_type
         raise s.InternalError('missing object')
     module_name = module_object[Property.NAME]
     comparison_dict = module_object[Property.CHANGES]
-    if not os.path.isdir(f'{s.LIBRARY}/{module_name}'):
-        os.mkdir(f'{s.LIBRARY}/{module_name}')
+    if not os.path.isdir(f'{core.library}/{module_name}'):
+        os.mkdir(f'{core.library}/{module_name}')
     if transfer == Transfer.REMOVE:
         if module_object[Property.ACTIVE] is False and check_type != 'pass':
             raise s.InternalError('deactivation of inactive module aborted')
@@ -740,9 +741,9 @@ def module_reverse(module_object, transfer: Transfer = Transfer.COPY, check_type
         for path_key in comparison_dict:
             file_path_source = f"{s.MAIN_DIRECTORY}/{path_key}"
             file_path_game = f"{s.MAIN_DIRECTORY}/{'/'.join(path_key.split('/')[:-1])}"
-            file_path_module = (f"{s.LIBRARY}/{module_name}/"
+            file_path_module = (f"{core.library}/{module_name}/"
                                 f"{'/'.join(path_key.split('/')[0:-1])}")
-            file_path_archive = f"{s.ARCHIVE}/{module_name}/{path_key}"
+            file_path_archive = f"{core.archive}/{module_name}/{path_key}"
             if 'hash' in check_type:
                 pass
             if comparison_dict[path_key][0] == Change.UNCHANGED:
@@ -761,7 +762,7 @@ def module_reverse(module_object, transfer: Transfer = Transfer.COPY, check_type
                     pass
     except s.InternalError:
         log(f'module_reverse {module_name} CANCELLED\n{output}')
-        module_attach(module_directory=f'{s.LIBRARY}/{module_name}', check_type='pass')
+        module_attach(module_directory=f'{core.library}/{module_name}', check_type='pass')
         return False
     if TEST:
         raise s.InternalError('under TEST phase: module_reverse not applied')
@@ -804,7 +805,7 @@ def module_attach(module_object=None, module_directory=None, check_type='ancesto
     if module_object is None:
         if module_directory is None:
             module_directory = askdirectory(title=f'{s.PROGRAM_NAME}: select module directory',
-                                            initialdir=s.LIBRARY)
+                                            initialdir=core.library)
             if not module_directory:
                 raise s.InternalError('module directory missing')
         if os.path.isfile(f'{module_directory}/{DEFINITION_NAME}'):
@@ -814,8 +815,8 @@ def module_attach(module_object=None, module_directory=None, check_type='ancesto
         module_object = definition_edit(module_object, ancestor=ancestor_module[Property.NAME])
         definition_edit(ancestor_module, heir=module_object[Property.NAME])
     if Property.OVERRIDES in check_type:
-        if os.path.isdir(f"{s.LIBRARY}/{module_object[Property.NAME]}"):
-            module_directory = f"{s.LIBRARY}/{module_object[Property.NAME]}"
+        if os.path.isdir(f"{core.library}/{module_object[Property.NAME]}"):
+            module_directory = f"{core.library}/{module_object[Property.NAME]}"
         else:
             raise s.InternalError('path not recognized')
         if module_object[Property.ACTIVE] is True and check_type != 'pass':
@@ -830,8 +831,8 @@ def module_attach(module_object=None, module_directory=None, check_type='ancesto
     elif check_type == 'pass':
         error_sensitivity = False
     module_name = module_directory.split('/')[-1]
-    if not os.path.isdir(f'{s.ARCHIVE}/{module_name}'):
-        os.mkdir(f'{s.ARCHIVE}/{module_name}')
+    if not os.path.isdir(f'{core.archive}/{module_name}'):
+        os.mkdir(f'{core.archive}/{module_name}')
     comparison_dict = module_object[Property.CHANGES].copy
     if not comparison_dict and os.path.isfile(f"{module_directory}/{COMPARISON_NAME}{module_name}.json"):
         with open(f"{module_directory}/{COMPARISON_NAME}{module_name}.json") as comparison_buffer:
@@ -842,8 +843,8 @@ def module_attach(module_object=None, module_directory=None, check_type='ancesto
             for path_key in comparison_dict:
                 file_path_source = f"{s.MAIN_DIRECTORY}{path_key}"
                 file_path_game = f"{s.MAIN_DIRECTORY}{'/'.join(path_key.split('/')[:-1])}"
-                file_path_archive = f"{s.ARCHIVE}/{module_name}/{'/'.join(path_key.split('/')[0:-1])}"
-                file_path_module = f"{s.LIBRARY}/{module_name}/{path_key}"
+                file_path_archive = f"{core.archive}/{module_name}/{'/'.join(path_key.split('/')[0:-1])}"
+                file_path_module = f"{core.library}/{module_name}/{path_key}"
                 if comparison_dict[path_key][0] == Change.UNCHANGED:
                     pass
                 elif comparison_dict[path_key][0] == Change.CHANGED:
@@ -867,10 +868,10 @@ def module_attach(module_object=None, module_directory=None, check_type='ancesto
 
 
 def module_new(name: str, changes_source: str = ''):
-    if not os.path.isdir(f'{s.LIBRARY}/{name}'):
-        os.mkdir(f'{s.LIBRARY}/{name}')
+    if not os.path.isdir(f'{core.library}/{name}'):
+        os.mkdir(f'{core.library}/{name}')
     output = f'{name} created. \n'
-    definition_write(module_directory=f'{s.LIBRARY}/{name}', return_type='save',
+    definition_write(module_directory=f'{core.library}/{name}', return_type='save',
                      changes_source=changes_source)
     return log(output)
 
@@ -886,21 +887,21 @@ def module_copy(new_name, template_directory=None, changes_source=None):
     """
     if not template_directory:
         raise s.InternalError('template not selected')
-    all_modules_names = [_ for _ in os.listdir(s.LIBRARY)]
+    all_modules_names = [_ for _ in os.listdir(core.library)]
     if new_name in all_modules_names:
         raise s.InternalError('module_copy error: name already in use')
-    os.mkdir(f'{s.LIBRARY}/{new_name}')
+    os.mkdir(f'{core.library}/{new_name}')
     output = f'{new_name} created. \n'
     folders = []
     files = []
     items_list = os.listdir(template_directory)
     for item in items_list:
         if os.path.isdir(f'{template_directory}/{item}'):
-            folders.append(f'{s.LIBRARY}/{new_name}/{item}')
+            folders.append(f'{core.library}/{new_name}/{item}')
             for next_item in os.listdir(f'{template_directory}/{item}'):
                 items_list.append(f'{item}/{next_item}')
                 if os.path.isdir(f'{template_directory}/{item}/{next_item}'):
-                    folders.append(f'{s.LIBRARY}/{new_name}/{item}/{next_item}')
+                    folders.append(f'{core.library}/{new_name}/{item}/{next_item}')
         elif os.path.isfile(f'{template_directory}/{item}'):
             files.append(item)
         else:
@@ -913,13 +914,13 @@ def module_copy(new_name, template_directory=None, changes_source=None):
             output += folder + '\n'
     for file in files:
         if file == DEFINITION_NAME:
-            definition_write(module_directory=f'{s.LIBRARY}/{new_name}', return_type='save',
+            definition_write(module_directory=f'{core.library}/{new_name}', return_type='save',
                              changes_source=changes_source)
             continue
         copied_file = f'{template_directory}/{file}'
         try:
-            test_transfer(copied_file, f'{s.LIBRARY}/{new_name}/{file}', Transfer.COPY)
-            output += f'{s.LIBRARY}/{new_name}/{file}\n'
+            test_transfer(copied_file, f'{core.library}/{new_name}/{file}', Transfer.COPY)
+            output += f'{core.library}/{new_name}/{file}\n'
         except FileNotFoundError:
             output += f'warning: {file} permission denied'
         except FileExistsError:
@@ -932,7 +933,7 @@ def module_detect_changes(module=None):
     changes_dict = {}
     if module is None:
         module_directory = askdirectory(title=f'{s.PROGRAM_NAME}: select a module directory',
-                                        initialdir=s.LIBRARY)
+                                        initialdir=core.library)
         if not module_directory:
             raise s.InternalError('no module selected')
         module = definition_read(module_path=module_directory)
@@ -942,7 +943,7 @@ def module_detect_changes(module=None):
         if module[Property.ACTIVE]:
             file_path = f'{s.MAIN_DIRECTORY}/{module_file}'
         else:
-            file_path = f'{s.LIBRARY}/{module[Property.NAME]}/{module_file}'
+            file_path = f'{core.library}/{module[Property.NAME]}/{module_file}'
         if os.path.isfile(file_path):
             file_hash = hash_file(file_path)
             if not module[Property.CHANGES][module_file][1] == file_hash:
@@ -964,9 +965,9 @@ def modules_filter(**criteria):
     """
     game_modules_list = []
     try:
-        modules_names = [_ for _ in os.listdir(s.LIBRARY) if _ not in s.current[s.KEY_EXCEPTIONS]]
+        modules_names = [_ for _ in os.listdir(core.library) if _ not in core.exceptions]
         for module_name in modules_names:
-            module_definition = definition_read(module_path=f'{s.LIBRARY}/{module_name}')
+            module_definition = definition_read(module_path=f'{core.library}/{module_name}')
             if (module_definition[Property.TRANSFER_TYPE] == DEFINITION_CLASSES[0]
                     or module_definition[Property.TRANSFER_TYPE] == DEFINITION_CLASSES[1]):
                 if criteria:

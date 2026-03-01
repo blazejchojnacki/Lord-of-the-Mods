@@ -7,6 +7,7 @@ from tkinter.filedialog import askopenfilenames, askdirectory
 from tkinter.ttk import Treeview
 from tklinenums import TkLineNumbers
 
+import source.core as core
 import source.shared as s
 from source.constructor import load_file, load_directories
 from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
@@ -140,7 +141,7 @@ def count_files_recursive(path, counter: int = -1):
 
 def get_change_statistics(module):
     if module[Property.NAME]:
-        module_path = f"{s.LIBRARY}/{module[Property.NAME]}"
+        module_path = f"{core.library}/{module[Property.NAME]}"
         output = (f"mentioned: {len(module[Property.CHANGES])} ("
                   f" removed: {len([_ for _ in module[Property.CHANGES] if _[0] == Change.REMOVED])}"
                   f') | present in module: {count_files_recursive(module_path)}')
@@ -235,7 +236,7 @@ class Window(tkinter.Tk):
         list_labels_settings = []
         self.list_entry_settings = []
         list_buttons_settings = []
-        for setting in s.current:
+        for setting in core.settings:
             list_labels_settings.append(tkinter.Label(master=self.container_settings, text=setting))
             self.list_entry_settings.append(tkinter.Entry(master=self.container_settings))
             list_buttons_settings.append(s.ReactiveButton(master=self.container_settings, small=True,
@@ -489,7 +490,7 @@ class Window(tkinter.Tk):
         tkinter.ttk.Style().configure(
             'Treeview.Heading', borderwidth=0, overbackground=s.TEXT_COLORS[0], overforeground=s.TEXT_COLORS[-1])
 
-        for index in range(len(s.current)):
+        for index in range(len(core.settings)):
             list_labels_settings[index].place(x=0, y=s.UNIT_HEIGHT * index, width=s.UNIT_WIDTH*2, height=s.UNIT_HEIGHT)
             self.list_entry_settings[index].place(
                 x=s.UNIT_WIDTH*2 + 10, y=s.UNIT_HEIGHT * index, width=s.TEXT_WIDTH - s.UNIT_WIDTH, height=s.UNIT_HEIGHT)
@@ -991,25 +992,25 @@ class Window(tkinter.Tk):
         new_settings = {}
         for entry_setting in self.list_entry_settings:
             setting_value.append(entry_setting.get())
-        for setting_key in s.current:
+        for setting_key in core.settings:
             if setting_key == 'comment':
                 continue
-            if s.current[setting_key] != setting_value[counter]:
-                if isinstance(s.current[setting_key], list):
+            if core.settings[setting_key] != setting_value[counter]:
+                if isinstance(core.settings[setting_key], list):
                     setting_dict_list = setting_value[counter].split(', ')
-                    if s.current[setting_key] and setting_dict_list:
-                        if s.current[setting_key] != setting_dict_list:
+                    if core.settings[setting_key] and setting_dict_list:
+                        if core.settings[setting_key] != setting_dict_list:
                             new_settings[setting_key] = setting_dict_list
                     elif setting_dict_list != ['']:
                         new_settings[setting_key] = setting_dict_list
                     else:
                         pass
-                elif isinstance(s.current[setting_key], str):
+                elif isinstance(core.settings[setting_key], str):
                     new_settings[setting_key] = setting_value[counter]
             counter += 1
         if new_settings:
             try:
-                if s.settings_set(new_settings):
+                if core.settings.load(new_settings):
                     self.set_log_update('Settings saved and checked.')
                 else:
                     self.set_log_update('The provided value seems to be incorrect.')
@@ -1020,14 +1021,14 @@ class Window(tkinter.Tk):
     def command_settings_reload(self):
         """ Reads the settings from the SETTINGS_FILE and inserts them into the settings text fields. """
         counter = 0
-        for setting_key in s.current:
+        for setting_key in core.settings:
             if setting_key == 'comment':
                 continue
             self.list_entry_settings[counter].delete('0', 'end')
-            if isinstance(s.current[setting_key], list):
-                self.list_entry_settings[counter].insert('end', ', '.join(s.current[setting_key]))
+            if isinstance(core.settings[setting_key], list):
+                self.list_entry_settings[counter].insert('end', ', '.join(core.settings[setting_key]))
             else:
-                self.list_entry_settings[counter].insert('end', s.current[setting_key])
+                self.list_entry_settings[counter].insert('end', core.settings[setting_key])
             counter += 1
 
     def on_select_module_idle(self, event):
@@ -1038,7 +1039,7 @@ class Window(tkinter.Tk):
             self.loaded_module = modules_filter(
                 **{Property.NAME:self.treeview_modules_idle.item(self.treeview_modules_idle.selection()[0], 'values')[0]})[0]
             self.current_path = (
-                f"{s.LIBRARY}/"
+                f"{core.library}/"
                 f"{self.treeview_modules_idle.item(self.treeview_modules_idle.selection()[0], 'values')[0]}")
             self.treeview_modules_active.selection_remove(self.treeview_modules_active.selection()[0])
             # # # selection_remove is a selection event steeling focus to the other list
@@ -1058,7 +1059,7 @@ class Window(tkinter.Tk):
             self.loaded_module = modules_filter(
                 **{Property.NAME:self.treeview_modules_active.item(self.treeview_modules_active.selection()[0], 'values')[0]})[0]
             self.current_path = (
-                f"{s.LIBRARY}/"
+                f"{core.library}/"
                 f"{self.treeview_modules_active.item(self.treeview_modules_active.selection()[0], 'values')[0]}")
             self.treeview_modules_idle.selection_remove(self.treeview_modules_idle.selection()[0])
             self.treeview_modules_active.selection_set(self.treeview_modules_active.selection()[0])
@@ -1111,13 +1112,13 @@ class Window(tkinter.Tk):
         """ Refreshes the lists of active and non-active modules. """
         try:
             self.treeview_modules_active.delete(*self.treeview_modules_active.get_children())
-            library_folders = [_ for _ in os.listdir(s.LIBRARY) if _ not in s.current[s.KEY_EXCEPTIONS]]
+            library_folders = [_ for _ in os.listdir(core.library) if _ not in core.settings[s.Setting.EXCEPTIONS]]
             for folder in library_folders:
-                if not os.path.isfile(f'{s.LIBRARY}/{folder}/{DEFINITION_NAME}'):
+                if not os.path.isfile(f'{core.library}/{folder}/{DEFINITION_NAME}'):
                     self.set_log_update(f'Detected a definition-less folder in the library - {folder}')
                     do_initiate = s.invoke_choice(
                         title='unsaved changes',
-                        text=f'The folder {s.LIBRARY}/{folder}\n seems to have no properties.\n'
+                        text=f'The folder {core.library}/{folder}\n seems to have no properties.\n'
                              'Do you wish it to become a mod?\n',
                         buttons=({s.KEY_LABEL: 'yes', s.KEY_RETURN: True, s.KEY_INFO: ''},
                                  {s.KEY_LABEL: 'no', s.KEY_RETURN: False, s.KEY_INFO: ''})
@@ -1126,7 +1127,7 @@ class Window(tkinter.Tk):
                         self.set_window_module_new(start_name=folder)
                         return
                     if not do_initiate:
-                        s.settings_set({s.KEY_EXCEPTIONS: folder})
+                        core.settings.save({s.Setting.EXCEPTIONS: folder})
             active_modules = modules_filter(**{Property.ACTIVE: True})
             active_module_parent_dict = modules_sort(modules=active_modules)
             for module in active_modules:
@@ -1170,8 +1171,8 @@ class Window(tkinter.Tk):
         """ Creates a new module after asking for a name and a way to create it. """
         self.new_module_name = self.entry_module_new_name.get()
         self.new_module_source = self.variable_option.get()
-        # TODO: test 'not in os.listdir(s.LIBRARY)'
-        if self.new_module_name and self.new_module_name not in os.listdir(s.LIBRARY):
+        # TODO: test 'not in os.listdir(core.library)'
+        if self.new_module_name and self.new_module_name not in os.listdir(core.library):
             self.set_log_update(f'command_module_new: creating module {self.new_module_name}. Please wait ...')
             output = module_new(self.new_module_name, changes_source=self.new_module_source)
             self.set_window_modules()
@@ -1411,7 +1412,7 @@ class Window(tkinter.Tk):
         if current_treeview == self.treeview_changes or current_treeview == self.treeview_changes_new:
             try:
                 self.current_path = (
-                    f"{s.LIBRARY}/{self.loaded_module[Property.NAME]}/"
+                    f"{core.library}/{self.loaded_module[Property.NAME]}/"
                     f"{current_treeview.item(current_treeview.selection()[0], 'values')[0]}")
                 self.position(self.button_execute)
             except IndexError:
@@ -1451,7 +1452,7 @@ class Window(tkinter.Tk):
 
     def command_change_path(self):
         """ - """
-        module_path = f'{s.LIBRARY}/{self.loaded_module[Property.NAME]}'
+        module_path = f'{core.library}/{self.loaded_module[Property.NAME]}'
         paths_added = tkinter.filedialog.askopenfilenames(title=s.PROGRAM_NAME, initialdir=module_path)
         for path_added in paths_added:
             hash_value = hash_file(path_added)
@@ -1465,7 +1466,7 @@ class Window(tkinter.Tk):
 
     def command_change_copy(self):
         """ Copies selected files in the change list """
-        module_path = f'{s.LIBRARY}/{self.loaded_module[Property.NAME]}'
+        module_path = f'{core.library}/{self.loaded_module[Property.NAME]}'
         game_directory = os.path.abspath('../').replace('\\', '/')
         paths_added = tkinter.filedialog.askopenfilenames(title=s.PROGRAM_NAME, initialdir='../')
         for path_added in paths_added:
@@ -1518,7 +1519,7 @@ class Window(tkinter.Tk):
         if event:
             pass
         self.loaded_module = modules_filter(**{Property.NAME:self.current_path.split('/')[-1]})[0]
-        game_paths = s.current[s.KEY_GAMES]
+        game_paths = core.games
         if self.loaded_module[Property.TRANSFER_TYPE] == DEFINITION_CLASSES[0] and self.loaded_module[Property.ACTIVE]:
             if not self.loaded_module[Property.GAME]:
                 for change_key in self.loaded_module[Property.CHANGES]:
@@ -1822,7 +1823,7 @@ class Window(tkinter.Tk):
             except s.InternalError as error:
                 output += error.message
             else:
-                module_index_start = self.current_path.find(s.LIBRARY) + len(s.LIBRARY) + 1
+                module_index_start = self.current_path.find(core.library) + len(core.library) + 1
                 module_index_end = self.current_path.replace('\\', '/').find('/', module_index_start)
                 current_module_name = self.current_path[module_index_start: module_index_end]
                 current_module_list = modules_filter(**{Property.NAME: current_module_name})

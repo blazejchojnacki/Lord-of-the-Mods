@@ -6,6 +6,7 @@ import json
 from tkinter.filedialog import askdirectory
 from tkinter.messagebox import askyesnocancel, showerror, showwarning
 
+import source.core as core
 import source.shared
 from source.module_control import definition_write, SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARISON_DIRECTORY
 
@@ -123,7 +124,7 @@ def initiate():
     initiator_label = tkinter.Label(master=initiator, text='Looking for game paths. Please wait...')
     initiator_label.pack()
     initiator.update()
-    if not os.path.isfile(source.shared.SETTINGS_PATH):
+    if not os.path.isfile(source.shared.SETTINGS_FILE_PATH):
         try:
             game_paths_list = get_game_directory()
         except NameError:
@@ -156,12 +157,12 @@ def initiate():
                     directories_dict[key] = default_folders_dict[key]
         elif use_default_paths is None:
             cancel_initiation()
-        source.shared.settings_set(
+        core.settings.save(
             do_initiate=True,
             settings_dict={
-                source.shared.KEY_LIBRARY: directories_dict['library'],
-                source.shared.KEY_ARCHIVE: directories_dict['archive'],
-                source.shared.KEY_GAMES: game_paths_list,
+                source.shared.Setting.LIBRARY: directories_dict['library'],
+                source.shared.Setting.ARCHIVE: directories_dict['archive'],
+                source.shared.Setting.GAMES: game_paths_list,
             }
         )
         initiator_label.configure(text='Creating initial modules. Please wait ...')
@@ -180,6 +181,6 @@ def initiate():
             except source.shared.InternalError:
                 pass
     else:
-        source.shared.settings_get('initiate')
+        core.settings.load()
     ensure_game_options()
     initiator.destroy()
