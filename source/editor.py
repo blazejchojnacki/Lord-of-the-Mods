@@ -133,12 +133,14 @@ def text_find_replace(find, replace_with=None, scope='', exceptions=None, mode='
         for scope_element in scope.split(', '):
             output += text_find_replace(find, replace_with, scope_element, exceptions, mode='part')
         return output
-    if exceptions:
-        if scope in exceptions:
+    for exception in exceptions:
+        if scope.replace('\\', '/') == exception.replace('\\', '/'):
             return output
     if os.path.isfile(scope):
         try:
-            file_content = c.load_file(scope)
+            # file_content = c.load_file(scope)  # faster to read without reformatting
+            with open(scope) as file_buffer:
+                file_content = file_buffer.read()
             if file_content.casefold().count(find.casefold()) > 0:
                 if 'include' in mode:
                     output = file_content[
@@ -168,7 +170,7 @@ def text_find_replace(find, replace_with=None, scope='', exceptions=None, mode='
             elif 'initiate' in mode:
                 output += f'\tfound none\n'
         except UnicodeDecodeError:
-            raise s.InternalError(f"file {scope} unreadable")
+            raise s.InternalWarning(f"file {scope} unreadable")
     elif os.path.isdir(scope):
         file_paths = os.listdir(scope)
         for file_path in file_paths:
@@ -188,10 +190,9 @@ def update_links_to_inc(new_path, in_file_or_folder, inc_file=None, overwrite=Tr
     :param overwrite:
     :return: logs of updated #include paths
     """
-    file_exceptions = [r"O:\Lord of the Mods\_LIBRARY\AotR-override\AOTR8\aotr\data\ini\eva.ini".replace('\\', '/'),
-                       r"O:\Lord of the Mods\_LIBRARY\AotR-override\AOTR8\aotr\data\ini\gamelodpresets.ini".replace('\\', '/')]
-    folder_exceptions = ["default",
-                         "obsolete"]
+    file_exceptions = [r"O:\Lord of the Mods\_LIBRARY\AotR-override\AOTR8\aotr\data\ini\eva.ini",
+                       r"O:\Lord of the Mods\_LIBRARY\AotR-override\AOTR8\aotr\data\ini\gamelodpresets.ini"]
+    folder_exceptions = ["default", "obsolete"]
     output = ''
     line_include = ''
     old_path = ''
@@ -203,7 +204,7 @@ def update_links_to_inc(new_path, in_file_or_folder, inc_file=None, overwrite=Tr
             output += update_links_to_inc(
                 new_path=new_path, in_file_or_folder=f'{in_file_or_folder}/{folder_path}', inc_file=inc_file)
     elif os.path.isfile(in_file_or_folder) and in_file_or_folder.endswith('.ini'):
-        if in_file_or_folder in file_exceptions:
+        if in_file_or_folder in [_.replace('\\', '/') for _ in file_exceptions]:
             return ''
         line_include += text_find_replace(find=new_path.split('/')[-1], scope=in_file_or_folder, mode='include')
         if line_include:
@@ -238,6 +239,7 @@ def update_links_to_inc(new_path, in_file_or_folder, inc_file=None, overwrite=Tr
         if ''.join(lines) != new_content and overwrite is True:
             with open(in_file_or_folder, 'w') as file_overwritten:
                 file_overwritten.write(new_content)
+    s.log(output)
     return output
 
 
@@ -289,13 +291,13 @@ def move_file(full_path, to_folder, mode=0):
             output += f' command: move {full_path}\n\tto {to_folder}\n'
             shutil.move(full_path, f'{to_folder}/{file_name}')
         if file_name.endswith('.inc'):
-            ini_folder = to_folder[:to_folder.find(s.INI_PATH_PART) + len(s.INI_PATH_PART)]
+            ini_folder = to_folder[:to_folder.find('/data/ini') + len('/data/ini')]
             output += update_links_to_inc(
                 new_path=f'{to_folder}/{file_name}', in_file_or_folder=ini_folder, inc_file=file_name)
         elif file_name.endswith('.ini'):
             output += update_links_in_ini(old_path=full_path, new_path=f'{to_folder}/{file_name}', mode=mode)
     except shutil.Error:
-        raise s.InternalError('file_editor.move_file error: erroneous path')
+        raise s.InternalError('erroneous path')
     s.log(output)
     return output
 
@@ -352,7 +354,6 @@ def duplicates_find(of_object_or_file, in_file_or_directory=None):
                 if title.casefold() in file_lines[line_index].casefold() and '//' not in file_lines[line_index]:
                     line_numbers.append(str(line_index + 1))
             output_line = ('\tline ' + ', '.join(line_numbers) + ' ' + title)
-            # print(output_line)
             if len(line_numbers) > 1 and output_line not in output:
                 output += output_line
     return output
@@ -377,7 +378,6 @@ def link_check(construct):
             link_check(element)
         elif isinstance(element, dict):
             if 'statement' in element:
-                # if element['statement'].strip() not in s.INI_ENDS:
                 if ' = ' in element['statement'].strip():
                     param, value = element['statement'].strip().split(' = ')
                     if value.isnumeric() or value in no_reference_values:
