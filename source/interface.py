@@ -22,7 +22,7 @@ CHANGES_COLUMNS = {'path': 6, 'type': 1}
 class ColumnedListbox(tkinter.ttk.Treeview):
     """ a Tk/Tcl Treeview-based class with predefined columns"""
 
-    def __init__(self, master, width=s.LIST_WIDTH, height=s.UNIT_HEIGHT*3, columns_dict=None, show='tree headings'):
+    def __init__(self, master, width=s.LIST_WIDTH, height=s.UNIT_HEIGHT * 3, columns_dict=None, show='tree headings'):
         super().__init__(master=master, height=height, show=show)
         self.width = width * 6  # # # required for columns widths to set properly
         if columns_dict:
@@ -491,9 +491,11 @@ class Window(tkinter.Tk):
             'Treeview.Heading', borderwidth=0, overbackground=s.TEXT_COLORS[0], overforeground=s.TEXT_COLORS[-1])
 
         for index in range(len(core.settings)):
-            list_labels_settings[index].place(x=0, y=s.UNIT_HEIGHT * index, width=s.UNIT_WIDTH*2, height=s.UNIT_HEIGHT)
+            list_labels_settings[index].place(x=0, y=s.UNIT_HEIGHT * index, width=s.UNIT_WIDTH * 2,
+                                              height=s.UNIT_HEIGHT)
             self.list_entry_settings[index].place(
-                x=s.UNIT_WIDTH*2 + 10, y=s.UNIT_HEIGHT * index, width=s.TEXT_WIDTH - s.UNIT_WIDTH, height=s.UNIT_HEIGHT)
+                x=s.UNIT_WIDTH * 2 + 10, y=s.UNIT_HEIGHT * index, width=s.TEXT_WIDTH - s.UNIT_WIDTH,
+                height=s.UNIT_HEIGHT)
             if index < 2:
                 self.list_entry_settings[index].configure(state='disabled')
                 continue
@@ -1037,7 +1039,8 @@ class Window(tkinter.Tk):
             pass
         try:
             self.loaded_module = modules_filter(
-                **{Property.NAME:self.treeview_modules_idle.item(self.treeview_modules_idle.selection()[0], 'values')[0]})[0]
+                **{Property.NAME:
+                    self.treeview_modules_idle.item(self.treeview_modules_idle.selection()[0], 'values')[0]})[0]
             self.current_path = (
                 f"{core.library}/"
                 f"{self.treeview_modules_idle.item(self.treeview_modules_idle.selection()[0], 'values')[0]}")
@@ -1057,7 +1060,8 @@ class Window(tkinter.Tk):
             pass
         try:
             self.loaded_module = modules_filter(
-                **{Property.NAME:self.treeview_modules_active.item(self.treeview_modules_active.selection()[0], 'values')[0]})[0]
+                **{Property.NAME:
+                    self.treeview_modules_active.item(self.treeview_modules_active.selection()[0], 'values')[0]})[0]
             self.current_path = (
                 f"{core.library}/"
                 f"{self.treeview_modules_active.item(self.treeview_modules_active.selection()[0], 'values')[0]}")
@@ -1204,7 +1208,7 @@ class Window(tkinter.Tk):
             name_module_selected = self.treeview_modules_idle.item(self.treeview_modules_idle.focus(), 'values')[0]
             self.set_log_update(f'loading module {name_module_selected} ...')
             try:
-                module = modules_filter(**{Property.NAME:name_module_selected})[0]
+                module = modules_filter(**{Property.NAME: name_module_selected})[0]
                 if ancestor_module := check_relative(module, Property.OVERRIDES):
                     answer = s.invoke_choice(
                         title='override retrieval',
@@ -1254,7 +1258,7 @@ class Window(tkinter.Tk):
             module_selected = self.treeview_modules_active.item(self.treeview_modules_active.focus(), 'values')[0]
             self.set_log_update(f'unloading mod {module_selected} ...')
             try:
-                module = modules_filter(**{Property.NAME:module_selected})[0]
+                module = modules_filter(**{Property.NAME: module_selected})[0]
                 if heir_module := check_relative(module, Property.OVERRODE_BY):
                     answer = s.invoke_choice(
                         title='override retrieval',
@@ -1333,7 +1337,7 @@ class Window(tkinter.Tk):
         if event:
             pass
         if self.loaded_module is DEFINITION_EXAMPLE:
-            self.loaded_module = modules_filter(**{Property.NAME:self.current_path.split('/')[-1]})[0]
+            self.loaded_module = modules_filter(**{Property.NAME: self.current_path.split('/')[-1]})[0]
         if self.loaded_module[Property.LAUNCH]:
             # # # restricting commands to launch an exe with a mod at best
             try:
@@ -1518,7 +1522,7 @@ class Window(tkinter.Tk):
         """ Allows to start browsing from the object folder if it can be found. """
         if event:
             pass
-        self.loaded_module = modules_filter(**{Property.NAME:self.current_path.split('/')[-1]})[0]
+        self.loaded_module = modules_filter(**{Property.NAME: self.current_path.split('/')[-1]})[0]
         game_paths = core.games
         if self.loaded_module[Property.TRANSFER_TYPE] == DEFINITION_CLASSES[0] and self.loaded_module[Property.ACTIVE]:
             if not self.loaded_module[Property.GAME]:

@@ -148,7 +148,9 @@ class ReactiveButton(tkinter.Button):
         self.info_id = ''
         self.super_master = main_window
         self.info = current_info
-        self.configure(image=self.default_image, compound='center', foreground=TEXT_COLORS[0], font=FONT_BUTTON,
+        if self.default_image:
+            self.configure(image=self.default_image)
+        self.configure(compound='center', foreground=TEXT_COLORS[0], font=FONT_BUTTON,
                        background=APP_BACKGROUND_COLOR, activebackground=APP_BACKGROUND_COLOR)
 
     def on_hover(self, event=None):

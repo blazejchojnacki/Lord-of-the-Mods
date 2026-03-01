@@ -174,7 +174,7 @@ def text_find_replace(find, replace_with=None, scope='', exceptions=None, mode='
     elif os.path.isdir(scope):
         file_paths = os.listdir(scope)
         for file_path in file_paths:
-            output += text_find_replace(find, replace_with, f'{scope}/{file_path}', exceptions, mode='part')  # overwrite=0
+            output += text_find_replace(find, replace_with, f'{scope}/{file_path}', exceptions, mode='part')
     if 'initiate' in mode:
         s.log(output)
     return output
@@ -336,8 +336,9 @@ def duplicates_find(of_object_or_file, in_file_or_directory=None):
         is_duplicated = False
         if isinstance(items_to_look_for[item_index], dict):
             continue
+        item_title = items_to_look_for[item_index][0].copy()
         item_phrase = (
-            rf"{items_to_look_for[item_index][0]['class']}\s?{space}\s?{items_to_look_for[item_index][0]['name'].replace('?', r'\?')}\s"
+            rf"{item_title['class']}\s?{space}\s?{item_title['name'].replace('?', r'\?')}\s"
             .replace('+', r'\+')
         )
         if find_result := re.findall(item_phrase, '\n'.join(file_lines)):

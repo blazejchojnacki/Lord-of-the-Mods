@@ -1,6 +1,5 @@
 import os
 from shutil import copy2, move
-import tkinter.messagebox
 from tkinter.filedialog import askopenfilename, askopenfilenames, askdirectory
 from tkinter.simpledialog import askstring
 from datetime import datetime
@@ -555,7 +554,7 @@ def initiate_comparison(module_directory, start_module='', changes_source='direc
                         game_paths.append(path_key.replace('\\', '/').split('/')[1])
                 new_snapshot = snapshot_take(
                     game_paths=game_paths, return_type='text save', name=module_directory.split('/')[-1])
-                comparison_dict = snapshot_compare(selected_snapshot, new_snapshot.split('\n'), return_type='lines')
+                comparison_dict = snapshot_compare(selected_snapshot, new_snapshot.split('\n'), return_type='dict')
                 for path_key in comparison_dict:
                     if (comparison_dict[path_key][0] != Change.UNCHANGED and
                             path_key != 'date_1' and path_key != 'date_2'):
