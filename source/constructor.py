@@ -1,6 +1,6 @@
 import os
 
-import source.shared
+import source.shared as s
 
 
 class ConstructShared(list):
@@ -43,12 +43,12 @@ class ConstructLevel(ConstructShared):
                 values_order = []
                 for key in item:
                     if 'comment' == key and 'class' in item:
-                        output += f"{source.shared.LEVEL_INDENT * level}{item['comment']}\n"
+                        output += f"{s.LEVEL_INDENT * level}{item['comment']}\n"
                     else:
                         values_order.append(item[key])
                 if 'end' in item:
                     level -= 1
-                line = f'{source.shared.LEVEL_INDENT * level}'
+                line = f'{s.LEVEL_INDENT * level}'
                 for value in values_order:
                     if line.strip():
                         line += f"{' ' if file_type in ['.ini', '.inc'] else ':'}{value}"
@@ -57,7 +57,7 @@ class ConstructLevel(ConstructShared):
                 if line.count('\n') > 1:
                     new_line = ''
                     for _ in line.split('\n'):
-                        new_line += f'{"\n" if new_line else ""}{source.shared.LEVEL_INDENT * level}{_.lstrip()}'
+                        new_line += f'{"\n" if new_line else ""}{s.LEVEL_INDENT * level}{_.lstrip()}'
                     line = new_line
 
                 if line[-1] != '\n':
@@ -89,10 +89,10 @@ class ConstructFile(ConstructShared):
             self.construct()
 
     def recognize_structure(self) -> None:
-        if source.shared.MOD_DEF_FILE_NAME in self.name:
-            raise source.shared.InternalError('functional file')
+        if s.MOD_DEF_FILE_NAME in self.name:
+            raise s.InternalError('functional file')
         if self.name.endswith('.str'):
-            delimiters = source.shared.STR_DELIMITERS.copy()
+            delimiters = s.STR_DELIMITERS.copy()
             delimiters.append([])
             self.delimiters, self.start_level = delimiters, 0
             return
@@ -101,7 +101,7 @@ class ConstructFile(ConstructShared):
                 for file_line in loaded_file.readlines():
                     words = file_line.split()
                     if len(words) > 0:
-                        for items_levels in source.shared.INI_DELIMITERS:
+                        for items_levels in s.INI_DELIMITERS:
                             for item_level in items_levels:
                                 if self.name.endswith('.ini') and items_levels.index(item_level) > 0:
                                     break
@@ -118,7 +118,7 @@ class ConstructFile(ConstructShared):
             with open(self.name) as file_pointer:
                 raw_lines = file_pointer.readlines()
         else:
-            raise source.shared.InternalError(f'file {self.name} invalid.')
+            raise s.InternalError(f'file {self.name} invalid.')
         last_comment = ''
         for raw_line in raw_lines:
             words = words_signs = []
@@ -152,7 +152,7 @@ class ConstructFile(ConstructShared):
                     new_item.assign(index=0, name=' '.join(words[1:]), comment=last_comment)
                 last_comment = ''
                 current_level += 1
-            elif words[0] in source.shared.INI_ENDS:
+            elif words[0] in s.INI_ENDS:
                 current_level -= 1
                 last = self.last()
                 if last_comment:
@@ -176,7 +176,7 @@ class ConstructFile(ConstructShared):
             if isinstance(item, ConstructLevel):
                 output += item.print(self.start_level, self.name[-4:])
             elif isinstance(item, dict):
-                line = source.shared.LEVEL_INDENT * self.start_level
+                line = s.LEVEL_INDENT * self.start_level
                 for key in item:
                     if line.strip():
                         line += item[key]
@@ -193,14 +193,14 @@ def load_file(full_path):
     :return: the file content
     """
     if not os.path.isfile(full_path):
-        raise source.shared.InternalError(f'wrong path: {full_path}')
+        raise s.InternalError(f'wrong path: {full_path}')
     elif full_path.endswith('.ini') or full_path.endswith('.str') or full_path.endswith('.inc'):
         try:
             file_object = ConstructFile(name=full_path)
             file_content = file_object.print()
             try:
                 file_levels = file_object.delimiters
-            except source.shared.InternalError as error:
+            except s.InternalError as error:
                 return error.message, []
         except IndexError:
             file_content = ''
@@ -222,9 +222,9 @@ def load_file(full_path):
     #         for line in loaded_file:
     #             file_content += loaded_file.readline()
     elif not full_path:
-        raise source.shared.InternalError(f'empty path.')
+        raise s.InternalError(f'empty path.')
     else:
-        raise source.shared.InternalError(f'wrong path or unsupported file type: {full_path}')
+        raise s.InternalError(f'wrong path or unsupported file type: {full_path}')
 
 
 def load_directories(full_path, mode=0):
