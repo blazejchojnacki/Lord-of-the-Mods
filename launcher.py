@@ -1,9 +1,12 @@
-import os
-import sys
 """
 Core of the 'Lord of the Mods.exe' to launch the application composed of the modules under /source/
 Alternatively, the modules can be tested via trials.py
 """
+
+import os
+import sys
+
+from source.initiator import initiate
 
 if __name__ == "__main__":
     if os.path.abspath('./') != '\\'.join(sys.argv[0].split('\\')[0:-1]):
@@ -13,5 +16,6 @@ if __name__ == "__main__":
         start_file = None
     # # # importing the modules before managing the base path results in errors related to relative paths
     import source.interface
+    initiate()
     main_window = source.interface.Window(start_file)
     main_window.focus()

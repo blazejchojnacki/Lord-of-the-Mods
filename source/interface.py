@@ -8,15 +8,11 @@ from tkinter.ttk import Treeview
 from tklinenums import TkLineNumbers
 
 import source.shared as s
-from source.initiator import initiate
 from source.constructor import load_file, load_directories
 from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
 from source.module_control import modules_filter, modules_sort, snapshot_take, snapshot_compare, \
     module_detect_changes, module_copy, module_new, hash_file, Property, \
     definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES, Change, check_relative
-
-popping_list_deployed = False
-popping_list_chosen = ''
 
 MODULE_COLUMNS = {Property.NAME: 1, Property.TRANSFER_TYPE: 1, 'progress': 1, Property.DESCRIPTION: 5}
 CHANGES_COLUMNS = {'path': 6, 'type': 1}
@@ -54,6 +50,10 @@ class ColumnedListbox(tkinter.ttk.Treeview):
                 self.open_children_recursive(child)
         except _tkinter.TclError:
             pass
+
+
+popping_list_deployed = False
+popping_list_chosen = ''
 
 
 class PoppingList(tkinter.Toplevel):
@@ -153,8 +153,6 @@ class Window(tkinter.Tk):
 
     def __init__(self, start_file=None):
         super().__init__()
-
-        initiate()
 
         s.main_window = self
         s.current_info = tkinter.Toplevel(master=self)
