@@ -15,7 +15,7 @@ from source.module_control import modules_filter, modules_sort, snapshot_take, s
     module_detect_changes, module_copy, module_new, hash_file, Property, \
     definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES, Change, check_relative
 
-MODULE_COLUMNS = {Property.NAME: 1, Property.TRANSFER_TYPE: 1, 'progress': 1, Property.DESCRIPTION: 5}
+MODULE_COLUMNS = {Property.NAME: 1, Property.TRANSFER_TYPE: 1, Property.DESCRIPTION: 5}
 CHANGES_COLUMNS = {'path': 6, 'type': 1}
 
 
@@ -282,12 +282,7 @@ class Window(tkinter.Tk):
         self.list_labels_module_editor = []
         self.list_text_definition_editor = []
         for key in DEFINITION_EXAMPLE:
-            if key == 'comment':
-                continue
             self.list_labels_module_editor.append(tkinter.Label(master=self.container_definition, text=key))
-            # if key == Property.CHANGES:
-            #     # self.list_labels_module_editor.append(tkinter.Label(master=self.container_definition))
-            #     continue
             self.list_text_definition_editor.append(tkinter.Text(master=self.container_definition))
 
         # # # window changes
@@ -502,7 +497,7 @@ class Window(tkinter.Tk):
             list_buttons_settings[index].place(x=s.TEXT_WIDTH + s.UNIT_WIDTH + 10, y=s.UNIT_HEIGHT * index,
                                                width=s.UNIT_WIDTH, height=s.UNIT_HEIGHT)
 
-        for index in range(len(DEFINITION_EXAMPLE) - 1):
+        for index in range(len(DEFINITION_EXAMPLE)):
             self.list_labels_module_editor[index].place(x=0, y=s.UNIT_HEIGHT * index, width=s.UNIT_WIDTH * 2,
                                                         height=s.UNIT_HEIGHT)
             self.list_text_definition_editor[index].place(
@@ -763,9 +758,7 @@ class Window(tkinter.Tk):
             if module_selected == module[Property.NAME]:
                 level = 0
                 for param in DEFINITION_EXAMPLE:
-                    if param == 'comment':
-                        continue
-                    elif param == Property.CHANGES:
+                    if param == Property.CHANGES:
                         self.list_labels_module_editor[-1].configure(text='changes')
                         self.list_text_definition_editor[-1].delete('1.0', 'end')
                         self.list_text_definition_editor[-1].insert('end', get_change_statistics(module))
@@ -995,8 +988,6 @@ class Window(tkinter.Tk):
         for entry_setting in self.list_entry_settings:
             setting_value.append(entry_setting.get())
         for setting_key in core.settings:
-            if setting_key == 'comment':
-                continue
             if core.settings[setting_key] != setting_value[counter]:
                 if isinstance(core.settings[setting_key], list):
                     setting_dict_list = setting_value[counter].split(', ')
@@ -1024,8 +1015,6 @@ class Window(tkinter.Tk):
         """ Reads the settings from the SETTINGS_FILE and inserts them into the settings text fields. """
         counter = 0
         for setting_key in core.settings:
-            if setting_key == 'comment':
-                continue
             self.list_entry_settings[counter].delete('0', 'end')
             if isinstance(core.settings[setting_key], list):
                 self.list_entry_settings[counter].insert('end', ', '.join(core.settings[setting_key]))
@@ -1384,9 +1373,7 @@ class Window(tkinter.Tk):
                 expected_definition = module.copy()
                 level = 0
                 for param in DEFINITION_EXAMPLE:
-                    if param == 'comment':
-                        continue
-                    elif param == Property.CHANGES:
+                    if param == Property.CHANGES:
                         continue
                     value = self.list_text_definition_editor[level].get('1.0', 'end').strip()
                     if value != module[param]:
