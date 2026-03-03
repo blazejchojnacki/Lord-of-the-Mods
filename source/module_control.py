@@ -572,92 +572,101 @@ test_previous_type = ''
 error_sensitivity = True
 
 
-def test_transfer(src, dst='', transfer: Transfer = Transfer.COPY, error_sensitive=True):
+def transfer_switch(src, dst='', transfer_type: Transfer = Transfer.COPY, error_sensitive=True):
+    if TEST:
+        simulate_transfer(src, dst, transfer_type)
+    else:
+        make_transfer(src, dst, transfer_type, error_sensitive)
+
+
+def simulate_transfer(src, dst='', transfer_type: Transfer = Transfer.COPY):
+    global test_previous_src, test_previous_dst, test_previous_type
+    output = ''
+    if os.path.exists(src):
+        if transfer_type == Transfer.DELETE:
+            output += log(f'for deletion: {src}')
+            if not os.path.isfile(f"{dst}/{src.split('/')[-1]}"):
+                output += log(f"warning: original absent {dst}/{src.split('/')[-1]}")
+        else:
+            output += log(f'source: {src}')
+    else:
+        output += log(f'error: source absent {src}')
+    if dst and transfer_type != Transfer.DELETE:
+        if os.path.exists(dst):
+            if os.path.isfile(f"{dst}/{src.split('/')[-1]}") and test_previous_src == f"{dst}/{src.split('/')[-1]}":
+                if test_previous_type == Transfer.DELETE:
+                    output += log(f'information: destination {test_previous_src} deleted')
+                elif test_previous_type == Transfer.MOVE:
+                    output += log(f'destination: {dst} (correct)')
+                else:
+                    output += log(f"warning: destination present {dst}/{src.split('/')[-1]}")
+            else:
+                output += log(f'destination: {dst}')
+        else:
+            output += log(f'error: destination absent {dst}')
+    test_previous_src, test_previous_dst, test_previous_type = src, dst, transfer_type
+    return output
+
+
+def make_transfer(src, dst='', transfer_type: Transfer = Transfer.COPY, error_sensitive=True):
     """
-    If TEST == True, reports if the file can be transferred, else tries to transfer the file from source to destination.
+    Tries to transfer the file from source to destination.
     :param src: path of the file to transfer
     :param dst: path of the directory to transfer to
-    :param transfer: 'copy' | 'move' | 'delete' - transfer type.
+    :param transfer_type: 'copy' | 'move' | 'delete' - transfer type.
     :param error_sensitive: if True, stops if an error is detected.
     :return: text gathering the report of the transfer.
     """
-    global test_previous_src, test_previous_dst, test_previous_type, error_sensitivity
-    output = ''
-    if TEST:
-        if os.path.exists(src):
-            if transfer == Transfer.DELETE:
-                output += log(f'for deletion: {src}')
-                if not os.path.isfile(f"{dst}/{src.split('/')[-1]}"):
-                    output += log(f"warning: original absent {dst}/{src.split('/')[-1]}")
+    global error_sensitivity
+    try:
+        if transfer_type == Transfer.COPY:
+            ensure_path_exists(src, dst)
+            copy2(src, dst)
+        elif transfer_type == Transfer.MOVE:
+            ensure_path_exists(src, dst)
+            move(src, dst)
+        elif transfer_type == Transfer.DELETE:
+            os.remove(src)
+    except OSError as err:
+        if src.endswith('.bak'):
+            new_src = src.replace('.bak', '')
+            return make_transfer(new_src, dst, transfer_type, error_sensitive)
+        elif src.endswith('.disabled'):
+            new_src = src.replace('.disabled', '.big')
+            return make_transfer(new_src, dst, transfer_type, error_sensitive)
+        elif src.endswith('.big'):
+            if os.path.isfile(f'{src}.bak'):
+                return make_transfer(f'{src}.bak', dst, transfer_type, error_sensitive)
+            elif os.path.isfile(f'{src.replace('.big', '.disabled')}'):
+                return make_transfer(f'{src.replace('.big', '.disabled')}', dst, transfer_type, error_sensitive)
+        if error_sensitive:
+            if err.strerror:
+                error_message = err.strerror
+            elif err.args[0]:
+                error_message = err.args[0]
             else:
-                output += log(f'source: {src}')
-        else:
-            output += log(f'error: source absent {src}')
-        if dst and transfer != Transfer.DELETE:
-            if os.path.exists(dst):
-                if os.path.isfile(f"{dst}/{src.split('/')[-1]}") and test_previous_src == f"{dst}/{src.split('/')[-1]}":
-                    if test_previous_type == Transfer.DELETE:
-                        output += log(f'information: destination {test_previous_src} deleted')
-                    elif test_previous_type == Transfer.MOVE:
-                        output += log(f'destination: {dst} (correct)')
-                    else:
-                        output += log(f"warning: destination present {dst}/{src.split('/')[-1]}")
-                else:
-                    output += log(f'destination: {dst}')
-            else:
-                output += log(f'error: destination absent {dst}')
-        test_previous_src, test_previous_dst, test_previous_type = src, dst, transfer
-    else:
-        try:
-            if transfer == Transfer.COPY:
-                ensure_path_exists(src, dst)
-                copy2(src, dst)
-            elif transfer == Transfer.MOVE:
-                ensure_path_exists(src, dst)
-                move(src, dst)
-            elif transfer == Transfer.DELETE:
-                os.remove(src)
-        except OSError as err:
-            if src.endswith('.bak'):
-                new_src = src.replace('.bak', '')
-                return test_transfer(new_src, dst, transfer, error_sensitive)
-            elif src.endswith('.disabled'):
-                new_src = src.replace('.disabled', '.big')
-                return test_transfer(new_src, dst, transfer, error_sensitive)
-            elif src.endswith('.big'):
-                if os.path.isfile(f'{src}.bak'):
-                    return test_transfer(f'{src}.bak', dst, transfer, error_sensitive)
-                elif os.path.isfile(f'{src.replace('.big', '.disabled')}'):
-                    return test_transfer(f'{src.replace('.big', '.disabled')}', dst, transfer, error_sensitive)
-            if error_sensitive:
-                if err.strerror:
-                    error_message = err.strerror
-                elif err.args[0]:
-                    error_message = err.args[0]
-                else:
-                    error_message = ' - '
-                do_proceed = s.invoke_choice(
-                    title='file transfer error',
-                    text=f'Error with {src}\n{error_message}\n'
-                         ' Do you wish to continue displaying each error,\n'
-                         ' continue skipping errors or revert the mod transfer?',
-                    buttons=(
-                        {s.KEY_LABEL: 'continue', s.KEY_RETURN: True, s.KEY_INFO: ''},
-                        {s.KEY_LABEL: 'skip', s.KEY_RETURN: False, s.KEY_INFO: ''},
-                        {s.KEY_LABEL: 'revert', s.KEY_RETURN: None, s.KEY_INFO: ''})
-                )
-                if do_proceed is True:
-                    pass
-                elif do_proceed is False:
-                    error_sensitivity = False
-                elif do_proceed is None:
-                    raise s.InternalError(err.strerror)
-    return output
+                error_message = ' - '
+            do_proceed = s.invoke_choice(
+                title='file transfer error',
+                text=f'Error with {src}\n{error_message}\n'
+                     ' Do you wish to continue displaying each error,\n'
+                     ' continue skipping errors or revert the mod transfer?',
+                buttons=(
+                    {s.KEY_LABEL: 'continue', s.KEY_RETURN: True, s.KEY_INFO: ''},
+                    {s.KEY_LABEL: 'skip', s.KEY_RETURN: False, s.KEY_INFO: ''},
+                    {s.KEY_LABEL: 'revert', s.KEY_RETURN: None, s.KEY_INFO: ''})
+            )
+            if do_proceed is True:
+                pass
+            elif do_proceed is False:
+                error_sensitivity = False
+            elif do_proceed is None:
+                raise s.InternalError(err.strerror)
 
 
 def ensure_path_exists(file_path, check_path='..'):
     """ Creates the directories in the ARCHIVE and LIBRARY folders where the files will be transferred. """
-    # # # 'if' added for case of test_transfer - copy.
+    # # # 'if' added for case of transfer_switch - copy.
     if core.library in file_path:
         check_path = '/'.join(file_path.split('/')[:core.library.count('/') + 2])
         file_path = file_path[file_path.index(check_path) + len(check_path) + 1:]
@@ -747,14 +756,14 @@ def module_reverse(module_object, transfer: Transfer = Transfer.COPY, check_type
                 pass
             elif comparison_dict[path_key][0] == Change.CHANGED:
                 if transfer in Transfer:
-                    output += test_transfer(file_path_source, file_path_module, transfer, error_sensitivity)
+                    output += transfer_switch(file_path_source, file_path_module, transfer, error_sensitivity)
                 if transfer == Transfer.MOVE or transfer == Transfer.DELETE:
-                    output += test_transfer(file_path_archive, file_path_game, Transfer.MOVE, error_sensitivity)
+                    output += transfer_switch(file_path_archive, file_path_game, Transfer.MOVE, error_sensitivity)
             elif comparison_dict[path_key][0] == Change.ADDED:
-                output += test_transfer(file_path_source, file_path_module, transfer, error_sensitivity)
+                output += transfer_switch(file_path_source, file_path_module, transfer, error_sensitivity)
             elif comparison_dict[path_key][0] == Change.REMOVED:
                 if transfer == Transfer.MOVE or transfer == Transfer.DELETE:
-                    output += test_transfer(file_path_archive, file_path_game, Transfer.MOVE, error_sensitivity)
+                    output += transfer_switch(file_path_archive, file_path_game, Transfer.MOVE, error_sensitivity)
                 else:
                     pass
     except s.InternalError:
@@ -845,12 +854,12 @@ def module_attach(module_object=None, module_directory=None, check_type='ancesto
                 if comparison_dict[path_key][0] == Change.UNCHANGED:
                     pass
                 elif comparison_dict[path_key][0] == Change.CHANGED:
-                    output += test_transfer(file_path_source, file_path_archive, transfer, error_sensitivity)
-                    output += test_transfer(file_path_module, file_path_game, transfer, error_sensitivity)
+                    output += transfer_switch(file_path_source, file_path_archive, transfer, error_sensitivity)
+                    output += transfer_switch(file_path_module, file_path_game, transfer, error_sensitivity)
                 elif comparison_dict[path_key][0] == Change.ADDED:
-                    output += test_transfer(file_path_module, file_path_game, transfer, error_sensitivity)
+                    output += transfer_switch(file_path_module, file_path_game, transfer, error_sensitivity)
                 elif comparison_dict[path_key][0] == Change.REMOVED:
-                    output += test_transfer(file_path_source, file_path_archive, transfer, error_sensitivity)
+                    output += transfer_switch(file_path_source, file_path_archive, transfer, error_sensitivity)
         except s.InternalError:
             log(f'module_attach {module_name} CANCELLED\n{output}')
             module_reverse(module_object=module_object, transfer=Transfer.REMOVE, check_type='pass')
@@ -916,7 +925,7 @@ def module_copy(new_name, template_directory=None, changes_source=None):
             continue
         copied_file = f'{template_directory}/{file}'
         try:
-            test_transfer(copied_file, f'{core.library}/{new_name}/{file}', Transfer.COPY)
+            transfer_switch(copied_file, f'{core.library}/{new_name}/{file}', Transfer.COPY)
             output += f'{core.library}/{new_name}/{file}\n'
         except FileNotFoundError:
             output += f'warning: {file} permission denied'
