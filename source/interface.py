@@ -1851,7 +1851,7 @@ class Window(tkinter.Tk):
         """ Takes a snapshot of all files in the selected directory. """
         self.set_log_update('generating snapshot - please wait')
         try:
-            result_path = snapshot_take()
+            result_path = snapshot_take(add_paths=True)
         except s.InternalError:
             self.set_log_update(f'snapshot not generated. path not selected')
         else:

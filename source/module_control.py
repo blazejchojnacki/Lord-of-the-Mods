@@ -348,21 +348,10 @@ def get_available_name(snapshot_directory, prefix=SNAPSHOT_NAME):
     return f'{snapshot_directory}/{prefix}{counter}.json'
 
 
-def snapshot_take(game_paths=None, add_paths=False, return_type='path', name=None):
-    """
-    Takes a snapshot of a selected directory.
-    :param game_paths: directory to take a snapshot of.
-    :param add_paths: True | False - when True, asks for new directories until cancel is pressed.
-    :param return_type: 'path' | 'dict' (+) 'save' - if 'path',
-     returns the path of the file where the snapshot has been saved.
-    If 'dict', returns the content.
-    :param name:
-    :return: according to return-type.
-    """
+def select_paths(game_paths, add_paths):
+    path_to_omit = ''
     if game_paths is None:
         game_paths = ['>no_path<']
-    game_snapshot = {"date": f"{datetime.now()}"}
-    path_to_omit = ''
     for game_path in game_paths:
         if game_path == '>no_path<':
             game_full_path = askdirectory(initialdir=f'{s.MAIN_DIRECTORY}',
@@ -380,6 +369,24 @@ def snapshot_take(game_paths=None, add_paths=False, return_type='path', name=Non
                 raise s.InternalError('directory not selected')
         if not os.path.isdir(f'{s.MAIN_DIRECTORY}/{game_path}'):
             game_paths.remove(game_path)
+    return game_paths, path_to_omit
+
+
+def snapshot_take(game_paths=None, add_paths=False, return_type='path', name=None):
+    """
+    Takes a snapshot of a selected directory.
+    :param game_paths: directory to take a snapshot of.
+    :param add_paths: True | False - when True, asks for new directories until cancel is pressed.
+    :param return_type: 'path' | 'dict' (+) 'save' - if 'path',
+     returns the path of the file where the snapshot has been saved.
+    If 'dict', returns the content.
+    :param name:
+    :return: according to return-type.
+    """
+
+    game_paths, path_to_omit = select_paths(game_paths, add_paths)
+
+    game_snapshot = {"date": f"{datetime.now()}"}
     for game_path in game_paths:
         game_snapshot.update(hash_directory(game_path, path_to_omit=path_to_omit))
     if return_type == 'dict':
