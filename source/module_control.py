@@ -12,7 +12,6 @@ from typing import Literal
 import source.core as core
 import source.shared as s
 
-
 SNAPSHOT_DIRECTORY = './snapshots'
 SNAPSHOT_NAME = 'file_snapshot_'
 SNAPSHOT_COMPARISON_DIRECTORY = './snapshot_comparisons'
@@ -95,6 +94,7 @@ def log(output):
 
 class Definition(dict):
     """ A dictionary-based class with predefined keys and functions that manipulate modules. """
+
     def __init__(self, initial_dict=None):
         super().__init__()
         for key in DEFINITION_CLASS_TEMPLATE:
@@ -307,10 +307,10 @@ def hash_file(file_path):
     return xxhash.xxh128(file_content).hexdigest()
 
 
-def hash_directory(file_or_folder, path_to_omit=''):
-    """ Composes a text where every file of a given directory is listed with its hash value. """
+def hash_directory(file_or_folder, path_to_omit='', skip_first_level_files=False):
+    """ Composes a dict where every file of a given directory is the key to its hash value. """
     output = {}
-    if os.path.isfile(file_or_folder):
+    if os.path.isfile(file_or_folder) and not skip_first_level_files:
         if path_to_omit:
             path_to_register = file_or_folder[file_or_folder.index(path_to_omit) + len(path_to_omit):]
         else:
@@ -484,86 +484,88 @@ def initiate_comparison(module_directory, start_module='', changes_source='direc
     If 'snapshot', bases the changes on the difference between present files and files in the snapshot.
     :return: tuple(active, changes)
     """
-    if not start_module and changes_source == 'directory':
-        start_module = askdirectory(title=f'{s.PROGRAM_NAME}: select the game directory to define the mod',
-                                    initialdir=s.MAIN_DIRECTORY)
-    if os.path.isdir(module_directory):
-        changes = {}
-        active = False
-        if os.path.isdir(changes_source):
-            active = True
-            snapshot_take(
-                game_paths=[changes_source.split('/')[-1]], return_type='path', name=changes_source.split('/')[-1])
-            current_files = hash_directory(changes_source)
-            for new_file in current_files:
-                if len(new_file) > 0:
-                    changes[new_file] = ['new', current_files[new_file]]
-        elif changes_source == 'directory':
-            new_folders_list = [f'{module_directory}/{_}' for _ in os.listdir(module_directory)
-                                if os.path.isdir(f'{module_directory}/{_}')]
-            new_files_dict = {}
-            for new_folder in new_folders_list:
-                new_files_dict.update(hash_directory(new_folder, path_to_omit=f'{module_directory}'))
-            if start_module and new_files_dict:
-                active = False
-                current_files = hash_directory(
-                    start_module, path_to_omit=f'{start_module[:start_module.rfind("/")]}')
-                for new_file in new_files_dict:
-                    if new_file in current_files:
-                        changes[new_file] = [Change.CHANGED, new_files_dict[new_file], current_files[new_file]]
-                    else:
-                        changes[new_file] = [Change.ADDED, new_files_dict[new_file]]
-            elif start_module and not new_files_dict:
-                active = True
-                current_files = hash_directory(start_module, path_to_omit=s.MAIN_DIRECTORY)
-                for new_file in current_files:
-                    changes[new_file] = [Change.ADDED, current_files[new_file]]
-            files_to_remove = askopenfilenames(title=f'{s.PROGRAM_NAME}: select files to remove',
-                                               initialdir=s.MAIN_DIRECTORY)
-            for file_path in files_to_remove:
-                changes[file_path] = [Change.REMOVED, hash_file(file_path)]
-            snapshot_take(
-                    game_paths=[module_directory], name=module_directory.split('/')[-1])
-        elif changes_source == 'comparison':
-            selected_comparison = askopenfilename(
-                title=f'{s.PROGRAM_NAME}: select the snapshot comparison to define the mod',
-                initialdir=f'./{SNAPSHOT_COMPARISON_DIRECTORY}')
-            if os.path.isfile(selected_comparison):
-                with open(selected_comparison) as comparison_buffer:
-                    comparison_dict = json.load(comparison_buffer)
-                for path_key in comparison_dict:
-                    if comparison_dict[path_key][0] != Change.UNCHANGED:
-                        changes[path_key] = comparison_dict[path_key]
-                active = True
-            else:
-                raise s.InternalError('comparison not selected')
-        elif changes_source == 'snapshot':
-            selected_snapshot = askopenfilename(
-                title=f'{s.PROGRAM_NAME}: select the snapshot taken before the changes',
-                initialdir=f'./{SNAPSHOT_DIRECTORY}')
-            if os.path.isfile(selected_snapshot):
-                with open(selected_snapshot) as snapshot_buffer:
-                    snapshot_dict = json.load(snapshot_buffer)
-                game_paths = []
-                for path_key in snapshot_dict:
-                    if path_key == 'date':
-                        continue
-                    elif path_key.replace('\\', '/').split('/')[1] not in game_paths:
-                        game_paths.append(path_key.replace('\\', '/').split('/')[1])
-                new_snapshot = snapshot_take(
-                    game_paths=game_paths, return_type='text save', name=module_directory.split('/')[-1])
-                comparison_dict = snapshot_compare(selected_snapshot, new_snapshot.split('\n'), return_type='dict')
-                for path_key in comparison_dict:
-                    if (comparison_dict[path_key][0] != Change.UNCHANGED and
-                            path_key != 'date_1' and path_key != 'date_2'):
-                        changes[path_key] = comparison_dict[path_key]
-                active = True
-            else:
-                raise s.InternalError('snapshot not selected')
-        log(f'comparison generated for {module_directory}')
-        return active, changes
-    else:
+    if not os.path.isdir(module_directory):
         raise s.InternalError('provided directory is not correct')
+    changes = {}
+    active = False
+    if os.path.isdir(changes_source):
+        active = True
+        snapshot_take(
+            game_paths=[changes_source.split('/')[-1]], return_type='path', name=changes_source.split('/')[-1])
+        current_files = hash_directory(changes_source)
+        for new_file in current_files:
+            if len(new_file) > 0:
+                changes[new_file] = [Change.ADDED, current_files[new_file]]
+    elif changes_source == 'directory':
+        if not start_module:
+            start_module = askdirectory(title=f'{s.PROGRAM_NAME}: select the game directory to define the mod',
+                                        initialdir=s.MAIN_DIRECTORY)
+        new_files_dict = hash_directory(module_directory, path_to_omit=module_directory, skip_first_level_files=True)
+        if start_module and new_files_dict:
+            active = False
+            current_files = hash_directory(
+                start_module, path_to_omit=f'{start_module[:start_module.rfind("/")]}')
+            for new_file in new_files_dict:
+                if new_file in current_files:
+                    changes[new_file] = [Change.CHANGED, new_files_dict[new_file], current_files[new_file]]
+                else:
+                    changes[new_file] = [Change.ADDED, new_files_dict[new_file]]
+        elif start_module and not new_files_dict:
+            active = True
+            current_files = hash_directory(start_module, path_to_omit=s.MAIN_DIRECTORY)
+            for new_file in current_files:
+                changes[new_file] = [Change.ADDED, current_files[new_file]]
+        files_to_remove = askopenfilenames(title=f'{s.PROGRAM_NAME}: select files to remove',
+                                           initialdir=s.MAIN_DIRECTORY)
+        for file_path in files_to_remove:
+            changes[file_path] = [Change.REMOVED, hash_file(file_path)]
+        snapshot_take(
+            game_paths=[module_directory], name=module_directory.split('/')[-1])
+    elif changes_source == 'comparison':
+        selected_comparison = askopenfilename(
+            title=f'{s.PROGRAM_NAME}: select the snapshot comparison to define the mod',
+            initialdir=f'./{SNAPSHOT_COMPARISON_DIRECTORY}')
+        if os.path.isfile(selected_comparison):
+            active, changes = evaluate_changes(selected_comparison)
+        else:
+            raise s.InternalError('comparison not selected')
+    elif changes_source == 'snapshot':
+        selected_snapshot = askopenfilename(
+            title=f'{s.PROGRAM_NAME}: select the snapshot taken before the changes',
+            initialdir=f'./{SNAPSHOT_DIRECTORY}')
+        if os.path.isfile(selected_snapshot):
+            with open(selected_snapshot) as snapshot_buffer:
+                snapshot_dict = json.load(snapshot_buffer)
+            game_paths = []
+            for path_key in snapshot_dict:
+                if 'date' == path_key:
+                    continue
+                elif path_key.replace('\\', '/').split('/')[1] not in game_paths:
+                    game_paths.append(path_key.replace('\\', '/').split('/')[1])
+            new_snapshot = snapshot_take(
+                game_paths=game_paths, return_type='dict save', name=module_directory.split('/')[-1])
+            comparison_dict = snapshot_compare(selected_snapshot, new_snapshot, return_type='dict')
+            active, changes = evaluate_changes(comparison_dict)
+        else:
+            raise s.InternalError('snapshot not selected')
+    log(f'comparison generated for {module_directory}')
+    return active, changes
+
+
+def evaluate_changes(comparison):
+    changes = {}
+    if os.path.isfile(comparison):
+        with open(comparison) as comparison_buffer:
+            comparison_dict = json.load(comparison_buffer)
+    elif isinstance(comparison, dict):
+        comparison_dict = comparison
+    else:
+        raise s.InternalError('no comparison')
+    for path_key in comparison_dict:
+        if comparison_dict[path_key][0] != Change.UNCHANGED and path_key != 'date_1' and path_key != 'date_2':
+            changes[path_key] = comparison_dict[path_key]
+    active = True
+    return active, changes
 
 
 test_previous_src = ''
