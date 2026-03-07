@@ -5,8 +5,10 @@ import os.path
 from source.shared import SETTINGS_FILE_PATH, _SETTINGS_FORMAT, Setting, \
     InternalError
 
-library = './_LIBRARY'
-archive = './_ARCHIVE'
+install_path = os.path.abspath('../..').strip('\\').replace('\\', '/')
+
+library = '_LIBRARY'
+archive = '_ARCHIVE'
 games = []
 exceptions = []
 

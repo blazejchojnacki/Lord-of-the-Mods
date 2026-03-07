@@ -312,7 +312,7 @@ def hash_directory(file_or_folder, path_to_omit='', skip_first_level_files=False
     output = {}
     if os.path.isfile(file_or_folder) and not skip_first_level_files:
         if path_to_omit:
-            path_to_register = file_or_folder[file_or_folder.index(path_to_omit) + len(path_to_omit):]
+            path_to_register = file_or_folder[file_or_folder.index(path_to_omit) + len(path_to_omit)+1:]
         else:
             path_to_register = file_or_folder
         output[path_to_register] = hash_file(file_or_folder)
@@ -348,50 +348,46 @@ def get_available_name(snapshot_directory, prefix=SNAPSHOT_NAME):
     return f'{snapshot_directory}/{prefix}{counter}.json'
 
 
-def select_paths(game_paths, add_paths):
-    path_to_omit = ''
-    if game_paths is None:
-        game_paths = ['>no_path<']
-    for game_path in game_paths:
-        if game_path == '>no_path<':
-            game_full_path = askdirectory(initialdir=f'{s.MAIN_DIRECTORY}',
-                                          title=f'{s.PROGRAM_NAME}: select game directory to take a snapshot of')
-            if game_full_path:
-                if os.path.abspath(core.library).replace('\\', '/') in game_full_path:
-                    mod_name = game_full_path[len(os.path.abspath(core.library)):].split('/')[1]
-                    path_to_omit = f'{os.path.abspath(core.library).replace('\\', '/')}/{mod_name}'
-                else:
-                    path_to_omit = s.MAIN_DIRECTORY
-                game_paths[game_paths.index('>no_path<')] = game_path
-                if add_paths:
-                    game_paths.append('>no_path<')
-            elif len(game_paths) == 0 or game_paths == ['>no_path<']:
-                raise s.InternalError('directory not selected')
-        if not os.path.isdir(f'{s.MAIN_DIRECTORY}/{game_path}'):
-            game_paths.remove(game_path)
-    return game_paths, path_to_omit
-
-
-def snapshot_take(game_paths=None, add_paths=False, return_type='path', name=None):
+def snapshot_take(game_paths=None, add_paths=False):
     """
     Takes a snapshot of a selected directory.
     :param game_paths: directory to take a snapshot of.
     :param add_paths: True | False - when True, asks for new directories until cancel is pressed.
-    :param return_type: 'path' | 'dict' (+) 'save' - if 'path',
-     returns the path of the file where the snapshot has been saved.
-    If 'dict', returns the content.
-    :param name:
-    :return: according to return-type.
+    :return: dict with paths as keys and hash as values.
     """
-
-    game_paths, path_to_omit = select_paths(game_paths, add_paths)
+    if not game_paths:
+        add_paths = True
+    path_to_omit = ''
+    while add_paths:
+        game_full_path = askdirectory(initialdir=f'{s.MAIN_DIRECTORY}',
+                                      title=f'{s.PROGRAM_NAME}: select game directory to take a snapshot of')
+        if game_full_path:
+            if os.path.abspath(core.library).replace('\\', '/') in game_full_path:
+                mod_name = game_full_path[len(os.path.abspath(core.library)):].split('/')[1]
+                path_to_omit = f'{os.path.abspath(core.library).replace('\\', '/')}/{mod_name}'
+            else:
+                path_to_omit = core.install_path
+            game_path = os.path.relpath(path_to_omit, game_full_path)
+            game_paths.append(game_path)
+        elif not game_full_path:
+            add_paths = False
+        elif len(game_paths) == 0:
+            raise s.InternalError('directory not selected')
 
     game_snapshot = {"date": f"{datetime.now()}"}
     for game_path in game_paths:
+        if os.path.abspath(core.library).replace('\\', '/') in game_path:
+            mod_name = game_path[len(os.path.abspath(core.library)):].split('/')[1]
+            path_to_omit = f'{os.path.abspath(core.library).replace('\\', '/')}/{mod_name}'
+        else:
+            path_to_omit = core.install_path
         game_snapshot.update(hash_directory(game_path, path_to_omit=path_to_omit))
-    if return_type == 'dict':
-        log('snapshot_take successful')
-        return game_snapshot
+    return game_snapshot
+
+
+def snapshot_save(game_snapshot, name=None):
+    if not game_snapshot:
+        game_snapshot = snapshot_take()
     if not name:
         snapshot_path = get_available_name(SNAPSHOT_DIRECTORY)
     elif os.path.isfile(f'{SNAPSHOT_DIRECTORY}/{SNAPSHOT_NAME}{name}.json'):
@@ -404,10 +400,7 @@ def snapshot_take(game_paths=None, add_paths=False, return_type='path', name=Non
     with open(snapshot_path, 'w') as snapshot_buffer:
         json.dump(game_snapshot, snapshot_buffer, indent=4)
     log(f'snapshot successfully saved in file {snapshot_path}')
-    if 'dict' in return_type:  # # # if 'dict save'
-        return game_snapshot
-    elif 'path' in return_type:
-        return snapshot_path
+    return snapshot_path
 
 
 def snapshot_compare(snap_anterior=None, snap_posterior=None, return_type: Literal['path', 'dict'] = 'path'):
@@ -497,8 +490,8 @@ def initiate_comparison(module_directory, start_module='', changes_source='direc
     active = False
     if os.path.isdir(changes_source):
         active = True
-        snapshot_take(
-            game_paths=[changes_source.split('/')[-1]], return_type='path', name=changes_source.split('/')[-1])
+        new_snapshot = snapshot_take(game_paths=[changes_source.split('/')[-1]])
+        snapshot_save(game_snapshot=new_snapshot, name=changes_source.split('/')[-1])
         current_files = hash_directory(changes_source)
         for new_file in current_files:
             if len(new_file) > 0:
@@ -526,8 +519,8 @@ def initiate_comparison(module_directory, start_module='', changes_source='direc
                                            initialdir=s.MAIN_DIRECTORY)
         for file_path in files_to_remove:
             changes[file_path] = [Change.REMOVED, hash_file(file_path)]
-        snapshot_take(
-            game_paths=[module_directory], name=module_directory.split('/')[-1])
+        new_snapshot = snapshot_take(game_paths=[module_directory])
+        snapshot_save(new_snapshot, name=module_directory.split('/')[-1])
     elif changes_source == 'comparison':
         selected_comparison = askopenfilename(
             title=f'{s.PROGRAM_NAME}: select the snapshot comparison to define the mod',
@@ -549,8 +542,8 @@ def initiate_comparison(module_directory, start_module='', changes_source='direc
                     continue
                 elif path_key.replace('\\', '/').split('/')[1] not in game_paths:
                     game_paths.append(path_key.replace('\\', '/').split('/')[1])
-            new_snapshot = snapshot_take(
-                game_paths=game_paths, return_type='dict save', name=module_directory.split('/')[-1])
+            new_snapshot = snapshot_take(game_paths=game_paths)
+            snapshot_save(new_snapshot, name=module_directory.split('/')[-1])
             comparison_dict = snapshot_compare(selected_snapshot, new_snapshot, return_type='dict')
             active, changes = evaluate_changes(comparison_dict)
         else:

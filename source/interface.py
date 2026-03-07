@@ -13,7 +13,7 @@ from source.constructor import load_file, load_directories
 from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
 from source.module_control import modules_filter, modules_sort, snapshot_take, snapshot_compare, \
     module_detect_changes, module_copy, module_new, hash_file, Property, \
-    definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES, Change, check_relative
+    definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES, Change, check_relative, snapshot_save
 
 MODULE_COLUMNS = {Property.NAME: 1, Property.TRANSFER_TYPE: 1, Property.DESCRIPTION: 5}
 CHANGES_COLUMNS = {'path': 6, 'type': 1}
@@ -1851,7 +1851,8 @@ class Window(tkinter.Tk):
         """ Takes a snapshot of all files in the selected directory. """
         self.set_log_update('generating snapshot - please wait')
         try:
-            result_path = snapshot_take(add_paths=True)
+            new_snapshot = snapshot_take()
+            result_path = snapshot_save(new_snapshot)
         except s.InternalError:
             self.set_log_update(f'snapshot not generated. path not selected')
         else:
