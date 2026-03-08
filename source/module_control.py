@@ -152,14 +152,17 @@ class Definition(dict):
 DEFINITION_EXAMPLE = Definition()
 
 
-def definition_write(definition_object=None, module_directory=None, return_type='object', changes_source='directory',
-                     **key_args):
+def definition_save(definition_object, module_directory):
+    with open(f'{module_directory}/{DEFINITION_NAME}', 'w') as definition_buffer:
+        json.dump(definition_object, definition_buffer, indent=4)
+        log(f'definition saved in {module_directory}')
+
+
+def definition_write(definition_object=None, module_directory=None, changes_source='directory', **key_args):
     """
     Reads a definition and formats it into text, that can be saved into a text file.
     :param definition_object: (optional) a definition dictionary-like object
     :param module_directory: (optional) a path to identify a module and to save the definition to
-    :param return_type: 'object' (+) 'save' - if 'object', returns a definition dictionary-like object.
-    If 'text save' or 'object save', saves the definition into a file.
     :param changes_source: (optional) 'directory' | 'snapshot' | 'comparison' | >the directory to base it upon<
     - passed to initiate_comparison
     :param key_args: (optional) key - arguments pairs for values to change before saving.
@@ -211,15 +214,9 @@ def definition_write(definition_object=None, module_directory=None, return_type=
                 module_directory, changes_source=changes_source)
         except s.InternalError:
             pass
-    if 'save' in return_type:
-        with open(f'{module_directory}/{DEFINITION_NAME}', 'w') as definition_buffer:
-            json.dump(definition_object, definition_buffer, indent=4)
-            log(f'definition saved in {module_directory}')
-    elif 'object' in return_type:
-        return definition_object
+    return definition_object
 
 
-# note in #lord_of_the_mods definition_write, definition_edit and initiate_comparison have been fused in properties_set
 def definition_read(module_path=None):
     """
     Reads the definition of an object and loads it into a dictionary.
@@ -264,7 +261,7 @@ def definition_edit(definition_object=None, module_path=None, **key_args):
     for key in key_args:
         if key in DEFINITION_EXAMPLE:
             if key == Property.NAME:
-                list_modules = modules_filter(return_type='names')
+                list_modules = [_ for _ in os.listdir(core.library) if not _ in core.exceptions]
                 for module_name in list_modules:
                     if key_args[Property.NAME] == module_name:
                         raise s.InternalError('definition_edit: name already in use')
@@ -287,7 +284,8 @@ def definition_edit(definition_object=None, module_path=None, **key_args):
             definition_object[key] = key_args[key]
         else:
             raise s.InternalWarning(f'key {key} not recognized')
-    return definition_write(definition_object, return_type='object save')
+    definition_save(definition_object, module_path)
+    return definition_object
 
 
 # TODO: check if correct business logic
@@ -879,8 +877,9 @@ def module_new(name: str, changes_source: str = ''):
     if not os.path.isdir(f'{core.library}/{name}'):
         os.mkdir(f'{core.library}/{name}')
     output = f'{name} created. \n'
-    definition_write(module_directory=f'{core.library}/{name}', return_type='save',
-                     changes_source=changes_source)
+    module_directory = f'{core.library}/{name}'
+    definition_object = definition_write(module_directory=module_directory, changes_source=changes_source)
+    definition_save(definition_object, module_directory)
     return log(output)
 
 
@@ -922,8 +921,9 @@ def module_copy(new_name, template_directory=None, changes_source=None):
             output += folder + '\n'
     for file in files:
         if file == DEFINITION_NAME:
-            definition_write(module_directory=f'{core.library}/{new_name}', return_type='save',
-                             changes_source=changes_source)
+            module_directory = f'{core.library}/{new_name}'
+            definition_object = definition_write(module_directory=module_directory, changes_source=changes_source)
+            definition_save(definition_object, module_directory)
             continue
         copied_file = f'{template_directory}/{file}'
         try:

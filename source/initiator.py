@@ -8,7 +8,7 @@ from tkinter.messagebox import askyesnocancel, showerror, showwarning
 
 import source.core as core
 import source.shared
-from source.module_control import definition_write, SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARISON_DIRECTORY
+from source.module_control import definition_write, SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARISON_DIRECTORY, definition_save
 
 default_folders_dict = {
     'library': './_LIBRARY',
@@ -175,9 +175,11 @@ def initiate():
             try:
                 if not os.path.isdir(f"{directories_dict['library']}/{game_path.split('/')[-1]}"):
                     os.mkdir(f"{directories_dict['library']}/{game_path.split('/')[-1]}")
-                definition_write(module_directory=f"{directories_dict['library']}/{game_path.split('/')[-1]}",
-                                 return_type='object save', changes_source=game_path,
-                                 description=f"Initial {game_path.split('/')[-1]} - created automatically")
+                module_directory = f"{directories_dict['library']}/{game_path.split('/')[-1]}"
+                definition_object = definition_write(
+                    module_directory=module_directory, changes_source=game_path,
+                    description=f"Initial {game_path.split('/')[-1]} - created automatically")
+                definition_save(definition_object, module_directory)
             except source.shared.InternalError:
                 pass
     else:
