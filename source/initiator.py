@@ -143,7 +143,7 @@ def initiate():
         if use_default_paths is False:
             for key in default_folders_dict:
                 evaluated_string = askdirectory(
-                    title=f'{source.shared.PROGRAM_NAME} initiator: Please select the module {key} directory\n',
+                    title=f'{source.shared.PROGRAM_NAME} initiator: Please select the mod {key} directory\n',
                     initialdir='./'
                 )
                 if os.path.isdir(evaluated_string):
@@ -165,7 +165,7 @@ def initiate():
                 source.shared.Setting.GAMES: game_paths_list,
             }
         )
-        initiator_label.configure(text='Creating initial modules. Please wait ...')
+        initiator_label.configure(text='Creating initial mods. Please wait ...')
         initiator.update()
         if not os.path.isdir(SNAPSHOT_DIRECTORY):
             os.mkdir(SNAPSHOT_DIRECTORY)
@@ -175,11 +175,11 @@ def initiate():
             try:
                 if not os.path.isdir(f"{directories_dict['library']}/{game_path.split('/')[-1]}"):
                     os.mkdir(f"{directories_dict['library']}/{game_path.split('/')[-1]}")
-                module_directory = f"{directories_dict['library']}/{game_path.split('/')[-1]}"
+                mod_directory = f"{directories_dict['library']}/{game_path.split('/')[-1]}"
                 definition_object = definition_write(
-                    module_directory=module_directory, changes_source=game_path,
+                    mod_directory=mod_directory, changes_source=game_path,
                     description=f"Initial {game_path.split('/')[-1]} - created automatically")
-                definition_save(definition_object, module_directory)
+                definition_save(definition_object, mod_directory)
             except source.shared.InternalError:
                 pass
     else:

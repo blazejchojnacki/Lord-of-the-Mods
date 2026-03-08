@@ -11,11 +11,11 @@ import source.core as core
 import source.shared as s
 from source.constructor import load_file, load_directories
 from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
-from source.module_control import modules_filter, modules_sort, snapshot_take, snapshot_compare, \
-    module_detect_changes, module_copy, module_new, hash_file, Property, \
-    definition_edit, DEFINITION_EXAMPLE, DEFINITION_NAME, DEFINITION_CLASSES, Change, check_relative, snapshot_save
+from source.module_control import mods_select, mods_sort, snapshot_take, snapshot_compare, \
+    mod_detect_changes, mod_copy, mod_new, hash_file, Property, \
+    definition_edit, DEFINITION_TEMPLATE, DEFINITION_NAME, DEFINITION_CLASSES, Change, mod_check_relative, snapshot_save
 
-MODULE_COLUMNS = {Property.NAME: 1, Property.TRANSFER_TYPE: 1, Property.DESCRIPTION: 5}
+MOD_COLUMNS = {Property.NAME: 1, Property.TRANSFER_TYPE: 1, Property.DESCRIPTION: 5}
 CHANGES_COLUMNS = {'path': 6, 'type': 1}
 
 
@@ -139,12 +139,12 @@ def count_files_recursive(path, counter: int = -1):
     return counter
 
 
-def get_change_statistics(module):
-    if module[Property.NAME]:
-        module_path = f"{core.library}/{module[Property.NAME]}"
-        output = (f"mentioned: {len(module[Property.CHANGES])} ("
-                  f" removed: {len([_ for _ in module[Property.CHANGES] if _[0] == Change.REMOVED])}"
-                  f') | present in module: {count_files_recursive(module_path)}')
+def get_change_statistics(mod):
+    if mod[Property.NAME]:
+        mod_path = f"{core.library}/{mod[Property.NAME]}"
+        output = (f"mentioned: {len(mod[Property.CHANGES])} ("
+                  f" removed: {len([_ for _ in mod[Property.CHANGES] if _[0] == Change.REMOVED])}"
+                  f') | present in mod: {count_files_recursive(mod_path)}')
         return output
     return ''
 
@@ -173,40 +173,40 @@ class Window(tkinter.Tk):
         self.bind_all('<Control-Key-f>', self.use_selected_text)
         self.bind_all('<Control-Key-r>', self.use_selected_text)
 
-        self.key_to_command_module = {
+        self.key_to_command_mod = {
             '<Return>': self.command_browser_forward,
-            '<Right>': self.switch_modules_list,
-            '<Left>': self.switch_modules_list,
+            '<Right>': self.switch_mods_list,
+            '<Left>': self.switch_mods_list,
         }
         self.key_to_command_browser = {
             '<Return>': self.command_browser_forward,
             '<BackSpace>': self.command_browser_back,
-            '<Escape>': self.set_window_modules,
+            '<Escape>': self.set_window_mods,
         }
         self.key_to_command_text = {
             '<Escape>': self.command_browser_back
         }
         self.key_to_command_current = {
-            '<Return>': self.set_window_modules,
+            '<Return>': self.set_window_mods,
         }
 
         self.current_path = ''
         self.current_window = ''
-        self.global_modules = []
-        self.loaded_module = None
+        self.global_mods = []
+        self.loaded_mod = None
         self.current_levels = []
         self.current_file_content_backup = ''
-        self.new_module_name = ''
-        self.new_module_source = ''
+        self.new_mod_name = ''
+        self.new_mod_source = ''
         self.new_changes = {}
 
         # # # main menu
         self.container_command = tkinter.Frame(master=self)
         self.container_command_buttons = tkinter.Frame(master=self.container_command)
         self.button_menu_back = s.ReactiveButton(master=self.container_command_buttons, small=True, text='back'.upper(),
-                                                 command=self.set_window_modules)
-        self.button_menu_modules = s.ReactiveButton(
-            master=self.container_command_buttons, text='modules'.upper(), command=self.set_window_modules)
+                                                 command=self.set_window_mods)
+        self.button_menu_mods = s.ReactiveButton(
+            master=self.container_command_buttons, text='mods'.upper(), command=self.set_window_mods)
         self.button_menu_settings = s.ReactiveButton(
             master=self.container_command_buttons, text='edit settings'.upper(), command=self.set_window_settings)
         self.button_run = s.ReactiveButton(master=self.container_command_buttons)
@@ -248,41 +248,41 @@ class Window(tkinter.Tk):
         except IndexError:
             pass
 
-        # # # window modules
-        self.container_modules = tkinter.Frame(master=self.container_current)
-        label_modules_idle = tkinter.Label(master=self.container_modules, text='available modules:')
-        self.treeview_modules_idle = ColumnedListbox(
-            master=self.container_modules, width=s.LIST_WIDTH, height=10, columns_dict=MODULE_COLUMNS)
-        self.treeview_modules_idle.bind('<<TreeviewSelect>>', self.on_select_module_idle)
-        self.treeview_modules_idle.bind('<Double-1>', self.command_module_browse)
-        container_module_buttons = tkinter.Frame(master=self.container_modules, pady=7)
-        self.button_module_attach = s.ReactiveButton(
-            master=container_module_buttons, text='attach module'.upper(), command=self.command_module_attach)
-        self.button_module_retrieve = s.ReactiveButton(
-            master=container_module_buttons, text='detach module'.upper(), command=self.command_module_retrieve)
-        self.button_module_reload = s.ReactiveButton(
-            master=container_module_buttons, text='reload module'.upper(), command=self.command_module_reload)
-        self.button_module_browse = s.ReactiveButton(
-            master=container_module_buttons, text='open module'.upper(), command=self.command_module_browse)
-        self.button_module_launch = s.ReactiveButton(
-            master=container_module_buttons, text='launch'.upper(), command=self.command_module_launch)
-        self.button_module_new = s.ReactiveButton(
-            master=container_module_buttons, text='new module'.upper(), command=self.set_window_module_new)
+        # # # window mods
+        self.container_mods = tkinter.Frame(master=self.container_current)
+        label_mods_idle = tkinter.Label(master=self.container_mods, text='available mods:')
+        self.treeview_mods_idle = ColumnedListbox(
+            master=self.container_mods, width=s.LIST_WIDTH, height=10, columns_dict=MOD_COLUMNS)
+        self.treeview_mods_idle.bind('<<TreeviewSelect>>', self.on_select_mod_idle)
+        self.treeview_mods_idle.bind('<Double-1>', self.command_mod_browse)
+        container_mod_buttons = tkinter.Frame(master=self.container_mods, pady=7)
+        self.button_mod_attach = s.ReactiveButton(
+            master=container_mod_buttons, text='attach mod'.upper(), command=self.command_mod_attach)
+        self.button_mod_retrieve = s.ReactiveButton(
+            master=container_mod_buttons, text='detach mod'.upper(), command=self.command_mod_retrieve)
+        self.button_mod_reload = s.ReactiveButton(
+            master=container_mod_buttons, text='reload mod'.upper(), command=self.command_mod_reload)
+        self.button_mod_browse = s.ReactiveButton(
+            master=container_mod_buttons, text='open mod'.upper(), command=self.command_mod_browse)
+        self.button_mod_launch = s.ReactiveButton(
+            master=container_mod_buttons, text='launch'.upper(), command=self.command_mod_launch)
+        self.button_mod_new = s.ReactiveButton(
+            master=container_mod_buttons, text='new mod'.upper(), command=self.set_window_mod_new)
         self.button_definition_edit = s.ReactiveButton(
-            master=container_module_buttons, text='edit module data'.upper(), command=self.set_window_definition)
-        label_modules_active = tkinter.Label(
-            master=self.container_modules, text='active modules:', width=s.UNIT_WIDTH * 2)
-        self.treeview_modules_active = ColumnedListbox(
-            master=self.container_modules, width=s.LIST_WIDTH, height=10, columns_dict=MODULE_COLUMNS)
-        self.treeview_modules_active.bind('<<TreeviewSelect>>', self.on_select_module_active)
-        self.treeview_modules_active.bind('<Double-1>', self.command_module_browse)
+            master=container_mod_buttons, text='edit mod data'.upper(), command=self.set_window_definition)
+        label_mods_active = tkinter.Label(
+            master=self.container_mods, text='active mods:', width=s.UNIT_WIDTH * 2)
+        self.treeview_mods_active = ColumnedListbox(
+            master=self.container_mods, width=s.LIST_WIDTH, height=10, columns_dict=MOD_COLUMNS)
+        self.treeview_mods_active.bind('<<TreeviewSelect>>', self.on_select_mod_active)
+        self.treeview_mods_active.bind('<Double-1>', self.command_mod_browse)
 
         # # # window definition
         self.container_definition = tkinter.Frame(master=self.container_current)
-        self.list_labels_module_editor = []
+        self.list_labels_mod_editor = []
         self.list_text_definition_editor = []
-        for key in DEFINITION_EXAMPLE:
-            self.list_labels_module_editor.append(tkinter.Label(master=self.container_definition, text=key))
+        for key in DEFINITION_TEMPLATE:
+            self.list_labels_mod_editor.append(tkinter.Label(master=self.container_definition, text=key))
             self.list_text_definition_editor.append(tkinter.Text(master=self.container_definition))
 
         # # # window changes
@@ -299,27 +299,27 @@ class Window(tkinter.Tk):
         self.treeview_changes_new.bind('<<TreeviewSelect>>', self.on_select_change)
         self.treeview_changes_new.bind('<Double-1>', self.on_double_click_change_new)
 
-        # # # window new module
-        self.container_module_new = tkinter.Frame(master=self.container_current)
-        self.label_module_new_name = tkinter.Label(master=self.container_module_new, text='New module name:')
-        self.entry_module_new_name = tkinter.Entry(master=self.container_module_new)
-        self.label_module_new_options = tkinter.Label(master=self.container_module_new, text='it will be based on:')
-        self.label_module_new_options.configure(
+        # # # window new mod
+        self.container_mod_new = tkinter.Frame(master=self.container_current)
+        self.label_mod_new_name = tkinter.Label(master=self.container_mod_new, text='New mod name:')
+        self.entry_mod_new_name = tkinter.Entry(master=self.container_mod_new)
+        self.label_mod_new_options = tkinter.Label(master=self.container_mod_new, text='it will be based on:')
+        self.label_mod_new_options.configure(
             background=s.ENTRY_BACKGROUND_COLOR, foreground=s.TEXT_COLORS[0])
-        self.container_module_new_options = tkinter.Frame(master=self.container_module_new)
-        self.container_module_new_options.configure(background=s.ENTRY_BACKGROUND_COLOR)
+        self.container_mod_new_options = tkinter.Frame(master=self.container_mod_new)
+        self.container_mod_new_options.configure(background=s.ENTRY_BACKGROUND_COLOR)
         self.variable_option = tkinter.StringVar()
         self.option_button_0 = tkinter.Checkbutton(
-            master=self.container_module_new_options, text='nothing', variable=self.variable_option,
+            master=self.container_mod_new_options, text='nothing', variable=self.variable_option,
             onvalue='nothing')
         self.option_button_a = tkinter.Checkbutton(
-            master=self.container_module_new_options, text='a present directory', variable=self.variable_option,
+            master=self.container_mod_new_options, text='a present directory', variable=self.variable_option,
             onvalue='directory')
         self.option_button_b = tkinter.Checkbutton(
-            master=self.container_module_new_options, text='a comparison file', variable=self.variable_option,
+            master=self.container_mod_new_options, text='a comparison file', variable=self.variable_option,
             onvalue='comparison')
         self.option_button_c = tkinter.Checkbutton(
-            master=self.container_module_new_options, text='a snapshot file', variable=self.variable_option,
+            master=self.container_mod_new_options, text='a snapshot file', variable=self.variable_option,
             onvalue='snapshot')
         self.option_button_0.select()
 
@@ -364,10 +364,10 @@ class Window(tkinter.Tk):
         containers = [
             self.container_current,
             self.container_settings,
-            self.container_modules,
-            container_module_buttons,
-            self.container_module_new,
-            self.container_module_new_options,
+            self.container_mods,
+            container_mod_buttons,
+            self.container_mod_new,
+            self.container_mod_new_options,
             self.container_definition,
             self.container_changes,
             self.container_changes_new,
@@ -388,18 +388,18 @@ class Window(tkinter.Tk):
                 continue
             small_buttons.append(button_settings)
         large_buttons = [
-            self.button_menu_modules,
+            self.button_menu_mods,
             self.button_menu_settings,
             self.button_run,
             self.button_execute,
             self.button_function_find,
             self.button_function_replace,
-            self.button_module_new,
-            self.button_module_attach,
-            self.button_module_retrieve,
-            self.button_module_reload,
-            self.button_module_browse,
-            self.button_module_launch,
+            self.button_mod_new,
+            self.button_mod_attach,
+            self.button_mod_retrieve,
+            self.button_mod_reload,
+            self.button_mod_browse,
+            self.button_mod_launch,
             self.button_definition_edit,
             button_replace_copy,
             button_scope_select_file,
@@ -409,10 +409,10 @@ class Window(tkinter.Tk):
         ]
         self.check_buttons = [self.option_button_0, self.option_button_a, self.option_button_b, self.option_button_c]
         labels = [
-            label_modules_idle,
-            label_modules_active,
-            self.label_module_new_name,
-            self.label_module_new_options,
+            label_mods_idle,
+            label_mods_active,
+            self.label_mod_new_name,
+            self.label_mod_new_options,
             self.label_changes,
             self.label_browser,
             self.label_scope_select,
@@ -422,7 +422,7 @@ class Window(tkinter.Tk):
         ]
         for setting_label in list_labels_settings:
             labels.append(setting_label)
-        for parameter_label in self.list_labels_module_editor:
+        for parameter_label in self.list_labels_mod_editor:
             labels.append(parameter_label)
         texts = [
             self.text_result,
@@ -435,7 +435,7 @@ class Window(tkinter.Tk):
         for parameter_text in self.list_text_definition_editor:
             texts.append(parameter_text)
         entries = [
-            self.entry_module_new_name
+            self.entry_mod_new_name
         ]
         for setting_entry in self.list_entry_settings:
             entries.append(setting_entry)
@@ -497,40 +497,40 @@ class Window(tkinter.Tk):
             list_buttons_settings[index].place(x=s.TEXT_WIDTH + s.UNIT_WIDTH + 10, y=s.UNIT_HEIGHT * index,
                                                width=s.UNIT_WIDTH, height=s.UNIT_HEIGHT)
 
-        for index in range(len(DEFINITION_EXAMPLE)):
-            self.list_labels_module_editor[index].place(x=0, y=s.UNIT_HEIGHT * index, width=s.UNIT_WIDTH * 2,
-                                                        height=s.UNIT_HEIGHT)
+        for index in range(len(DEFINITION_TEMPLATE)):
+            self.list_labels_mod_editor[index].place(x=0, y=s.UNIT_HEIGHT * index, width=s.UNIT_WIDTH * 2,
+                                                     height=s.UNIT_HEIGHT)
             self.list_text_definition_editor[index].place(
                 x=s.UNIT_WIDTH * 2 + 10, y=s.UNIT_HEIGHT * index, width=s.TEXT_WIDTH, height=s.UNIT_HEIGHT)
         self.list_text_definition_editor[-2].place_configure(height=s.UNIT_HEIGHT * 3)
-        self.list_text_definition_editor[-1].place_configure(y=s.UNIT_HEIGHT * len(DEFINITION_EXAMPLE))
-        self.list_labels_module_editor[-1].place_configure(y=s.UNIT_HEIGHT * len(DEFINITION_EXAMPLE))
+        self.list_text_definition_editor[-1].place_configure(y=s.UNIT_HEIGHT * len(DEFINITION_TEMPLATE))
+        self.list_labels_mod_editor[-1].place_configure(y=s.UNIT_HEIGHT * len(DEFINITION_TEMPLATE))
 
         self.dict_position = {
             self.container_current: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 13),
 
-            label_modules_idle: dict(x=0, y=int(s.UNIT_HEIGHT * 2.5), width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
-            self.treeview_modules_idle: dict(x=s.UNIT_WIDTH * 2, y=0, width=s.TEXT_WIDTH, height=s.UNIT_HEIGHT * 5),
-            container_module_buttons: dict(x=s.UNIT_WIDTH * 0, y=s.UNIT_HEIGHT * 5 + 5, width=s.FULL_WIDTH,
-                                           height=s.UNIT_HEIGHT + 10),
-            self.button_module_new: dict(x=s.UNIT_WIDTH * 0, y=0),
-            self.button_module_launch: dict(x=s.UNIT_WIDTH * 10, y=0, width=s.DOUBLE_WIDTH, height=s.UNIT_HEIGHT),
-            self.button_module_attach: dict(x=s.UNIT_WIDTH * 2, y=0, width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
-            label_modules_active: dict(x=0, y=int(s.UNIT_HEIGHT * 9), width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
-            self.treeview_modules_active: dict(x=s.UNIT_WIDTH * 2, y=int(s.UNIT_HEIGHT * 6.5), width=s.TEXT_WIDTH,
-                                               height=s.UNIT_HEIGHT * 5),
+            label_mods_idle: dict(x=0, y=int(s.UNIT_HEIGHT * 2.5), width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
+            self.treeview_mods_idle: dict(x=s.UNIT_WIDTH * 2, y=0, width=s.TEXT_WIDTH, height=s.UNIT_HEIGHT * 5),
+            container_mod_buttons: dict(x=s.UNIT_WIDTH * 0, y=s.UNIT_HEIGHT * 5 + 5, width=s.FULL_WIDTH,
+                                        height=s.UNIT_HEIGHT + 10),
+            self.button_mod_new: dict(x=s.UNIT_WIDTH * 0, y=0),
+            self.button_mod_launch: dict(x=s.UNIT_WIDTH * 10, y=0, width=s.DOUBLE_WIDTH, height=s.UNIT_HEIGHT),
+            self.button_mod_attach: dict(x=s.UNIT_WIDTH * 2, y=0, width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
+            label_mods_active: dict(x=0, y=int(s.UNIT_HEIGHT * 9), width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
+            self.treeview_mods_active: dict(x=s.UNIT_WIDTH * 2, y=int(s.UNIT_HEIGHT * 6.5), width=s.TEXT_WIDTH,
+                                            height=s.UNIT_HEIGHT * 5),
 
             self.label_browser: dict(x=0, y=0, width=s.TEXT_WIDTH, height=s.UNIT_HEIGHT),
             self.listbox_browser: dict(x=s.UNIT_WIDTH * 1, y=s.UNIT_HEIGHT, width=s.TEXT_WIDTH,
                                        height=s.UNIT_HEIGHT * 10),
-            # # # container_module_new
-            self.container_module_new: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 13),
-            self.label_module_new_name: dict(x=0, y=0, width=s.UNIT_WIDTH * 4, height=s.UNIT_HEIGHT),
-            self.entry_module_new_name: dict(x=int(s.UNIT_WIDTH * 0.5), y=s.UNIT_HEIGHT * 1, width=s.UNIT_WIDTH * 3,
-                                             height=s.UNIT_HEIGHT),
-            self.container_module_new_options: dict(x=int(s.UNIT_WIDTH * 0.5), y=s.UNIT_HEIGHT * 4,
-                                                    width=s.UNIT_WIDTH * 3, height=s.UNIT_HEIGHT * 4),
-            self.label_module_new_options: dict(x=0, y=s.UNIT_HEIGHT * 3, width=s.UNIT_WIDTH * 4, height=s.UNIT_HEIGHT),
+            # # # container_mod_new
+            self.container_mod_new: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 13),
+            self.label_mod_new_name: dict(x=0, y=0, width=s.UNIT_WIDTH * 4, height=s.UNIT_HEIGHT),
+            self.entry_mod_new_name: dict(x=int(s.UNIT_WIDTH * 0.5), y=s.UNIT_HEIGHT * 1, width=s.UNIT_WIDTH * 3,
+                                          height=s.UNIT_HEIGHT),
+            self.container_mod_new_options: dict(x=int(s.UNIT_WIDTH * 0.5), y=s.UNIT_HEIGHT * 4,
+                                                 width=s.UNIT_WIDTH * 3, height=s.UNIT_HEIGHT * 4),
+            self.label_mod_new_options: dict(x=0, y=s.UNIT_HEIGHT * 3, width=s.UNIT_WIDTH * 4, height=s.UNIT_HEIGHT),
             self.option_button_0: dict(x=0, y=s.UNIT_HEIGHT * 0, width=s.DOUBLE_WIDTH, height=s.UNIT_HEIGHT),
             self.option_button_a: dict(x=0, y=s.UNIT_HEIGHT * 1, width=s.DOUBLE_WIDTH, height=s.UNIT_HEIGHT),
             self.option_button_b: dict(x=0, y=s.UNIT_HEIGHT * 2, width=s.DOUBLE_WIDTH, height=s.UNIT_HEIGHT),
@@ -572,7 +572,7 @@ class Window(tkinter.Tk):
             self.container_command_buttons: dict(x=0, y=s.UNIT_HEIGHT * 2, anchor='sw', width=s.FULL_WIDTH,
                                                  height=s.UNIT_HEIGHT),
             self.button_menu_back: dict(x=0, y=0),
-            self.button_menu_modules: dict(x=s.UNIT_WIDTH * 1, y=0),
+            self.button_menu_mods: dict(x=s.UNIT_WIDTH * 1, y=0),
             self.button_menu_settings: dict(x=s.UNIT_WIDTH * 3, y=0),
             self.button_run: dict(x=s.UNIT_WIDTH * 5, y=0),
             self.button_execute: dict(x=s.UNIT_WIDTH * 7, y=0),
@@ -580,11 +580,11 @@ class Window(tkinter.Tk):
             self.button_function_replace: dict(x=s.UNIT_WIDTH * 13, y=0),
 
             # non-default
-            self.container_modules: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 13),
-            self.button_module_browse: dict(x=s.UNIT_WIDTH * 8, y=0, width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
+            self.container_mods: dict(x=0, y=0, width=s.FULL_WIDTH, height=s.UNIT_HEIGHT * 13),
+            self.button_mod_browse: dict(x=s.UNIT_WIDTH * 8, y=0, width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
             self.button_definition_edit: dict(x=s.UNIT_WIDTH * 12, y=0, width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
-            self.button_module_retrieve: dict(x=s.UNIT_WIDTH * 4, y=0, width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
-            self.button_module_reload: dict(x=s.UNIT_WIDTH * 6, y=0, width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
+            self.button_mod_retrieve: dict(x=s.UNIT_WIDTH * 4, y=0, width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
+            self.button_mod_reload: dict(x=s.UNIT_WIDTH * 6, y=0, width=s.UNIT_WIDTH * 2, height=s.UNIT_HEIGHT),
 
             self.container_command: dict(x=0, y=s.UNIT_HEIGHT * 15, anchor='sw', width=s.FULL_WIDTH,
                                          height=s.UNIT_HEIGHT * 2),
@@ -597,15 +597,15 @@ class Window(tkinter.Tk):
 
         self.position(
             self.container_current, self.text_result,
-            self.container_command_buttons, self.button_menu_back, self.button_menu_modules, self.button_menu_settings,
-            self.label_module_new_name, self.entry_module_new_name, self.label_module_new_options,
-            self.container_module_new_options,
+            self.container_command_buttons, self.button_menu_back, self.button_menu_mods, self.button_menu_settings,
+            self.label_mod_new_name, self.entry_mod_new_name, self.label_mod_new_options,
+            self.container_mod_new_options,
             self.option_button_0, self.option_button_a, self.option_button_b, self.option_button_c,
             self.button_run,
             self.button_execute, self.button_function_find, self.button_function_replace,
-            container_module_buttons, self.button_module_new, self.button_module_attach,
+            container_mod_buttons, self.button_mod_new, self.button_mod_attach,
             self.text_file_content, numeration, self.label_browser, self.listbox_browser,
-            label_modules_idle, self.treeview_modules_idle, label_modules_active, self.treeview_modules_active,
+            label_mods_idle, self.treeview_mods_idle, label_mods_active, self.treeview_mods_active,
             self.label_scope_select, button_scope_select_file, self.button_scope_select_folder, self.text_scope_select,
             self.label_scope_except, self.button_scope_except_file, button_scope_except_folder, self.text_scope_except,
             label_find, self.text_find, button_replace_copy, label_replace, self.text_replace,
@@ -619,10 +619,10 @@ class Window(tkinter.Tk):
             if self.try_set_window_file():
                 pass
             else:
-                self.set_window_modules()
+                self.set_window_mods()
                 self.set_log_update(self.current_path)
         else:
-            self.set_window_modules()
+            self.set_window_mods()
         self.mainloop()
 
     def on_app_close(self):
@@ -690,9 +690,9 @@ class Window(tkinter.Tk):
         elif self.current_window == 'changes_new':
             self.warning_unsaved_changes()
         self.current_window = ''
-        self.retrieve(self.container_browser, self.container_modules, self.container_definition,
+        self.retrieve(self.container_browser, self.container_mods, self.container_definition,
                       self.container_find_replace, self.container_find, self.container_replace,
-                      self.container_module_new,
+                      self.container_mod_new,
                       self.container_scope_select, self.container_file_content, self.container_settings,
                       self.container_changes_new, self.container_changes)
 
@@ -703,78 +703,78 @@ class Window(tkinter.Tk):
         self.retrieve(self.button_run, self.button_execute, self.button_function_find, self.button_function_replace)
         self.position(self.container_settings, self.text_result)
         self.button_menu_settings.configure(text='save settings'.upper(), command=self.command_settings_save)
-        self.button_menu_modules.configure(text='return to modules'.upper())
+        self.button_menu_mods.configure(text='return to mods'.upper())
         self.command_settings_reload()
         self.current_window = 'settings'
         self.set_log_update('settings edition feature loaded')
 
-    def set_window_modules(self):
-        """ Loads the screen for managing modules. """
-        self.key_to_command_current = self.key_to_command_module.copy()
+    def set_window_mods(self):
+        """ Loads the screen for managing mods. """
+        self.key_to_command_current = self.key_to_command_mod.copy()
         self.clear_window()
         self.retrieve(self.button_definition_edit, self.button_function_find,
                       self.button_function_replace, self.button_menu_back)
-        self.position(self.container_modules, self.button_module_new, self.container_command, self.button_run,
+        self.position(self.container_mods, self.button_mod_new, self.container_command, self.button_run,
                       self.button_execute,
                       self.button_menu_settings, self.container_command_buttons, self.text_result)
         self.container_current.place_configure(height=s.UNIT_HEIGHT * 13)
         self.button_run.configure(text='take snapshot'.upper(), command=self.command_snapshot_take)
         self.button_execute.configure(text='compare snapshots'.upper(), command=self.command_snapshot_compare)
         self.button_menu_settings.configure(text='edit settings'.upper(), command=self.set_window_settings)
-        self.button_menu_modules.configure(text='refresh modules'.upper())
+        self.button_menu_mods.configure(text='refresh mods'.upper())
         self.refresh_definitions()
-        self.treeview_modules_idle.focus_set()
+        self.treeview_mods_idle.focus_set()
         try:
-            self.treeview_modules_idle.selection_set(self.treeview_modules_idle.get_children()[0])
-            self.treeview_modules_idle.focus(self.treeview_modules_idle.get_children()[0])
+            self.treeview_mods_idle.selection_set(self.treeview_mods_idle.get_children()[0])
+            self.treeview_mods_idle.focus(self.treeview_mods_idle.get_children()[0])
         except IndexError:
             pass
-        self.current_window = 'modules'
-        self.set_log_update('module manager window loaded.')
+        self.current_window = 'mods'
+        self.set_log_update('mod manager window loaded.')
 
-    def set_window_module_new(self, start_name: str = ''):
+    def set_window_mod_new(self, start_name: str = ''):
         self.clear_window()
-        self.retrieve(self.button_menu_modules, self.button_menu_settings, self.button_execute)
-        self.position(self.container_module_new, self.button_menu_back, self.button_run)
-        self.button_run.configure(text='create'.upper(), command=self.command_module_new)
-        self.button_menu_back.configure(command=self.command_module_new_cancel)
+        self.retrieve(self.button_menu_mods, self.button_menu_settings, self.button_execute)
+        self.position(self.container_mod_new, self.button_menu_back, self.button_run)
+        self.button_run.configure(text='create'.upper(), command=self.command_mod_new)
+        self.button_menu_back.configure(command=self.command_mod_new_cancel)
         if start_name:
-            self.entry_module_new_name.insert('end', start_name)
-        self.current_window = 'module_new'
+            self.entry_mod_new_name.insert('end', start_name)
+        self.current_window = 'mod_new'
 
     def set_window_definition(self):
-        """ Loads the screen for modification of module definitions. """
-        if not self.global_modules:
-            self.global_modules = modules_filter()
+        """ Loads the screen for modification of mod definitions. """
+        if not self.global_mods:
+            self.global_mods = mods_select()
         self.key_to_command_current = self.key_to_command_text.copy()
         self.clear_window()
         self.retrieve(self.button_menu_settings, self.button_function_find, self.button_menu_back)
         self.position(self.container_definition, self.button_execute)
-        self.button_menu_modules.configure(text='return to modules'.upper())
+        self.button_menu_mods.configure(text='return to mods'.upper())
         self.button_run.configure(text='save parameters'.upper(), command=self.command_definition_save)
         self.button_execute.configure(text='see changed files', command=self.set_window_changes)
-        module_selected = self.current_path.split('/')[-1]
-        for module in self.global_modules:
-            if module_selected == module[Property.NAME]:
+        mod_selected = self.current_path.split('/')[-1]
+        for mod in self.global_mods:
+            if mod_selected == mod[Property.NAME]:
                 level = 0
-                for param in DEFINITION_EXAMPLE:
+                for param in DEFINITION_TEMPLATE:
                     if param == Property.CHANGES:
-                        self.list_labels_module_editor[-1].configure(text='changes')
+                        self.list_labels_mod_editor[-1].configure(text='changes')
                         self.list_text_definition_editor[-1].delete('1.0', 'end')
-                        self.list_text_definition_editor[-1].insert('end', get_change_statistics(module))
+                        self.list_text_definition_editor[-1].insert('end', get_change_statistics(mod))
                         continue
                     self.list_text_definition_editor[level].configure(state='normal')
                     self.list_text_definition_editor[level].delete('1.0', 'end')
-                    if isinstance(module[param], bool):
-                        self.list_text_definition_editor[level].insert('end', str(module[param]))
+                    if isinstance(mod[param], bool):
+                        self.list_text_definition_editor[level].insert('end', str(mod[param]))
                     else:
-                        self.list_text_definition_editor[level].insert('end', module[param])
+                        self.list_text_definition_editor[level].insert('end', mod[param])
                     if Property.ACTIVE in param:
                         self.list_text_definition_editor[level].configure(state='disabled')
                     level += 1
-                self.loaded_module = module
+                self.loaded_mod = mod
                 break
-        self.set_log_update('module definition edition feature loaded.')
+        self.set_log_update('mod definition edition feature loaded.')
         self.current_window = 'definition'
 
     def set_window_changes(self):
@@ -782,29 +782,29 @@ class Window(tkinter.Tk):
         self.clear_window()
         self.retrieve(self.button_execute, self.button_function_find, self.button_function_replace, self.button_run)
         self.position(self.container_changes, self.treeview_changes, self.button_menu_back,
-                      self.button_menu_modules, self.button_menu_settings)
+                      self.button_menu_mods, self.button_menu_settings)
         self.button_menu_back.configure(text='back', command=self.set_window_definition)
-        self.button_menu_modules.configure(text='return to modules', command=self.set_window_modules)
+        self.button_menu_mods.configure(text='return to mods', command=self.set_window_mods)
         self.button_menu_settings.configure(text='edit changes', command=self.set_window_change_new)
         # # # displayed on selection - see on_select_change()
         self.button_execute.configure(text='open file', command=self.set_window_file)
         self.treeview_changes.delete(*self.treeview_changes.get_children())
         change_index = 0
-        for change in self.loaded_module[Property.CHANGES]:
-            change_values = (change, self.loaded_module[Property.CHANGES][change][0])
+        for change in self.loaded_mod[Property.CHANGES]:
+            change_values = (change, self.loaded_mod[Property.CHANGES][change][0])
             self.treeview_changes.insert(index=change_index, parent='', values=change_values, iid=change_index)
             change_index += 1
-        self.label_changes.configure(text=f"changes of {self.loaded_module[Property.NAME]}")
+        self.label_changes.configure(text=f"changes of {self.loaded_mod[Property.NAME]}")
         self.treeview_changes.bind('<Double-1>', self.set_window_file)
         self.current_window = 'changes'
         self.set_log_update('Changes screen loaded')
 
     def set_window_change_new(self):
         self.retrieve()
-        self.position(self.container_changes_new, self.button_menu_modules, self.button_menu_settings,
+        self.position(self.container_changes_new, self.button_menu_mods, self.button_menu_settings,
                       self.button_run, self.button_execute, self.button_function_find)
         self.button_menu_back.configure(command=self.set_window_changes)
-        self.button_menu_modules.configure(text='add file(s)', command=self.command_change_path)
+        self.button_menu_mods.configure(text='add file(s)', command=self.command_change_path)
         self.button_menu_settings.configure(text='copy file(s)', command=self.command_change_copy)
         self.button_run.configure(text='delete change(s)', command=self.command_change_delete)
         self.button_execute.configure(text='apply change(s)', command=self.command_change_confirm)
@@ -816,10 +816,10 @@ class Window(tkinter.Tk):
         self.set_log_update('Changes edition screen loaded')
 
     def set_window_browser(self):
-        """ Loads the screen for browsing in modules directories. """
+        """ Loads the screen for browsing in mods directories. """
         self.key_to_command_current = self.key_to_command_browser.copy()
         self.clear_window()
-        self.retrieve(self.button_module_new, self.button_function_find, self.button_function_replace,
+        self.retrieve(self.button_mod_new, self.button_function_find, self.button_function_replace,
                       self.button_menu_settings)
         self.position(self.container_browser)
         self.container_current.place_configure(height=s.UNIT_HEIGHT * 13)
@@ -906,7 +906,7 @@ class Window(tkinter.Tk):
         self.container_file_content.place_configure(height=s.UNIT_HEIGHT * 5)
         self.container_scope_select.place_configure(y=int(s.UNIT_HEIGHT * 5.5))
         self.button_menu_back.config(command=self.set_window_file)
-        self.button_menu_modules.configure(text='return to modules'.upper())
+        self.button_menu_mods.configure(text='return to mods'.upper())
         self.button_run.configure(text='find text'.upper(), command=self.command_run_find)
         self.button_execute.configure(text='clear logs'.upper(), command=self.set_log_update)
         try:
@@ -938,7 +938,7 @@ class Window(tkinter.Tk):
         self.container_file_content.place_configure(height=s.UNIT_HEIGHT * 5)
         self.container_scope_select.place_configure(y=int(s.UNIT_HEIGHT * 5.5))
         self.button_menu_back.config(command=self.set_window_file)
-        self.button_menu_modules.configure(text='return to modules'.upper())
+        self.button_menu_mods.configure(text='return to mods'.upper())
         self.button_run.configure(text='replace text'.upper(), command=self.command_run_replace)
         self.button_run.focus()
         self.button_execute.configure(text='clear logs'.upper(), command=self.set_log_update)
@@ -1022,78 +1022,78 @@ class Window(tkinter.Tk):
                 self.list_entry_settings[counter].insert('end', core.settings[setting_key])
             counter += 1
 
-    def on_select_module_idle(self, event):
-        """ Triggered on selection of a non-active module, shows or hides the desired buttons"""
+    def on_select_mod_idle(self, event):
+        """ Triggered on selection of a non-active mod, shows or hides the desired buttons"""
         if event:
             pass
         try:
-            self.loaded_module = modules_filter(
+            self.loaded_mod = mods_select(
                 **{Property.NAME:
-                    self.treeview_modules_idle.item(self.treeview_modules_idle.selection()[0], 'values')[0]})[0]
+                    self.treeview_mods_idle.item(self.treeview_mods_idle.selection()[0], 'values')[0]})[0]
             self.current_path = (
                 f"{core.library}/"
-                f"{self.treeview_modules_idle.item(self.treeview_modules_idle.selection()[0], 'values')[0]}")
-            self.treeview_modules_active.selection_remove(self.treeview_modules_active.selection()[0])
+                f"{self.treeview_mods_idle.item(self.treeview_mods_idle.selection()[0], 'values')[0]}")
+            self.treeview_mods_active.selection_remove(self.treeview_mods_active.selection()[0])
             # # # selection_remove is a selection event steeling focus to the other list
-            self.treeview_modules_idle.selection_set(self.treeview_modules_idle.selection()[0])
+            self.treeview_mods_idle.selection_set(self.treeview_mods_idle.selection()[0])
         except IndexError:
             pass
-        self.key_to_command_current['<Return>'] = self.command_module_browse
-        self.position(self.button_module_attach, self.button_module_browse, self.button_definition_edit)
-        self.retrieve(self.button_module_retrieve, self.button_module_reload, self.button_module_launch)
-        self.treeview_modules_idle.focus()
+        self.key_to_command_current['<Return>'] = self.command_mod_browse
+        self.position(self.button_mod_attach, self.button_mod_browse, self.button_definition_edit)
+        self.retrieve(self.button_mod_retrieve, self.button_mod_reload, self.button_mod_launch)
+        self.treeview_mods_idle.focus()
 
-    def on_select_module_active(self, event):
-        """ Triggered on selection of an active module, shows or hides the desired buttons. """
+    def on_select_mod_active(self, event):
+        """ Triggered on selection of an active mod, shows or hides the desired buttons. """
         if event:
             pass
         try:
-            self.loaded_module = modules_filter(
+            self.loaded_mod = mods_select(
                 **{Property.NAME:
-                    self.treeview_modules_active.item(self.treeview_modules_active.selection()[0], 'values')[0]})[0]
+                    self.treeview_mods_active.item(self.treeview_mods_active.selection()[0], 'values')[0]})[0]
             self.current_path = (
                 f"{core.library}/"
-                f"{self.treeview_modules_active.item(self.treeview_modules_active.selection()[0], 'values')[0]}")
-            self.treeview_modules_idle.selection_remove(self.treeview_modules_idle.selection()[0])
-            self.treeview_modules_active.selection_set(self.treeview_modules_active.selection()[0])
+                f"{self.treeview_mods_active.item(self.treeview_mods_active.selection()[0], 'values')[0]}")
+            self.treeview_mods_idle.selection_remove(self.treeview_mods_idle.selection()[0])
+            self.treeview_mods_active.selection_set(self.treeview_mods_active.selection()[0])
         except IndexError:
             pass
-        self.key_to_command_current['<Return>'] = self.command_module_browse
-        self.position(self.button_module_retrieve, self.button_module_reload, self.button_module_browse,
+        self.key_to_command_current['<Return>'] = self.command_mod_browse
+        self.position(self.button_mod_retrieve, self.button_mod_reload, self.button_mod_browse,
                       self.button_definition_edit)
-        if self.loaded_module[Property.LAUNCH]:
-            self.position(self.button_module_launch)
+        if self.loaded_mod[Property.LAUNCH]:
+            self.position(self.button_mod_launch)
         else:
-            self.retrieve(self.button_module_launch)
-        self.retrieve(self.button_module_attach)
+            self.retrieve(self.button_mod_launch)
+        self.retrieve(self.button_mod_attach)
 
-    def switch_modules_list(self):
-        """ Binds arrow pressing with the change between the lists of active and non-active modules. """
-        if self.focus_get() == self.treeview_modules_idle:
-            self.treeview_modules_idle.selection_remove(self.treeview_modules_idle.selection())
-            self.treeview_modules_active.focus_set()
-            if self.treeview_modules_active.focus():
-                module_selected = self.treeview_modules_active.focus()
-            elif self.treeview_modules_active.selection():
-                module_selected = self.treeview_modules_active.selection()
-            elif len(self.treeview_modules_active.get_children()) > 0:
-                module_selected = self.treeview_modules_active.get_children()[0]
+    def switch_mods_list(self):
+        """ Binds arrow pressing with the change between the lists of active and non-active mods. """
+        if self.focus_get() == self.treeview_mods_idle:
+            self.treeview_mods_idle.selection_remove(self.treeview_mods_idle.selection())
+            self.treeview_mods_active.focus_set()
+            if self.treeview_mods_active.focus():
+                mod_selected = self.treeview_mods_active.focus()
+            elif self.treeview_mods_active.selection():
+                mod_selected = self.treeview_mods_active.selection()
+            elif len(self.treeview_mods_active.get_children()) > 0:
+                mod_selected = self.treeview_mods_active.get_children()[0]
             else:
                 return
-            self.treeview_modules_active.selection_set(module_selected)
-        elif self.focus_get() == self.treeview_modules_active:
-            self.treeview_modules_active.selection_remove(self.treeview_modules_active.selection())
-            self.treeview_modules_idle.focus_set()
-            self.treeview_modules_idle.selection_set(self.treeview_modules_idle.focus())
-            if self.treeview_modules_idle.focus():
-                module_selected = self.treeview_modules_idle.focus()
-            elif self.treeview_modules_idle.selection():
-                module_selected = self.treeview_modules_idle.selection()
-            elif self.treeview_modules_idle.get_children():
-                module_selected = self.treeview_modules_idle.get_children()[0]
+            self.treeview_mods_active.selection_set(mod_selected)
+        elif self.focus_get() == self.treeview_mods_active:
+            self.treeview_mods_active.selection_remove(self.treeview_mods_active.selection())
+            self.treeview_mods_idle.focus_set()
+            self.treeview_mods_idle.selection_set(self.treeview_mods_idle.focus())
+            if self.treeview_mods_idle.focus():
+                mod_selected = self.treeview_mods_idle.focus()
+            elif self.treeview_mods_idle.selection():
+                mod_selected = self.treeview_mods_idle.selection()
+            elif self.treeview_mods_idle.get_children():
+                mod_selected = self.treeview_mods_idle.get_children()[0]
             else:
                 return
-            self.treeview_modules_idle.selection_set(module_selected)
+            self.treeview_mods_idle.selection_set(mod_selected)
         elif self.focus_get() == self.listbox_browser:
             list_length = len(self.listbox_browser.get('0', 'end'))
             selected_item_index = self.listbox_browser.get('0', 'end').index(self.listbox_browser.selection_get())
@@ -1102,9 +1102,9 @@ class Window(tkinter.Tk):
             print(self.focus_get())
 
     def refresh_definitions(self):
-        """ Refreshes the lists of active and non-active modules. """
+        """ Refreshes the lists of active and non-active mods. """
         try:
-            self.treeview_modules_active.delete(*self.treeview_modules_active.get_children())
+            self.treeview_mods_active.delete(*self.treeview_mods_active.get_children())
             library_folders = [_ for _ in os.listdir(core.library) if _ not in core.settings[s.Setting.EXCEPTIONS]]
             for folder in library_folders:
                 if not os.path.isfile(f'{core.library}/{folder}/{DEFINITION_NAME}'):
@@ -1117,101 +1117,101 @@ class Window(tkinter.Tk):
                                  {s.KEY_LABEL: 'no', s.KEY_RETURN: False, s.KEY_INFO: ''})
                     )
                     if do_initiate:
-                        self.set_window_module_new(start_name=folder)
+                        self.set_window_mod_new(start_name=folder)
                         return
                     if not do_initiate:
                         core.settings.save({s.Setting.EXCEPTIONS: folder})
-            active_modules = modules_filter(**{Property.ACTIVE: True})
-            active_module_parent_dict = modules_sort(modules=active_modules)
-            for module in active_modules:
-                self.treeview_modules_active.insert(
-                    parent='', index=active_modules.index(module), iid=active_modules.index(module),
-                    values=tuple(module[_] for _ in MODULE_COLUMNS)
+            active_mods = mods_select(**{Property.ACTIVE: True})
+            active_mod_parent_dict = mods_sort(mods=active_mods)
+            for mod in active_mods:
+                self.treeview_mods_active.insert(
+                    parent='', index=active_mods.index(mod), iid=active_mods.index(mod),
+                    values=tuple(mod[_] for _ in MOD_COLUMNS)
                 )
-                self.global_modules.append(module)
-            for module in active_modules:
+                self.global_mods.append(mod)
+            for mod in active_mods:
                 try:
-                    parent_index = active_module_parent_dict[module[Property.NAME]]
-                    self.treeview_modules_active.move(active_modules.index(module), parent_index, 0)
+                    parent_index = active_mod_parent_dict[mod[Property.NAME]]
+                    self.treeview_mods_active.move(active_mods.index(mod), parent_index, 0)
                 except KeyError:
                     pass
-            self.treeview_modules_active.open_children()
+            self.treeview_mods_active.open_children()
 
-            self.treeview_modules_idle.delete(*self.treeview_modules_idle.get_children())
-            idle_modules = modules_filter(**{Property.ACTIVE: False})
-            idle_module_parent_dict = modules_sort(modules=idle_modules)
-            for module in idle_modules:
-                self.treeview_modules_idle.insert(
-                    parent='', index=idle_modules.index(module), iid=idle_modules.index(module),
-                    values=tuple(module[_] for _ in MODULE_COLUMNS)
+            self.treeview_mods_idle.delete(*self.treeview_mods_idle.get_children())
+            idle_mods = mods_select(**{Property.ACTIVE: False})
+            idle_mod_parent_dict = mods_sort(mods=idle_mods)
+            for mod in idle_mods:
+                self.treeview_mods_idle.insert(
+                    parent='', index=idle_mods.index(mod), iid=idle_mods.index(mod),
+                    values=tuple(mod[_] for _ in MOD_COLUMNS)
                 )
-                self.global_modules.append(module)
-            for module in idle_modules:
+                self.global_mods.append(mod)
+            for mod in idle_mods:
                 try:
-                    parent_index = idle_module_parent_dict[module[Property.NAME]]
-                    self.treeview_modules_idle.move(idle_modules.index(module), parent_index, 0)
+                    parent_index = idle_mod_parent_dict[mod[Property.NAME]]
+                    self.treeview_mods_idle.move(idle_mods.index(mod), parent_index, 0)
                 except KeyError:
                     pass
-            self.treeview_modules_idle.open_children()
+            self.treeview_mods_idle.open_children()
         except s.InternalError:
             self.set_log_update('definitions not loaded - settings not loaded.')
             return
         except _tkinter.TclError:
-            self.set_log_update('loading module error')
-        self.retrieve(self.button_module_retrieve, self.button_module_attach)
+            self.set_log_update('loading mod error')
+        self.retrieve(self.button_mod_retrieve, self.button_mod_attach)
 
-    def command_module_new(self):
-        """ Creates a new module after asking for a name and a way to create it. """
-        self.new_module_name = self.entry_module_new_name.get()
-        self.new_module_source = self.variable_option.get()
+    def command_mod_new(self):
+        """ Creates a new mod after asking for a name and a way to create it. """
+        self.new_mod_name = self.entry_mod_new_name.get()
+        self.new_mod_source = self.variable_option.get()
         # TODO: test 'not in os.listdir(core.library)'
-        if self.new_module_name and self.new_module_name not in os.listdir(core.library):
-            self.set_log_update(f'command_module_new: creating module {self.new_module_name}. Please wait ...')
-            output = module_new(self.new_module_name, changes_source=self.new_module_source)
-            self.set_window_modules()
+        if self.new_mod_name and self.new_mod_name not in os.listdir(core.library):
+            self.set_log_update(f'command_mod_new: creating mod {self.new_mod_name}. Please wait ...')
+            output = mod_new(self.new_mod_name, changes_source=self.new_mod_source)
+            self.set_window_mods()
             self.set_log_update(output)
         else:
-            self.label_module_new_name.configure(text=' Please provide a name unique to the new module')
-            self.set_log_update('command_module_new error: a correct unique name was not provided')
-        self.new_module_name = ''
+            self.label_mod_new_name.configure(text=' Please provide a name unique to the new mod')
+            self.set_log_update('command_mod_new error: a correct unique name was not provided')
+        self.new_mod_name = ''
 
-    def command_module_new_cancel(self):
-        """ escape the module_new screen """
-        self.label_module_new_name.configure(text='')
+    def command_mod_new_cancel(self):
+        """ escape the mod_new screen """
+        self.label_mod_new_name.configure(text='')
         self.option_button_0.select()
-        self.set_window_modules()
-        self.set_log_update('new module creation cancelled')
+        self.set_window_mods()
+        self.set_log_update('new mod creation cancelled')
 
-    def command_module_copy(self):
-        """ Copies the selected module. Currently, not in use """
-        module_selected = self.current_path
-        name = module_selected.split('/')[-1] + '_copy'
-        self.set_log_update(module_copy(name, module_selected))
+    def command_mod_copy(self):
+        """ Copies the selected mod. Currently, not in use """
+        mod_selected = self.current_path
+        name = mod_selected.split('/')[-1] + '_copy'
+        self.set_log_update(mod_copy(name, mod_selected))
         self.refresh_definitions()
 
-    def command_module_attach(self):
-        """ Activates the selected module """
-        if not self.global_modules:
-            self.global_modules = modules_filter()
+    def command_mod_attach(self):
+        """ Activates the selected mod """
+        if not self.global_mods:
+            self.global_mods = mods_select()
         try:
-            name_module_selected = self.treeview_modules_idle.item(self.treeview_modules_idle.focus(), 'values')[0]
-            self.set_log_update(f'loading module {name_module_selected} ...')
+            name_mod_selected = self.treeview_mods_idle.item(self.treeview_mods_idle.focus(), 'values')[0]
+            self.set_log_update(f'loading mod {name_mod_selected} ...')
             try:
-                module = modules_filter(**{Property.NAME: name_module_selected})[0]
-                if ancestor_module := check_relative(module, Property.OVERRIDES):
+                mod = mods_select(**{Property.NAME: name_mod_selected})[0]
+                if ancestor_mod := mod_check_relative(mod, Property.OVERRIDES):
                     answer = s.invoke_choice(
                         title='override retrieval',
                         text=f'This mod depends on another that is not active.\n'
-                             f'Do you wish to attach the ancestor mod and continue?\n{ancestor_module[Property.NAME]}',
+                             f'Do you wish to attach the ancestor mod and continue?\n{ancestor_mod[Property.NAME]}',
                         buttons=({s.KEY_LABEL: 'yes', s.KEY_RETURN: True, s.KEY_INFO: ''},
                                  {s.KEY_LABEL: 'no', s.KEY_RETURN: False, s.KEY_INFO: ''})
                     )
                     if answer is True or answer == 'yes' or answer == 'ok':
-                        ancestor_module.attach()
+                        ancestor_mod.attach()
                     elif answer is None or answer == 'cancel' or answer is False:
-                        self.set_log_update('module loading aborted')
+                        self.set_log_update('mod loading aborted')
                         return
-                if changes := module_detect_changes(module):
+                if changes := mod_detect_changes(mod):
                     answer = s.invoke_choice(
                         title='mod changes',
                         text=f'Changes have been detected.\nDo you wish to update the mod and continue?\n'
@@ -1221,54 +1221,54 @@ class Window(tkinter.Tk):
                                  {s.KEY_LABEL: 'cancel', s.KEY_RETURN: None, s.KEY_INFO: ''})
                     )
                     if answer is True or answer == 'yes':
-                        module.edit(changes=module[Property.CHANGES].update(changes))
+                        mod.edit(changes=mod[Property.CHANGES].update(changes))
                     elif answer is False or answer == 'no':
                         pass
                     elif answer is None or answer == 'cancel':
-                        self.set_log_update('module loading aborted')
+                        self.set_log_update('mod loading aborted')
                         return
-                if module.attach():
-                    self.set_log_update(f'module {name_module_selected} loaded')
+                if mod.attach():
+                    self.set_log_update(f'mod {name_mod_selected} loaded')
                 else:
-                    self.set_log_update(f'module {name_module_selected} not loaded')
+                    self.set_log_update(f'mod {name_mod_selected} not loaded')
                 return self.refresh_definitions()
             except IndexError:
-                self.set_log_update(f'command_module_attach error: module {name_module_selected} not found')
+                self.set_log_update(f'command_mod_attach error: mod {name_mod_selected} not found')
         except _tkinter.TclError:
-            self.set_log_update('command_module_attach warning: TclError')
+            self.set_log_update('command_mod_attach warning: TclError')
         except s.InternalError as err:
             self.set_log_update(err.message)
 
-    def command_module_retrieve(self):
-        """ Deactivates the selected module. """
-        if not self.global_modules:
-            self.global_modules = modules_filter()
+    def command_mod_retrieve(self):
+        """ Deactivates the selected mod. """
+        if not self.global_mods:
+            self.global_mods = mods_select()
         try:
-            module_selected = self.treeview_modules_active.item(self.treeview_modules_active.focus(), 'values')[0]
-            self.set_log_update(f'unloading mod {module_selected} ...')
+            mod_selected = self.treeview_mods_active.item(self.treeview_mods_active.focus(), 'values')[0]
+            self.set_log_update(f'unloading mod {mod_selected} ...')
             try:
-                module = modules_filter(**{Property.NAME: module_selected})[0]
-                if heir_module := check_relative(module, Property.OVERRODE_BY):
+                mod = mods_select(**{Property.NAME: mod_selected})[0]
+                if heir_mod := mod_check_relative(mod, Property.OVERRODE_BY):
                     answer = s.invoke_choice(
                         title='override retrieval',
                         text=f'This mod depends on another that is still active.\n'
-                             f'Do you wish to detach the heir mod and continue?\n{heir_module[Property.NAME]}',
+                             f'Do you wish to detach the heir mod and continue?\n{heir_mod[Property.NAME]}',
                         buttons=({s.KEY_LABEL: 'yes', s.KEY_RETURN: True, s.KEY_INFO: ''},
                                  {s.KEY_LABEL: 'no', s.KEY_RETURN: False, s.KEY_INFO: ''})
                     )
                     if answer is True or answer == 'yes' or answer == 'ok':
-                        heir_module.retrieve()
+                        heir_mod.retrieve()
                     elif answer is None or answer == 'cancel' or answer is False:
-                        self.set_log_update('module retrieval aborted')
+                        self.set_log_update('mod retrieval aborted')
                         return
 
                 # OPTIMIZE: save changes in the definition
-                if changes := module_detect_changes(module=module):
+                if changes := mod_detect_changes(mod=mod):
                     file_fate = ''
-                    if module[Property.TRANSFER_TYPE] == DEFINITION_CLASSES[1]:
-                        file_fate = f"Since the module is a '{DEFINITION_CLASSES[1]}', they will be deleted.\n"
-                    elif module[Property.TRANSFER_TYPE] == DEFINITION_CLASSES[0]:
-                        file_fate = f"Since the module is a '{DEFINITION_CLASSES[0]}', they will be incorporated.\n"
+                    if mod[Property.TRANSFER_TYPE] == DEFINITION_CLASSES[1]:
+                        file_fate = f"Since the mod is a '{DEFINITION_CLASSES[1]}', they will be deleted.\n"
+                    elif mod[Property.TRANSFER_TYPE] == DEFINITION_CLASSES[0]:
+                        file_fate = f"Since the mod is a '{DEFINITION_CLASSES[0]}', they will be incorporated.\n"
                     do_proceed = s.invoke_choice(
                         title='mod changes',
                         text=f'Files have been changed since the mod have been attached.\n{file_fate}'
@@ -1279,58 +1279,58 @@ class Window(tkinter.Tk):
                                  {s.KEY_LABEL: 'cancel', s.KEY_RETURN: None, s.KEY_INFO: ''})
                     )  # # # too big changes crash the message box: it will not display and return False directly
                     if do_proceed is True:
-                        module.edit(changes=module[Property.CHANGES].update(changes))
+                        mod.edit(changes=mod[Property.CHANGES].update(changes))
                         changes = {}
                     elif do_proceed is False:
                         changes = {}
                     elif do_proceed is None:
                         pass
                 if not changes:
-                    if module.retrieve():
+                    if mod.retrieve():
                         self.refresh_definitions()
-                        self.set_log_update(f"module {module[Property.NAME]} deactivated")
+                        self.set_log_update(f"mod {mod[Property.NAME]} deactivated")
                     else:
                         self.set_log_update(
-                            f'command_module_retrieve error: module {module_selected} retrieval aborted')
+                            f'command_mod_retrieve error: mod {mod_selected} retrieval aborted')
                     return
                 else:
-                    self.set_log_update(f'command_module_retrieve error: module {module_selected} retrieval aborted')
+                    self.set_log_update(f'command_mod_retrieve error: mod {mod_selected} retrieval aborted')
                     return
             except IndexError:
-                self.set_log_update(f'command_module_retrieve error: module {module_selected} not found')
+                self.set_log_update(f'command_mod_retrieve error: mod {mod_selected} not found')
         except _tkinter.TclError:
-            self.set_log_update('command_module_retrieve error: module not selected')
+            self.set_log_update('command_mod_retrieve error: mod not selected')
         except s.InternalError as err:
             self.set_log_update(err.message)
 
-    def command_module_reload(self):
-        """ Reloads the selected module by detaching it and attaching again. """
-        if not self.global_modules:
-            self.global_modules = modules_filter()
+    def command_mod_reload(self):
+        """ Reloads the selected mod by detaching it and attaching again. """
+        if not self.global_mods:
+            self.global_mods = mods_select()
         try:
-            module_selected = self.treeview_modules_active.item(self.treeview_modules_active.focus(), 'values')[0]
-            self.set_log_update(f'Reloading module {module_selected}. Please wait ...')
-            for module in self.global_modules:
-                if module[Property.NAME] == module_selected:
-                    if module.reload():
+            mod_selected = self.treeview_mods_active.item(self.treeview_mods_active.focus(), 'values')[0]
+            self.set_log_update(f'Reloading mod {mod_selected}. Please wait ...')
+            for mod in self.global_mods:
+                if mod[Property.NAME] == mod_selected:
+                    if mod.reload():
                         self.refresh_definitions()
-                        self.set_log_update(f'Module {module_selected} reloaded. Please wait ...')
+                        self.set_log_update(f'mod {mod_selected} reloaded. Please wait ...')
                         return
                     else:
-                        self.set_log_update(f'The module could not be reloaded.')
-            self.set_log_update(f'command_module_reload error: mod {module_selected} not found')
+                        self.set_log_update(f'The mod could not be reloaded.')
+            self.set_log_update(f'command_mod_reload error: mod {mod_selected} not found')
         except _tkinter.TclError:
-            self.set_log_update('command_module_reload error: no mod selected')
+            self.set_log_update('command_mod_reload error: no mod selected')
 
-    def command_module_launch(self, event=None):
+    def command_mod_launch(self, event=None):
         if event:
             pass
-        if self.loaded_module is DEFINITION_EXAMPLE:
-            self.loaded_module = modules_filter(**{Property.NAME: self.current_path.split('/')[-1]})[0]
-        if self.loaded_module[Property.LAUNCH]:
+        if self.loaded_mod is DEFINITION_TEMPLATE:
+            self.loaded_mod = mods_select(**{Property.NAME: self.current_path.split('/')[-1]})[0]
+        if self.loaded_mod[Property.LAUNCH]:
             # # # restricting commands to launch an exe with a mod at best
             try:
-                for command in self.loaded_module[Property.LAUNCH].split('\n'):
+                for command in self.loaded_mod[Property.LAUNCH].split('\n'):
                     command_mod = ''
                     if '.exe' in command:
                         # # # OPTIMIZE: mount disk if not mounted
@@ -1364,19 +1364,19 @@ class Window(tkinter.Tk):
                 return self.set_log_update('launch command is incorrect')
 
     def command_definition_save(self):
-        """ Saves the current module definition. """
-        output = 'module data edition failed'
-        module_selected = self.current_path.split('/')[-1]
-        for module in self.global_modules:
-            if module_selected == module[Property.NAME]:
+        """ Saves the current mod definition. """
+        output = 'mod data edition failed'
+        mod_selected = self.current_path.split('/')[-1]
+        for mod in self.global_mods:
+            if mod_selected == mod[Property.NAME]:
                 edited_parameters = {}
-                expected_definition = module.copy()
+                expected_definition = mod.copy()
                 level = 0
-                for param in DEFINITION_EXAMPLE:
+                for param in DEFINITION_TEMPLATE:
                     if param == Property.CHANGES:
                         continue
                     value = self.list_text_definition_editor[level].get('1.0', 'end').strip()
-                    if value != module[param]:
+                    if value != mod[param]:
                         if param == Property.TRANSFER_TYPE and value not in DEFINITION_CLASSES:
                             break
                         elif param != Property.ACTIVE:
@@ -1384,11 +1384,11 @@ class Window(tkinter.Tk):
                             expected_definition[param] = value
                     level += 1
                 try:
-                    new_definition = definition_edit(module, **edited_parameters)
+                    new_definition = definition_edit(mod, **edited_parameters)
                     if new_definition == expected_definition:
                         output = 'new definition saved'
-                    if Property.TRANSFER_TYPE in edited_parameters and module[Property.ACTIVE] is True:
-                        module.reload_after_class_change()
+                    if Property.TRANSFER_TYPE in edited_parameters and mod[Property.ACTIVE] is True:
+                        mod.reload_after_class_change()
                     break
                 except s.InternalError as error:
                     output = error.message
@@ -1403,7 +1403,7 @@ class Window(tkinter.Tk):
         if current_treeview == self.treeview_changes or current_treeview == self.treeview_changes_new:
             try:
                 self.current_path = (
-                    f"{core.library}/{self.loaded_module[Property.NAME]}/"
+                    f"{core.library}/{self.loaded_mod[Property.NAME]}/"
                     f"{current_treeview.item(current_treeview.selection()[0], 'values')[0]}")
                 self.position(self.button_execute)
             except IndexError:
@@ -1421,7 +1421,7 @@ class Window(tkinter.Tk):
                     self.treeview_changes.set(
                         selected, CHANGES_COLUMNS[1], popping_list_chosen)
                     path_added = self.treeview_changes.item(selected, 'values')[0]
-                    self.loaded_module[Property.CHANGES][path_added][0] = popping_list_chosen
+                    self.loaded_mod[Property.CHANGES][path_added][0] = popping_list_chosen
             if self.treeview_changes_new.selection() and 'new' in tree:
                 for selected in self.treeview_changes_new.selection():
                     self.treeview_changes_new.set(
@@ -1443,12 +1443,12 @@ class Window(tkinter.Tk):
 
     def command_change_path(self):
         """ - """
-        module_path = f'{core.library}/{self.loaded_module[Property.NAME]}'
-        paths_added = tkinter.filedialog.askopenfilenames(title=s.PROGRAM_NAME, initialdir=module_path)
+        mod_path = f'{core.library}/{self.loaded_mod[Property.NAME]}'
+        paths_added = tkinter.filedialog.askopenfilenames(title=s.PROGRAM_NAME, initialdir=mod_path)
         for path_added in paths_added:
             hash_value = hash_file(path_added)
-            if module_path in path_added:
-                path_added = path_added[len(module_path) + 1:]
+            if mod_path in path_added:
+                path_added = path_added[len(mod_path) + 1:]
             self.treeview_changes_new.insert('', 'end', values=(path_added, Change.CHANGED))
             try:
                 self.new_changes[path_added] = [Change.CHANGED, hash_value]
@@ -1457,15 +1457,15 @@ class Window(tkinter.Tk):
 
     def command_change_copy(self):
         """ Copies selected files in the change list """
-        module_path = f'{core.library}/{self.loaded_module[Property.NAME]}'
+        mod_path = f'{core.library}/{self.loaded_mod[Property.NAME]}'
         game_directory = os.path.abspath('../').replace('\\', '/')
         paths_added = tkinter.filedialog.askopenfilenames(title=s.PROGRAM_NAME, initialdir='../')
         for path_added in paths_added:
-            if game_directory in path_added and module_path not in path_added:
+            if game_directory in path_added and mod_path not in path_added:
                 new_path = path_added[path_added.rfind(game_directory) + len(game_directory):]
-                os.makedirs(f'{module_path}/{new_path[:new_path.rfind('/')]}', exist_ok=True)
-                shutil.copy2(src=path_added, dst=f'{module_path}/{new_path}')
-                hash_value = hash_file(f'{module_path}/{new_path}')
+                os.makedirs(f'{mod_path}/{new_path[:new_path.rfind('/')]}', exist_ok=True)
+                shutil.copy2(src=path_added, dst=f'{mod_path}/{new_path}')
+                hash_value = hash_file(f'{mod_path}/{new_path}')
                 self.treeview_changes_new.insert('', 'end', values=(new_path, Change.CHANGED))
                 self.new_changes[new_path] = [Change.CHANGED, hash_value]
             else:
@@ -1480,8 +1480,8 @@ class Window(tkinter.Tk):
                 self.treeview_changes.see(self.treeview_changes.get_children()[-1])
                 self.treeview_changes_new.delete(change_new_id)
         # # # save changes:
-        self.loaded_module[Property.CHANGES].update(self.new_changes)
-        self.loaded_module.edit(changes=self.loaded_module[Property.CHANGES])
+        self.loaded_mod[Property.CHANGES].update(self.new_changes)
+        self.loaded_mod.edit(changes=self.loaded_mod[Property.CHANGES])
         self.set_window_changes()
 
     def command_change_delete(self):
@@ -1490,9 +1490,9 @@ class Window(tkinter.Tk):
             if self.treeview_changes.selection():
                 for selected in self.treeview_changes.selection():
                     file_path = self.treeview_changes.item(selected, 'values')[0]
-                    self.loaded_module[Property.CHANGES].pop(file_path)
+                    self.loaded_mod[Property.CHANGES].pop(file_path)
                     self.treeview_changes.delete(selected)
-                self.loaded_module.edit(changes=self.loaded_module[Property.CHANGES])
+                self.loaded_mod.edit(changes=self.loaded_mod[Property.CHANGES])
             if self.treeview_changes_new.selection():
                 for selected in self.treeview_changes_new.selection():
                     file_path = self.treeview_changes_new.item(selected, 'values')[0]
@@ -1505,29 +1505,29 @@ class Window(tkinter.Tk):
         except KeyError:
             print(s.internal_message('KeyError'))
 
-    def command_module_browse(self, event=None):
+    def command_mod_browse(self, event=None):
         """ Allows to start browsing from the object folder if it can be found. """
         if event:
             pass
-        self.loaded_module = modules_filter(**{Property.NAME: self.current_path.split('/')[-1]})[0]
+        self.loaded_mod = mods_select(**{Property.NAME: self.current_path.split('/')[-1]})[0]
         game_paths = core.games
-        if self.loaded_module[Property.TRANSFER_TYPE] == DEFINITION_CLASSES[0] and self.loaded_module[Property.ACTIVE]:
-            if not self.loaded_module[Property.GAME]:
-                for change_key in self.loaded_module[Property.CHANGES]:
+        if self.loaded_mod[Property.TRANSFER_TYPE] == DEFINITION_CLASSES[0] and self.loaded_mod[Property.ACTIVE]:
+            if not self.loaded_mod[Property.GAME]:
+                for change_key in self.loaded_mod[Property.CHANGES]:
                     change_split = change_key.split('/')
                     if os.path.isdir('/'.join(change_split[:2])) and '/'.join(change_split[1:-1]) in game_paths:
                         self.current_path = '/'.join((change_split[0], game_paths[game_paths.index(change_split[1])]))
                         if os.path.isdir(f'{self.current_path}/data/ini/object'):
                             self.current_path = f'{self.current_path}/data/ini/object'
                         break
-            elif self.loaded_module[Property.GAME] in game_paths:
-                if os.path.isdir(f"../{game_paths[game_paths.index(self.loaded_module[Property.GAME])]}"):
-                    self.current_path = f"../{game_paths[game_paths.index(self.loaded_module[Property.GAME])]}"
-            elif f"{self.loaded_module[Property.GAME]}/aotr" in game_paths:
-                if os.path.isdir(f"../{self.loaded_module[Property.GAME]}/aotr/data/ini/object"):
-                    self.current_path = f"../{self.loaded_module[Property.GAME]}/aotr/data/ini/object"
-                elif os.path.isdir(f"../{self.loaded_module[Property.GAME]}/aotr"):
-                    self.current_path = f"../{self.loaded_module[Property.GAME]}/aotr"
+            elif self.loaded_mod[Property.GAME] in game_paths:
+                if os.path.isdir(f"../{game_paths[game_paths.index(self.loaded_mod[Property.GAME])]}"):
+                    self.current_path = f"../{game_paths[game_paths.index(self.loaded_mod[Property.GAME])]}"
+            elif f"{self.loaded_mod[Property.GAME]}/aotr" in game_paths:
+                if os.path.isdir(f"../{self.loaded_mod[Property.GAME]}/aotr/data/ini/object"):
+                    self.current_path = f"../{self.loaded_mod[Property.GAME]}/aotr/data/ini/object"
+                elif os.path.isdir(f"../{self.loaded_mod[Property.GAME]}/aotr"):
+                    self.current_path = f"../{self.loaded_mod[Property.GAME]}/aotr"
         else:
             for game_name in game_paths:
                 if os.path.isdir(f'{self.current_path}/{game_name}/data/ini/object'):
@@ -1536,7 +1536,7 @@ class Window(tkinter.Tk):
                 elif os.path.isdir(f'{self.current_path}/{game_name}'):
                     self.current_path = f'{self.current_path}/{game_name}'
                     break
-        self.button_menu_modules.configure(text='return to modules'.upper())
+        self.button_menu_mods.configure(text='return to mods'.upper())
         self.set_window_browser()
 
     def command_browser_back(self):
@@ -1551,7 +1551,7 @@ class Window(tkinter.Tk):
                 self.set_window_browser()
         if len(self.current_path) <= len('..'):
             self.retrieve(self.button_menu_back)
-            self.key_to_command_current['<BackSpace>'] = self.set_window_modules
+            self.key_to_command_current['<BackSpace>'] = self.set_window_mods
         self.set_log_update(f'going back to {os.path.abspath(self.current_path)}')
         self.key_to_command_current = self.key_to_command_browser.copy()
 
@@ -1814,31 +1814,31 @@ class Window(tkinter.Tk):
             except s.InternalError as error:
                 output += error.message
             else:
-                module_index_start = self.current_path.find(core.library) + len(core.library) + 1
-                module_index_end = self.current_path.replace('\\', '/').find('/', module_index_start)
-                current_module_name = self.current_path[module_index_start: module_index_end]
-                current_module_list = modules_filter(**{Property.NAME: current_module_name})
-                if current_module_list:
-                    self.loaded_module = current_module_list[0]
+                mod_index_start = self.current_path.find(core.library) + len(core.library) + 1
+                mod_index_end = self.current_path.replace('\\', '/').find('/', mod_index_start)
+                current_mod_name = self.current_path[mod_index_start: mod_index_end]
+                current_mod_list = mods_select(**{Property.NAME: current_mod_name})
+                if current_mod_list:
+                    self.loaded_mod = current_mod_list[0]
                 else:
-                    module_index_start = self.current_path.find(s.MAIN_DIRECTORY) + len(s.MAIN_DIRECTORY) + 1
-                    module_index_end = self.current_path.replace('\\', '/').find('/', module_index_start)
-                    current_module_name = self.current_path[module_index_start: module_index_end]
-                    current_module_list = modules_filter(**{Property.NAME: current_module_name})
-                    if current_module_list:
-                        self.loaded_module = current_module_list[0]
+                    mod_index_start = self.current_path.find(s.MAIN_DIRECTORY) + len(s.MAIN_DIRECTORY) + 1
+                    mod_index_end = self.current_path.replace('\\', '/').find('/', mod_index_start)
+                    current_mod_name = self.current_path[mod_index_start: mod_index_end]
+                    current_mod_list = mods_select(**{Property.NAME: current_mod_name})
+                    if current_mod_list:
+                        self.loaded_mod = current_mod_list[0]
                     else:
-                        output += '\nmodule not found - definition not updated.\n'
+                        output += '\nmod not found - definition not updated.\n'
                         return self.set_log_update(output)
                 new_changes = {}
-                for file_path in self.loaded_module[Property.CHANGES]:
+                for file_path in self.loaded_mod[Property.CHANGES]:
                     file_name = file_named.replace('\\', '/').split('/')[-1]
                     if file_path.split('/')[-1] == file_name:
-                        file_rel_path = '..' + to_folder[module_index_end + 1:].replace('\\', '/')
-                        new_changes[f'{file_rel_path}/{file_name}'] = self.loaded_module[Property.CHANGES][file_path]
+                        file_rel_path = '..' + to_folder[mod_index_end + 1:].replace('\\', '/')
+                        new_changes[f'{file_rel_path}/{file_name}'] = self.loaded_mod[Property.CHANGES][file_path]
                     else:
-                        new_changes[file_path] = self.loaded_module[Property.CHANGES][file_path]
-                definition_edit(self.loaded_module, changes=new_changes)
+                        new_changes[file_path] = self.loaded_mod[Property.CHANGES][file_path]
+                definition_edit(self.loaded_mod, changes=new_changes)
         self.set_log_update(output)
 
     def command_run_duplicate(self):
