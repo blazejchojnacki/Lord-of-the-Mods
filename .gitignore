@@ -6,3 +6,5 @@ _settings.json
 /snapshot_comparisons
 /change_logs
 /trials/arch
+/source/__pycache__
+/trials/__pycache__

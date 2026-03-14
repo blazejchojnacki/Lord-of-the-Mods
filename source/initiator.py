@@ -7,16 +7,16 @@ from tkinter.filedialog import askdirectory
 from tkinter.messagebox import askyesnocancel, showerror, showwarning
 
 import source.core as core
-import source.shared
+from source.shared import PROGRAM_NAME, MAIN_DIRECTORY, ICON_PATH, SETTINGS_FILE_PATH, Setting, InternalError
 from source.module_control import definition_write, SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARISON_DIRECTORY, definition_save
 
 default_folders_dict = {
-    'library': './_LIBRARY',
-    'archive': './_ARCHIVE',
+    'library': f'{MAIN_DIRECTORY}/_LIBRARY',
+    'archive': f'{MAIN_DIRECTORY}/_ARCHIVE',
 }  # TODO: don't ask if those already exist
 
-if os.path.isfile('./initial/_games.json'):
-    with open('./initial/_games.json') as games_buffer:
+if os.path.isfile(f'{MAIN_DIRECTORY}/initial/_games.json'):
+    with open(f'{MAIN_DIRECTORY}/initial/_games.json') as games_buffer:
         game_list = json.load(games_buffer)
 else:
     game_list = [
@@ -76,7 +76,7 @@ def get_game_directory():
             game_directories.append(search_reg(game_key['Registry'], game_key['Name']))
         except FileNotFoundError:
             provided_directory = askdirectory(
-                title=f"{source.shared.PROGRAM_NAME}: please select {game_key['Name']} directory (or create one)",
+                title=f"{PROGRAM_NAME}: please select {game_key['Name']} directory (or create one)",
                 initialdir='../')
             if provided_directory:
                 game_directories.append(provided_directory)
@@ -99,7 +99,8 @@ def ensure_game_options():
                 for roaming_file in game_key['RoamingFiles']:
                     if not os.path.isfile(f'{roaming_path}/{roaming_file}'):
                         shutil.copy(
-                            f"./initial/{game_key['Roaming'].split('/')[-1]}/{roaming_file}", roaming_path)
+                            f"{MAIN_DIRECTORY}/initial/{game_key['Roaming'].split('/')[-1]}/{roaming_file}",
+                            roaming_path)
             except FileNotFoundError:
                 pass
     except NameError:
@@ -109,7 +110,7 @@ def ensure_game_options():
 def cancel_initiation():
     """ Triggered when the directories are not provided to terminate the window. """
     showerror(
-        title=f'{source.shared.PROGRAM_NAME} initiator: Error',
+        title=f'{PROGRAM_NAME} initiator: Error',
         message='The program cannot function properly without the appropriate settings\n Please try again'
     )
     exit()
@@ -118,13 +119,13 @@ def cancel_initiation():
 def initiate():
     """ Initiates the application settings by asking for directories needed by the application. """
     initiator = tkinter.Tk()
-    initiator.iconbitmap(source.shared.ICON_PATH)
-    initiator.title(f'{source.shared.PROGRAM_NAME} initiator')
+    initiator.iconbitmap(ICON_PATH)
+    initiator.title(f'{PROGRAM_NAME} initiator')
     initiator.minsize(width=500, height=200)
     initiator_label = tkinter.Label(master=initiator, text='Looking for game paths. Please wait...')
     initiator_label.pack()
     initiator.update()
-    if not os.path.isfile(source.shared.SETTINGS_FILE_PATH):
+    if not os.path.isfile(SETTINGS_FILE_PATH):
         try:
             game_paths_list = get_game_directory()
         except NameError:
@@ -134,7 +135,7 @@ def initiate():
         initiator.update()
         # TODO: replace with ChoiceWindow
         use_default_paths = askyesnocancel(
-            title=f'{source.shared.PROGRAM_NAME} initiator:',
+            title=f'{PROGRAM_NAME} initiator:',
             message=f'Use default functional folder names? If not, you can choose your own.'
         )
         if use_default_paths is True:
@@ -143,14 +144,14 @@ def initiate():
         if use_default_paths is False:
             for key in default_folders_dict:
                 evaluated_string = askdirectory(
-                    title=f'{source.shared.PROGRAM_NAME} initiator: Please select the mod {key} directory\n',
-                    initialdir='./'
+                    title=f'{PROGRAM_NAME} initiator: Please select the mod {key} directory\n',
+                    initialdir=f'{MAIN_DIRECTORY}'
                 )
                 if os.path.isdir(evaluated_string):
                     directories_dict[key] = os.path.relpath(evaluated_string).replace('\\', '/')
                 else:
                     showwarning(
-                        title=f'{source.shared.PROGRAM_NAME} initiator: ',
+                        title=f'{PROGRAM_NAME} initiator: ',
                         message=f'The provided name is empty.\n'
                                 f' The default value will be applied'
                     )
@@ -158,11 +159,10 @@ def initiate():
         elif use_default_paths is None:
             cancel_initiation()
         core.settings.save(
-            do_initiate=True,
             settings_dict={
-                source.shared.Setting.LIBRARY: directories_dict['library'],
-                source.shared.Setting.ARCHIVE: directories_dict['archive'],
-                source.shared.Setting.GAMES: game_paths_list,
+                Setting.LIBRARY: directories_dict['library'],
+                Setting.ARCHIVE: directories_dict['archive'],
+                Setting.GAMES: game_paths_list,
             }
         )
         initiator_label.configure(text='Creating initial mods. Please wait ...')
@@ -180,7 +180,7 @@ def initiate():
                     mod_directory=mod_directory, changes_source=game_path,
                     description=f"Initial {game_path.split('/')[-1]} - created automatically")
                 definition_save(definition_object, mod_directory)
-            except source.shared.InternalError:
+            except InternalError:
                 pass
     else:
         core.settings.load()
