@@ -11,6 +11,7 @@ from typing import Literal
 
 import source.core as core
 import source.shared as s
+from source.shared import MOD_DEF_FILE_NAME
 
 SNAPSHOT_DIRECTORY = './snapshots'
 SNAPSHOT_NAME = 'file_snapshot_'
@@ -150,7 +151,7 @@ class Mod(dict):
 
 
 def definition_save(definition_object, mod_directory):
-    with open(f'{mod_directory}/{DEFINITION_NAME}', 'w') as definition_buffer:
+    with open(f'{mod_directory}/{MOD_DEF_FILE_NAME}', 'w') as definition_buffer:
         json.dump(definition_object, definition_buffer, indent=4)
         log(f'definition saved in {mod_directory}')
 
@@ -180,7 +181,7 @@ def definition_write(definition_object=None, mod_directory=None, changes_source=
     else:
         mod_name = 'default name'
     if definition_object is None:
-        if os.path.isfile(f'{mod_directory}/{DEFINITION_NAME}'):
+        if os.path.isfile(f'{mod_directory}/{MOD_DEF_FILE_NAME}'):
             definition_object = definition_read(mod_path=f'{mod_directory}')
         else:
             definition_object = Mod()
@@ -228,8 +229,8 @@ def definition_read(mod_path=None):
                                 initialdir=core.library)
         if mod_path == "":
             raise s.InternalError('directory not selected')
-    if os.path.isfile(f'{mod_path}/{DEFINITION_NAME}'):
-        with open(f'{mod_path}/{DEFINITION_NAME}') as definition_buffer:
+    if os.path.isfile(f'{mod_path}/{MOD_DEF_FILE_NAME}'):
+        with open(f'{mod_path}/{MOD_DEF_FILE_NAME}') as definition_buffer:
             return Mod(initial_dict=json.load(definition_buffer))
     else:
         # return Definition()
@@ -290,7 +291,7 @@ def mods_detect_new():
     output = ''
     library_folders = [_ for _ in os.listdir(core.library) if _ not in core.exceptions]
     for folder in library_folders:
-        if not os.path.isfile(f'{core.library}/{folder}/{DEFINITION_NAME}'):
+        if not os.path.isfile(f'{core.library}/{folder}/{MOD_DEF_FILE_NAME}'):
             output += f'Registering a definition-less folder in the library - {folder}\n'
     return output
 
@@ -690,14 +691,14 @@ def check_library(mod_object):
 def mod_check_relative(mod_object, relation):
     if Property.OVERRODE_BY == relation:
         if mod_object[Property.OVERRODE_BY]:
-            if os.path.isfile(f"{core.library}/{mod_object[Property.OVERRODE_BY]}/{DEFINITION_NAME}"):
+            if os.path.isfile(f"{core.library}/{mod_object[Property.OVERRODE_BY]}/{MOD_DEF_FILE_NAME}"):
                 heir_mod_object = definition_read(f"{core.library}/{mod_object[Property.OVERRODE_BY]}")
                 if heir_mod_object[Property.ACTIVE]:
                     return heir_mod_object
     elif Property.OVERRIDES == relation:
         if mod_object[Property.OVERRIDES]:
             ancestor_directory = f"{core.library}/{mod_object[Property.OVERRIDES]}"
-            if os.path.isfile(f'{ancestor_directory}/{DEFINITION_NAME}'):
+            if os.path.isfile(f'{ancestor_directory}/{MOD_DEF_FILE_NAME}'):
                 ancestor_mod_object = definition_read(mod_path=ancestor_directory)
                 if not ancestor_mod_object[Property.ACTIVE]:
                     return ancestor_mod_object
@@ -810,7 +811,7 @@ def mod_attach(mod_object=None, mod_directory=None, check_type='ancestor'):
                                          initialdir=core.library)
             if not mod_directory:
                 raise s.InternalError('mod directory missing')
-        if os.path.isfile(f'{mod_directory}/{DEFINITION_NAME}'):
+        if os.path.isfile(f'{mod_directory}/{MOD_DEF_FILE_NAME}'):
             mod_object = definition_read(mod_path=mod_directory)
     error_sensitivity = True
     if ancestor_mod := mod_detect_override(mod_object):
@@ -916,7 +917,7 @@ def mod_copy(new_name, template_directory=None, changes_source=None):
             os.makedirs(folder)
             output += folder + '\n'
     for file in files:
-        if file == DEFINITION_NAME:
+        if file == MOD_DEF_FILE_NAME:
             mod_directory = f'{core.library}/{new_name}'
             definition_object = definition_write(mod_directory=mod_directory, changes_source=changes_source)
             definition_save(definition_object, mod_directory)

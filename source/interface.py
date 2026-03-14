@@ -9,11 +9,12 @@ from tklinenums import TkLineNumbers
 
 import source.core as core
 import source.shared as s
+from source.shared import MOD_DEF_FILE_NAME
 from source.constructor import load_file, load_directories
 from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
 from source.module_control import mods_select, mods_sort, snapshot_take, snapshot_compare, \
     mod_detect_changes, mod_copy, mod_new, hash_file, Property, \
-    definition_edit, DEFINITION_TEMPLATE, DEFINITION_NAME, DEFINITION_CLASSES, Change, mod_check_relative, snapshot_save
+    definition_edit, DEFINITION_TEMPLATE, DEFINITION_CLASSES, Change, mod_check_relative, snapshot_save
 
 MOD_COLUMNS = {Property.NAME: 1, Property.TRANSFER_TYPE: 1, Property.DESCRIPTION: 5}
 CHANGES_COLUMNS = {'path': 6, 'type': 1}
@@ -1107,7 +1108,7 @@ class Window(tkinter.Tk):
             self.treeview_mods_active.delete(*self.treeview_mods_active.get_children())
             library_folders = [_ for _ in os.listdir(core.library) if _ not in core.settings[s.Setting.EXCEPTIONS]]
             for folder in library_folders:
-                if not os.path.isfile(f'{core.library}/{folder}/{DEFINITION_NAME}'):
+                if not os.path.isfile(f'{core.library}/{folder}/{MOD_DEF_FILE_NAME}'):
                     self.set_log_update(f'Detected a definition-less folder in the library - {folder}')
                     do_initiate = s.invoke_choice(
                         title='unsaved changes',
@@ -1562,7 +1563,7 @@ class Window(tkinter.Tk):
         if self.current_window != 'file_editor':
             try:
                 file_name = self.listbox_browser.selection_get()
-                if file_name == DEFINITION_NAME or file_name.endswith('.big'):
+                if file_name == MOD_DEF_FILE_NAME or file_name.endswith('.big'):
                     raise s.InternalError
                 elif os.path.isfile(f'{self.current_path}/{self.listbox_browser.selection_get()}'):
                     self.key_to_command_current = self.key_to_command_browser.copy()

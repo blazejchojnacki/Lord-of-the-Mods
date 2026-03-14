@@ -8,7 +8,7 @@ from enum import StrEnum
 
 PROGRAM_NAME = 'Lord of the Mods'
 MAIN_DIRECTORY = os.path.abspath('..').replace('\\', '/')
-MOD_DEF_FILE_NAME = '_definition.ini'
+MOD_DEF_FILE_NAME = '_definition.json'
 LOG_PATH = './change_logs'
 LEVEL_INDENT = ' ' * 4
 INI_COMMENTS = [';', '/']
