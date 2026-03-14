@@ -5,11 +5,13 @@ import tkinter
 import _tkinter
 from ctypes import windll, byref, sizeof, c_int, create_unicode_buffer
 from enum import StrEnum
+from pathlib import Path
 
 PROGRAM_NAME = 'Lord of the Mods'
-MAIN_DIRECTORY = os.path.abspath('..').replace('\\', '/')
+THIS_PATH = Path(__file__).parent.resolve()
+MAIN_DIRECTORY = Path(__file__).parent.parent.resolve()
 MOD_DEF_FILE_NAME = '_definition.json'
-LOG_PATH = './change_logs'
+LOG_PATH = f'{MAIN_DIRECTORY}/change_logs'
 LEVEL_INDENT = ' ' * 4
 INI_COMMENTS = [';', '/']
 INI_ENDS = ['End', 'END', 'EndScript']
@@ -26,7 +28,7 @@ class Setting(StrEnum):
     EXCEPTIONS = "LibraryExceptions"
 
 
-SETTINGS_FILE_PATH = './_settings.json'
+SETTINGS_FILE_PATH = f'{MAIN_DIRECTORY}/_settings.json'
 _SETTINGS_FORMAT = {
     Setting.TITLE: "Lord of the Mods Settings",
     Setting.VERSION: "",
@@ -58,6 +60,7 @@ ICON_PATH = ''
 KEY_LABEL = 'label'
 KEY_RETURN = 'command'
 KEY_INFO = 'info'
+AESTHETIC_PATH = f'{MAIN_DIRECTORY}/aesthetic/'
 
 # # # global variable
 current_info: tkinter.Toplevel
@@ -121,10 +124,8 @@ def internal_message(message):
 
 
 # # # load delimiters
-for delimiter_path in ['./_delimiters_ini.json', './_delimiters_str.json']:
-    if os.path.isfile(delimiter_path) or os.path.isfile(f".{delimiter_path}"):
-        if os.path.isfile(f".{delimiter_path}"):
-            delimiter_path = f".{delimiter_path}"
+for delimiter_path in [f'{MAIN_DIRECTORY}/_delimiters_ini.json', f'{MAIN_DIRECTORY}/_delimiters_str.json']:
+    if os.path.isfile(delimiter_path):
         with open(delimiter_path) as delimiters_buffer:
             if '_ini' in delimiter_path:
                 INI_DELIMITERS = json.load(delimiters_buffer)
@@ -226,20 +227,20 @@ def load_aesthetic():
     """
     global APP_BACKGROUND_COLOR, ENTRY_BACKGROUND_COLOR, TEXT_COLORS, INI_LEVEL_COLORS, FONT_TEXT, FONT_BUTTON, \
         BUTTON_SMALL_IDLE, BUTTON_SMALL_HOVER, BUTTON_LARGE_IDLE, BUTTON_LARGE_HOVER, ICON_PATH
-    if os.path.isfile('./aesthetic/icon.ico'):
-        ICON_PATH = './aesthetic/icon.ico'
-    if os.path.isfile('./aesthetic/aesthetic.json'):
-        with open('./aesthetic/aesthetic.json') as aesthetic_buffer:
+    if os.path.isfile(f'{AESTHETIC_PATH}icon.ico'):
+        ICON_PATH = f'{AESTHETIC_PATH}icon.ico'
+    if os.path.isfile(f'{AESTHETIC_PATH}aesthetic.json'):
+        with open(f'{AESTHETIC_PATH}aesthetic.json') as aesthetic_buffer:
             aesthetic_json = json.load(aesthetic_buffer)
         APP_BACKGROUND_COLOR = aesthetic_json["APP_BACKGROUND_COLOR"]
         ENTRY_BACKGROUND_COLOR = aesthetic_json["ENTRY_BACKGROUND_COLOR"]
         TEXT_COLORS = aesthetic_json["TEXT_COLORS"]
         INI_LEVEL_COLORS = aesthetic_json["INI_LEVEL_COLORS"]
-        BUTTON_SMALL_IDLE = tkinter.PhotoImage(file='./aesthetic/button_small_idle.png')
-        BUTTON_SMALL_HOVER = tkinter.PhotoImage(file='./aesthetic/button_small_hover.png')
-        BUTTON_LARGE_IDLE = tkinter.PhotoImage(file='./aesthetic/button_large_idle.png')
-        BUTTON_LARGE_HOVER = tkinter.PhotoImage(file='./aesthetic/button_large_hover.png')
-        font_path = f'./aesthetic/{aesthetic_json["FONT_FILE_NAME"]}'
+        BUTTON_SMALL_IDLE = tkinter.PhotoImage(file=f'{AESTHETIC_PATH}button_small_idle.png')
+        BUTTON_SMALL_HOVER = tkinter.PhotoImage(file=f'{AESTHETIC_PATH}button_small_hover.png')
+        BUTTON_LARGE_IDLE = tkinter.PhotoImage(file=f'{AESTHETIC_PATH}button_large_idle.png')
+        BUTTON_LARGE_HOVER = tkinter.PhotoImage(file=f'{AESTHETIC_PATH}button_large_hover.png')
+        font_path = f'{AESTHETIC_PATH}{aesthetic_json["FONT_FILE_NAME"]}'
         '''based on https://stackoverflow.com/questions/11993290/truly-custom-font-in-tkinter'''
         # https://github.com/ifwe/digsby/blob/f5fe00244744aa131e07f09348d10563f3d8fa99/digsby/src/gui/native/win/winfonts.py#L15
         if os.path.isfile(font_path):
@@ -260,7 +261,7 @@ class ChoiceWindow(tkinter.Toplevel):
         super().__init__()
         load_aesthetic()
         set_title_bar_color(self)
-        if os.path.isfile('./aesthetic/icon.ico'):
+        if os.path.isfile(f'{AESTHETIC_PATH}icon.ico'):
             self.iconbitmap(ICON_PATH)
         self.width = DOUBLE_WIDTH*4
         self.height = UNIT_HEIGHT*6

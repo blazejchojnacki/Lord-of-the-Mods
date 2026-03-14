@@ -1,6 +1,7 @@
 """ This module contains variables that are global for all the modules. """
 import json
 import os.path
+from pathlib import Path
 
 from source.shared import SETTINGS_FILE_PATH, _SETTINGS_FORMAT, Setting, \
     InternalError
@@ -59,13 +60,16 @@ class Settings(dict):
                 raise InternalError(f"{key} not recognized")
 
     def check_paths(self, new_settings_dict):
+        settings_result = self.copy()
+        settings_result.update(new_settings_dict)
         for key in _SETTINGS_FORMAT:
-            settings_result = self.copy()
-            settings_result.update(new_settings_dict)
-            if settings_result[key]:
+            if settings_result[key] and key not in [Setting.TITLE, Setting.VERSION]:
                 paths = []
-                if isinstance(settings_result[key], list):
-                    paths = settings_result[key]
+                # if isinstance(settings_result[key], list):
+                if key == Setting.GAMES:
+                    paths = [f'{install_path}/{_}' for _ in settings_result[key]]
+                elif key == Setting.EXCEPTIONS:
+                    paths = [f'{library}/{_}' for _ in settings_result[key]]
                 elif isinstance(settings_result[key], str):
                     paths = [settings_result[key]]
                 for path in paths:
@@ -87,8 +91,7 @@ class Settings(dict):
             raise InternalError(f"invalid path")
 
 
-if __name__ == "__main__":
-    os.chdir("..")
+os.chdir(Path(__file__).parent.parent.resolve())
 
 settings = Settings()
 loaded = settings.load()
