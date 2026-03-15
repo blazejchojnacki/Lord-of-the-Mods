@@ -47,7 +47,9 @@ class Settings(dict):
         library = f'{install_path}/{self[Setting.LIBRARY]}'
         archive = f'{install_path}/{self[Setting.ARCHIVE]}'
         games = [f'{install_path}/{_}' for _ in self[Setting.GAMES]]
-        exceptions = [f'{install_path}/{_}' for _ in self[Setting.EXCEPTIONS]]
+        # # # use cases require only the folder names in the library
+        # exceptions = [f'{install_path}/{_}' for _ in self[Setting.EXCEPTIONS]]
+        exceptions = [_.split('/')[-1] for _ in self[Setting.EXCEPTIONS]]
 
     def load(self):
         if os.path.isfile(SETTINGS_FILE_PATH):
@@ -58,7 +60,6 @@ class Settings(dict):
             self.propagate()
             return True
         else:
-            # raise g.InternalError(f"{g.SETTINGS_FILE_PATH} not found")
             self.update(_SETTINGS_FORMAT)
             return False
 
@@ -86,7 +87,7 @@ class Settings(dict):
         if self.check_paths(settings_dict):
             self.update(settings_dict)
             self.check_format()
-            with open(SETTINGS_FILE_PATH, 'x') as file_stream:
+            with open(SETTINGS_FILE_PATH, 'w') as file_stream:
                 file_stream.write(json.dumps(self, indent=4))
             self.propagate()
         else:

@@ -79,29 +79,29 @@ class Test_Settings(unittest.TestCase):
             settings_to_save = {
                 source.shared.Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib",
             }
-            for key in settings_to_save:
-                paths = []
-                if isinstance(settings_to_save[key], str):
-                    paths = [settings_to_save[key]]
-                elif isinstance(settings_to_save[key], list):
-                    paths = settings_to_save[key]
-                for path in paths:
-                    os.makedirs(path, exist_ok=True)
+            for path in core.complete_paths(settings_to_save):
+                os.makedirs(path, exist_ok=True)
 
             core.settings.save(settings_to_save)
             self.assertTrue(os.path.isfile(source.shared.SETTINGS_FILE_PATH))
             self.assertEqual(core.library, settings_to_save[source.shared.Setting.LIBRARY])
 
-            for key in settings_to_save:
-                paths = []
-                if isinstance(settings_to_save[key], str):
-                    paths = [settings_to_save[key]]
-                elif isinstance(settings_to_save[key], list):
-                    paths = settings_to_save[key]
-                for path in paths:
-                    os.rmdir(path)
+            for path in core.complete_paths(settings_to_save):
+                os.rmdir(path)
         else:
-            print(source.shared.internal_message('test not applicable'))
+            settings_to_save = {
+                source.shared.Setting.EXCEPTIONS: [f"{TRIALS_PATH}/__test_lib/test_exception"]
+            }
+            completed_paths = core.complete_paths(settings_to_save)
+            for path in completed_paths:
+                os.makedirs(path, exist_ok=True)
+
+            core.settings.save(settings_to_save)
+            self.assertEqual([f"{core.install_path}/{_}" for _ in settings_to_save[source.shared.Setting.EXCEPTIONS]],
+                             core.exceptions)
+
+            for path in completed_paths:
+                os.rmdir(path)
 
     def test_save__invalid(self):
         settings_to_save = {

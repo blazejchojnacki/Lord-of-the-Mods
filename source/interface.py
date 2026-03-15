@@ -9,7 +9,7 @@ from tklinenums import TkLineNumbers
 
 import source.core as core
 import source.shared as s
-from source.shared import MOD_DEF_FILE_NAME, internal_message, InternalError
+from source.shared import MOD_DEF_FILE_NAME, internal_message, InternalError, Setting
 from source.constructor import load_file, load_directories
 from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
 from source.module_control import mods_select, mods_sort, snapshot_take, snapshot_compare, \
@@ -246,6 +246,7 @@ class Window(tkinter.Tk):
             list_buttons_settings[2].configure(command=lambda: self.settings_select_new_directory(2))
             list_buttons_settings[3].configure(command=lambda: self.settings_select_new_directory(3))
             list_buttons_settings[4].configure(command=lambda: self.settings_select_add_directory(4))
+            list_buttons_settings[5].configure(command=lambda: self.settings_select_add_directory(5))
         except IndexError:
             pass
 
@@ -1004,23 +1005,25 @@ class Window(tkinter.Tk):
             counter += 1
         if new_settings:
             try:
-                if core.settings.load(new_settings):
-                    self.set_log_update('Settings saved and checked.')
-                else:
-                    self.set_log_update('The provided value seems to be incorrect.')
+                core.settings.save(new_settings)
+                self.set_log_update('Settings saved and checked.')
             except InternalError as error:
                 self.set_log_update(error.message)
                 self.command_settings_reload()
+        else:
+            self.set_log_update('Settings unchanged')
 
     def command_settings_reload(self):
         """ Reads the settings from the SETTINGS_FILE and inserts them into the settings text fields. """
         counter = 0
         for setting_key in core.settings:
+            self.list_entry_settings[counter].configure(state='normal')
             self.list_entry_settings[counter].delete('0', 'end')
             if isinstance(core.settings[setting_key], list):
                 self.list_entry_settings[counter].insert('end', ', '.join(core.settings[setting_key]))
             else:
                 self.list_entry_settings[counter].insert('end', core.settings[setting_key])
+            self.list_entry_settings[counter].configure(state='disabled')
             counter += 1
 
     def on_select_mod_idle(self, event):
@@ -1105,8 +1108,7 @@ class Window(tkinter.Tk):
     def refresh_definitions(self):
         """ Refreshes the lists of active and non-active mods. """
         try:
-            self.treeview_mods_active.delete(*self.treeview_mods_active.get_children())
-            library_folders = [_ for _ in os.listdir(core.library) if _ not in core.settings[s.Setting.EXCEPTIONS]]
+            library_folders = [_ for _ in os.listdir(core.library) if _ not in core.exceptions]
             for folder in library_folders:
                 if not os.path.isfile(f'{core.library}/{folder}/{MOD_DEF_FILE_NAME}'):
                     self.set_log_update(f'Detected a definition-less folder in the library - {folder}')
@@ -1121,7 +1123,13 @@ class Window(tkinter.Tk):
                         self.set_window_mod_new(start_name=folder)
                         return
                     if not do_initiate:
-                        core.settings.save({s.Setting.EXCEPTIONS: folder})
+                        exceptions = core.settings[Setting.EXCEPTIONS].copy()
+                        exceptions.append(f'{core.settings[Setting.LIBRARY]}/{folder}')
+                        core.settings.save({s.Setting.EXCEPTIONS: exceptions})
+        except InternalError:
+            self.set_log_update('library exception error')
+        try:
+            self.treeview_mods_active.delete(*self.treeview_mods_active.get_children())
             active_mods = mods_select(**{Property.ACTIVE: True})
             active_mod_parent_dict = mods_sort(mods=active_mods)
             for mod in active_mods:
@@ -1137,7 +1145,9 @@ class Window(tkinter.Tk):
                 except KeyError:
                     pass
             self.treeview_mods_active.open_children()
-
+        except InternalError as err:
+            self.set_log_update('active_mods not loaded')
+        try:
             self.treeview_mods_idle.delete(*self.treeview_mods_idle.get_children())
             idle_mods = mods_select(**{Property.ACTIVE: False})
             idle_mod_parent_dict = mods_sort(mods=idle_mods)
@@ -1154,8 +1164,8 @@ class Window(tkinter.Tk):
                 except KeyError:
                     pass
             self.treeview_mods_idle.open_children()
-        except InternalError:
-            self.set_log_update('definitions not loaded - settings not loaded.')
+        except InternalError as err:
+            self.set_log_update('inactive mods not loaded')
             return
         except _tkinter.TclError:
             self.set_log_update('loading mod error')
