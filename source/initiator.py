@@ -3,11 +3,14 @@ import shutil
 import tkinter
 import winreg
 import json
+from pathlib import Path
 from tkinter.filedialog import askdirectory
-from tkinter.messagebox import askyesnocancel, showerror, showwarning
+from tkinter.messagebox import showerror, showwarning
 
 import source.core as core
-from source.shared import PROGRAM_NAME, MAIN_DIRECTORY, ICON_PATH, SETTINGS_FILE_PATH, Setting, InternalError
+import source.shared
+from source.shared import PROGRAM_NAME, MAIN_DIRECTORY, ICON_PATH, SETTINGS_FILE_PATH, Setting, InternalError, \
+    invoke_choice, KEY_LABEL, KEY_RETURN, KEY_INFO
 from source.module_control import definition_write, SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARISON_DIRECTORY, definition_save
 
 default_folders_dict = {
@@ -84,7 +87,10 @@ def get_game_directory():
                 cancel_initiation()
     for game_index in range(len(game_directories)):
         if os.path.isdir(game_directories[game_index]):
-            game_directories[game_index] = os.path.relpath(game_directories[game_index]).replace('\\', '/')
+            # TODO: handling of cases where the game is not directly in the install path
+            core.install_path = Path(game_directories[game_index]).parent.resolve()
+            game_directories[game_index] = game_directories[game_index].replace(
+                str(core.install_path).replace('\\', '/'), '')
     return game_directories
 
 
@@ -122,6 +128,9 @@ def initiate():
     initiator.iconbitmap(ICON_PATH)
     initiator.title(f'{PROGRAM_NAME} initiator')
     initiator.minsize(width=500, height=200)
+    source.shared.main_window = initiator
+    source.shared.current_info = tkinter.Toplevel(master=initiator)
+    source.shared.current_info.destroy()
     initiator_label = tkinter.Label(master=initiator, text='Looking for game paths. Please wait...')
     initiator_label.pack()
     initiator.update()
@@ -133,10 +142,12 @@ def initiate():
         directories_dict = {}
         initiator_label.configure(text='Initiating functional directories.')
         initiator.update()
-        # TODO: replace with ChoiceWindow
-        use_default_paths = askyesnocancel(
+        use_default_paths = invoke_choice(
             title=f'{PROGRAM_NAME} initiator:',
-            message=f'Use default functional folder names? If not, you can choose your own.'
+            text='Use default functional folder names?',
+            buttons=({KEY_LABEL: 'Use default', KEY_RETURN: True, KEY_INFO: ''},
+                     {KEY_LABEL: 'Choose own', KEY_RETURN: False, KEY_INFO: ''},
+                     {KEY_LABEL: 'Cancel', KEY_RETURN: None, KEY_INFO: ''})
         )
         if use_default_paths is True:
             for key in default_folders_dict:
@@ -148,7 +159,7 @@ def initiate():
                     initialdir=f'{MAIN_DIRECTORY}'
                 )
                 if os.path.isdir(evaluated_string):
-                    directories_dict[key] = os.path.relpath(evaluated_string).replace('\\', '/')
+                    directories_dict[key] = evaluated_string
                 else:
                     showwarning(
                         title=f'{PROGRAM_NAME} initiator: ',
@@ -158,6 +169,8 @@ def initiate():
                     directories_dict[key] = default_folders_dict[key]
         elif use_default_paths is None:
             cancel_initiation()
+        for key in directories_dict:
+            directories_dict[key] = os.path.relpath(directories_dict[key], core.install_path).replace('\\', '/')
         core.settings.save(
             settings_dict={
                 Setting.LIBRARY: directories_dict['library'],
@@ -173,9 +186,9 @@ def initiate():
             os.mkdir(SNAPSHOT_COMPARISON_DIRECTORY)
         for game_path in game_paths_list:
             try:
-                if not os.path.isdir(f"{directories_dict['library']}/{game_path.split('/')[-1]}"):
-                    os.mkdir(f"{directories_dict['library']}/{game_path.split('/')[-1]}")
-                mod_directory = f"{directories_dict['library']}/{game_path.split('/')[-1]}"
+                mod_directory = f"{core.install_path}/{directories_dict['library']}/{game_path.split('/')[-1]}"
+                if not mod_directory:
+                    os.mkdir(mod_directory)
                 definition_object = definition_write(
                     mod_directory=mod_directory, changes_source=game_path,
                     description=f"Initial {game_path.split('/')[-1]} - created automatically")
@@ -186,3 +199,7 @@ def initiate():
         core.settings.load()
     ensure_game_options()
     initiator.destroy()
+
+
+if __name__ == "__main__":
+    initiate()

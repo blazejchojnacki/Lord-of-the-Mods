@@ -3,13 +3,13 @@ import json
 import os.path
 from pathlib import Path
 
-from source.shared import SETTINGS_FILE_PATH, _SETTINGS_FORMAT, Setting, \
+from source.shared import SETTINGS_FILE_PATH, _SETTINGS_FORMAT, Setting, MAIN_DIRECTORY, \
     InternalError
 
 install_path = os.path.abspath('../..').strip('\\').replace('\\', '/')
 
-library = '_LIBRARY'
-archive = '_ARCHIVE'
+library = f'{MAIN_DIRECTORY}/_LIBRARY'
+archive = f'{MAIN_DIRECTORY}/_ARCHIVE'
 games = []
 exceptions = []
 
@@ -71,7 +71,7 @@ class Settings(dict):
                 elif key == Setting.EXCEPTIONS:
                     paths = [f'{library}/{_}' for _ in settings_result[key]]
                 elif isinstance(settings_result[key], str):
-                    paths = [settings_result[key]]
+                    paths = [f'{install_path}/{settings_result[key]}']
                 for path in paths:
                     if not os.path.isdir(path):
                         # raise g.InternalError(f"{path} not found")

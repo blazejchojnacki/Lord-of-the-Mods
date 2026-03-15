@@ -1,8 +1,11 @@
 import os.path
 import unittest
+from pathlib import Path
 
 import source.core as core
 import source.shared
+
+TRIALS_PATH = "/".join(str(Path(__file__).parent).split('\\')[-2:])
 
 
 class Test_Settings(unittest.TestCase):
@@ -11,10 +14,11 @@ class Test_Settings(unittest.TestCase):
 
     def test_create_directories(self):
         settings_to_initiate = {
-            source.shared.Setting.LIBRARY: "trials/__test_lib",
-            source.shared.Setting.ARCHIVE: "trials/__test_arch",
-            source.shared.Setting.GAMES: ["trials/__test_game1", "./trials/__test_game2"],
-            source.shared.Setting.EXCEPTIONS: ["trials/__test_not_mod1"],
+            source.shared.Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib",
+            source.shared.Setting.ARCHIVE: f"{TRIALS_PATH}/__test_arch",
+            source.shared.Setting.GAMES: [f"{TRIALS_PATH}/__test_game1",
+                                          f"{TRIALS_PATH}/__test_game2"],
+            source.shared.Setting.EXCEPTIONS: [f"{TRIALS_PATH}/__test_not_mod1"],
         }
         core.settings.create_directories(settings_to_initiate)
         for key in settings_to_initiate:
@@ -29,9 +33,9 @@ class Test_Settings(unittest.TestCase):
 
     def test_propagate(self):
         value_copy = core.settings[source.shared.Setting.LIBRARY]
-        core.settings[source.shared.Setting.LIBRARY] = "trials/__test_lib"
+        core.settings[source.shared.Setting.LIBRARY] = f"{TRIALS_PATH}/__test_lib"
         core.settings.propagate()
-        self.assertEqual(core.library, "trials/__test_lib")
+        self.assertEqual(core.library, f"{TRIALS_PATH}/__test_lib")
         core.settings[source.shared.Setting.LIBRARY] = value_copy
         core.settings.propagate()
 
@@ -56,14 +60,14 @@ class Test_Settings(unittest.TestCase):
 
     def test_check_paths__existing(self):
         settings_to_check = {
-            source.shared.Setting.LIBRARY: "trials",
+            source.shared.Setting.LIBRARY: f"{TRIALS_PATH}",
         }
         self.assertTrue(core.settings.check_paths(settings_to_check))
 
     def test_check_paths__not_existing(self):
         settings_to_check = {
-            source.shared.Setting.LIBRARY: "trials/__test_lib",
-            source.shared.Setting.ARCHIVE: "trials/__test_arch",
+            source.shared.Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib",
+            source.shared.Setting.ARCHIVE: f"{TRIALS_PATH}/__test_arch",
         }
         self.assertFalse(core.settings.check_paths(settings_to_check))
 
@@ -76,7 +80,7 @@ class Test_Settings(unittest.TestCase):
     def test_save__valid_new(self):
         if not os.path.isfile(source.shared.SETTINGS_FILE_PATH):
             settings_to_save = {
-                source.shared.Setting.LIBRARY: "trials/__test_lib",
+                source.shared.Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib",
             }
             for key in settings_to_save:
                 paths = []
@@ -104,6 +108,6 @@ class Test_Settings(unittest.TestCase):
 
     def test_save__invalid(self):
         settings_to_save = {
-            source.shared.Setting.LIBRARY: "trials/__test_lib",
+            source.shared.Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib",
         }
         self.assertRaises(source.shared.InternalError, core.settings.save, settings_to_save)
