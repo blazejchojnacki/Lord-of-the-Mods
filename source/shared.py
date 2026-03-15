@@ -63,8 +63,8 @@ KEY_INFO = 'info'
 AESTHETIC_PATH = f'{MAIN_DIRECTORY}/aesthetic/'
 
 # # # global variable
-current_info: tkinter.Toplevel
 main_window: tkinter.Tk
+current_info: tkinter.Toplevel
 
 
 def log(output, file='file_changes.txt'):
