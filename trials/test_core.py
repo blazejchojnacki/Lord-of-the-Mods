@@ -18,24 +18,21 @@ class Test_Settings(unittest.TestCase):
             source.shared.Setting.ARCHIVE: f"{TRIALS_PATH}/__test_arch",
             source.shared.Setting.GAMES: [f"{TRIALS_PATH}/__test_game1",
                                           f"{TRIALS_PATH}/__test_game2"],
-            source.shared.Setting.EXCEPTIONS: [f"{TRIALS_PATH}/__test_not_mod1"],
+            source.shared.Setting.EXCEPTIONS: [f"{TRIALS_PATH}/__test_lib/__test_not_mod1"],
         }
         core.settings.create_directories(settings_to_initiate)
-        for key in settings_to_initiate:
-            paths = []
-            if isinstance(settings_to_initiate[key], str):
-                paths = [settings_to_initiate[key]]
-            elif isinstance(settings_to_initiate[key], list):
-                paths = settings_to_initiate[key]
-            for path in paths:
-                self.assertTrue(os.path.isdir(path))
-                os.rmdir(path)
+        paths = core.complete_paths(settings_to_initiate)
+        for path in paths:
+            self.assertTrue(os.path.isdir(path))
+        for path_index in range(len(paths), 0, -1):
+            os.rmdir(paths[path_index-1])
 
     def test_propagate(self):
         value_copy = core.settings[source.shared.Setting.LIBRARY]
-        core.settings[source.shared.Setting.LIBRARY] = f"{TRIALS_PATH}/__test_lib"
+        propagated_path = f"{TRIALS_PATH}/__test_lib"
+        core.settings[source.shared.Setting.LIBRARY] = propagated_path
         core.settings.propagate()
-        self.assertEqual(core.library, f"{TRIALS_PATH}/__test_lib")
+        self.assertEqual(core.library, f"{core.install_path}/{propagated_path}")
         core.settings[source.shared.Setting.LIBRARY] = value_copy
         core.settings.propagate()
 
