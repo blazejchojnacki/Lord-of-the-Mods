@@ -27,13 +27,22 @@ class Test_Settings(unittest.TestCase):
         for path_index in range(len(paths), 0, -1):
             os.rmdir(paths[path_index-1])
 
-    def test_propagate(self):
+    def test_propagate_lib(self):
         value_copy = core.settings[source.shared.Setting.LIBRARY]
         propagated_path = f"{TRIALS_PATH}/__test_lib"
         core.settings[source.shared.Setting.LIBRARY] = propagated_path
         core.settings.propagate()
         self.assertEqual(core.library, f"{core.install_path}/{propagated_path}")
         core.settings[source.shared.Setting.LIBRARY] = value_copy
+        core.settings.propagate()
+
+    def test_propagate_exception(self):
+        value_copy = core.settings[source.shared.Setting.EXCEPTIONS]
+        propagated_paths = [f"{TRIALS_PATH}/__test_lib/test_exception"]
+        core.settings[source.shared.Setting.EXCEPTIONS] = propagated_paths
+        core.settings.propagate()
+        self.assertEqual(core.exceptions, [_.split('/')[-1] for _ in propagated_paths])
+        core.settings[source.shared.Setting.EXCEPTIONS] = value_copy
         core.settings.propagate()
 
     def test_load(self):
@@ -89,6 +98,9 @@ class Test_Settings(unittest.TestCase):
             for path in core.complete_paths(settings_to_save):
                 os.rmdir(path)
         else:
+            settings_backup = {
+                source.shared.Setting.EXCEPTIONS: core.settings[source.shared.Setting.EXCEPTIONS].copy()
+            }
             settings_to_save = {
                 source.shared.Setting.EXCEPTIONS: [f"{TRIALS_PATH}/__test_lib/test_exception"]
             }
@@ -97,11 +109,14 @@ class Test_Settings(unittest.TestCase):
                 os.makedirs(path, exist_ok=True)
 
             core.settings.save(settings_to_save)
-            self.assertEqual([f"{core.install_path}/{_}" for _ in settings_to_save[source.shared.Setting.EXCEPTIONS]],
-                             core.exceptions)
+            self.assertEqual(settings_to_save[source.shared.Setting.EXCEPTIONS],
+                             core.settings[source.shared.Setting.EXCEPTIONS])
 
             for path in completed_paths:
                 os.rmdir(path)
+            core.settings.save(settings_backup)
+            self.assertEqual(settings_backup[source.shared.Setting.EXCEPTIONS],
+                             core.settings[source.shared.Setting.EXCEPTIONS])
 
     def test_save__invalid(self):
         settings_to_save = {
