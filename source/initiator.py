@@ -139,7 +139,7 @@ def set_directories(directories_dict, game_paths_list):
     for game_path in game_paths_list:
         try:
             mod_directory = f"{core.install_path}/{directories_dict['library']}/{game_path.split('/')[-1]}"
-            if not mod_directory:
+            if not os.path.isdir(mod_directory):
                 os.mkdir(mod_directory)
             definition_object = definition_write(
                 mod_directory=mod_directory, changes_source=game_path,

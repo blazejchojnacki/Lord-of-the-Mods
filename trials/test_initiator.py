@@ -5,6 +5,7 @@ from pathlib import Path
 
 import source.initiator as initiator
 import source.core as core
+from source.shared import Setting
 
 
 class Test_Initiator(unittest.TestCase):
