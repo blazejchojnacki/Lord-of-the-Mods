@@ -90,7 +90,7 @@ def get_game_directory():
             # TODO: handling of cases where the game is not directly in the install path
             core.install_path = Path(game_directories[game_index]).parent.resolve()
             game_directories[game_index] = game_directories[game_index].replace(
-                str(core.install_path).replace('\\', '/'), '')
+                str(core.install_path).replace('\\', '/'), '').strip('/')
     return game_directories
 
 
