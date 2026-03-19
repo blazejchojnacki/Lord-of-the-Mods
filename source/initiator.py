@@ -122,6 +122,65 @@ def cancel_initiation():
     exit()
 
 
+def set_directories(directories_dict, game_paths_list):
+    for key in directories_dict:
+        directories_dict[key] = os.path.relpath(directories_dict[key], core.install_path).replace('\\', '/')
+    core.settings.save(
+        settings_dict={
+            Setting.LIBRARY: directories_dict['library'],
+            Setting.ARCHIVE: directories_dict['archive'],
+            Setting.GAMES: game_paths_list,
+        }
+    )
+    if not os.path.isdir(SNAPSHOT_DIRECTORY):
+        os.mkdir(SNAPSHOT_DIRECTORY)
+    if not os.path.isdir(SNAPSHOT_COMPARISON_DIRECTORY):
+        os.mkdir(SNAPSHOT_COMPARISON_DIRECTORY)
+    for game_path in game_paths_list:
+        try:
+            mod_directory = f"{core.install_path}/{directories_dict['library']}/{game_path.split('/')[-1]}"
+            if not mod_directory:
+                os.mkdir(mod_directory)
+            definition_object = definition_write(
+                mod_directory=mod_directory, changes_source=game_path,
+                description=f"Initial {game_path.split('/')[-1]} - created automatically")
+            definition_save(definition_object, mod_directory)
+        except InternalError:
+            pass
+
+
+def get_directories():
+    use_default_paths = invoke_choice(
+        title=f'{PROGRAM_NAME} initiator:',
+        text='Use default functional folder names?',
+        buttons=({KEY_LABEL: 'Use default', KEY_RETURN: True, KEY_INFO: ''},
+                 {KEY_LABEL: 'Choose own', KEY_RETURN: False, KEY_INFO: ''},
+                 {KEY_LABEL: 'Cancel', KEY_RETURN: None, KEY_INFO: ''})
+    )
+    if use_default_paths is None:
+        cancel_initiation()
+    directories_dict = {}
+    if use_default_paths is True:
+        for key in default_folders_dict:
+            directories_dict[key] = default_folders_dict[key]
+    elif use_default_paths is False:
+        for key in default_folders_dict:
+            evaluated_string = askdirectory(
+                title=f'{PROGRAM_NAME} initiator: Please select the mod {key} directory\n',
+                initialdir=f'{MAIN_DIRECTORY}'
+            )
+            if os.path.isdir(evaluated_string):
+                directories_dict[key] = evaluated_string
+            else:
+                showwarning(
+                    title=f'{PROGRAM_NAME} initiator: ',
+                    message=f'The provided name is empty.\n'
+                            f' The default value will be applied'
+                )
+                directories_dict[key] = default_folders_dict[key]
+    return directories_dict
+
+
 def initiate():
     """ Initiates the application settings by asking for directories needed by the application. """
     initiator = tkinter.Tk()
@@ -139,62 +198,13 @@ def initiate():
             game_paths_list = get_game_directory()
         except NameError:
             game_paths_list = []
-        directories_dict = {}
         initiator_label.configure(text='Initiating functional directories.')
         initiator.update()
-        use_default_paths = invoke_choice(
-            title=f'{PROGRAM_NAME} initiator:',
-            text='Use default functional folder names?',
-            buttons=({KEY_LABEL: 'Use default', KEY_RETURN: True, KEY_INFO: ''},
-                     {KEY_LABEL: 'Choose own', KEY_RETURN: False, KEY_INFO: ''},
-                     {KEY_LABEL: 'Cancel', KEY_RETURN: None, KEY_INFO: ''})
-        )
-        if use_default_paths is True:
-            for key in default_folders_dict:
-                directories_dict[key] = default_folders_dict[key]
-        if use_default_paths is False:
-            for key in default_folders_dict:
-                evaluated_string = askdirectory(
-                    title=f'{PROGRAM_NAME} initiator: Please select the mod {key} directory\n',
-                    initialdir=f'{MAIN_DIRECTORY}'
-                )
-                if os.path.isdir(evaluated_string):
-                    directories_dict[key] = evaluated_string
-                else:
-                    showwarning(
-                        title=f'{PROGRAM_NAME} initiator: ',
-                        message=f'The provided name is empty.\n'
-                                f' The default value will be applied'
-                    )
-                    directories_dict[key] = default_folders_dict[key]
-        elif use_default_paths is None:
-            cancel_initiation()
-        for key in directories_dict:
-            directories_dict[key] = os.path.relpath(directories_dict[key], core.install_path).replace('\\', '/')
-        core.settings.save(
-            settings_dict={
-                Setting.LIBRARY: directories_dict['library'],
-                Setting.ARCHIVE: directories_dict['archive'],
-                Setting.GAMES: game_paths_list,
-            }
-        )
+        directories_dict = get_directories()
+
         initiator_label.configure(text='Creating initial mods. Please wait ...')
         initiator.update()
-        if not os.path.isdir(SNAPSHOT_DIRECTORY):
-            os.mkdir(SNAPSHOT_DIRECTORY)
-        if not os.path.isdir(SNAPSHOT_COMPARISON_DIRECTORY):
-            os.mkdir(SNAPSHOT_COMPARISON_DIRECTORY)
-        for game_path in game_paths_list:
-            try:
-                mod_directory = f"{core.install_path}/{directories_dict['library']}/{game_path.split('/')[-1]}"
-                if not mod_directory:
-                    os.mkdir(mod_directory)
-                definition_object = definition_write(
-                    mod_directory=mod_directory, changes_source=game_path,
-                    description=f"Initial {game_path.split('/')[-1]} - created automatically")
-                definition_save(definition_object, mod_directory)
-            except InternalError:
-                pass
+        set_directories(directories_dict, game_paths_list)
     else:
         core.settings.load()
     ensure_game_options()

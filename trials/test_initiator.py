@@ -114,6 +114,65 @@ class Test_Initiator(unittest.TestCase):
         finally:
             initiator.game_list = original_game_list
 
+    @patch('source.initiator.definition_save')
+    @patch('source.initiator.definition_write')
+    @patch('source.core.settings.save')
+    @patch('source.initiator.os.mkdir')
+    @patch('source.initiator.os.path.isdir')
+    def test_set_directories(self, mock_isdir, mock_mkdir, mock_settings_save, mock_def_write,
+                             mock_def_save):
+        # 1. Arrange: Pretend no directories exist yet so os.mkdir gets called
+        mock_isdir.return_value = False
+
+        # Set up a fake install path so os.path.relpath has something to work with
+        core.install_path = "C:/Fake/Install/Path"
+
+        # Create our dummy inputs (what the user *would* have chosen in the UI)
+        dummy_directories = {
+            'library': 'C:/Fake/Install/Path/_LIBRARY',
+            'archive': 'C:/Fake/Install/Path/_ARCHIVE'
+        }
+        dummy_games = ['C:/Fake/Install/Path/Game1', 'C:/Fake/Install/Path/Game2']
+
+        # Pretend definition_write returns a dummy object
+        mock_def_write.return_value = "dummy_definition_object"
+
+        # 2. Act: Call our new purely logical function
+        initiator.set_directories(dummy_directories, dummy_games)
+
+        # 3. Assert: Verify the logic worked exactly as expected
+
+        # A. Check that settings.save was called with relative paths
+        mock_settings_save.assert_called_once_with(
+            settings_dict={
+                Setting.LIBRARY: '_LIBRARY',
+                Setting.ARCHIVE: '_ARCHIVE',
+                Setting.GAMES: dummy_games,
+            }
+        )
+
+        # B. Check that standard directories were created (Snapshot & Comparison)
+        mock_mkdir.assert_any_call(initiator.SNAPSHOT_DIRECTORY)
+        mock_mkdir.assert_any_call(initiator.SNAPSHOT_COMPARISON_DIRECTORY)
+
+        # C. Check that the individual mod directories were created for BOTH games
+        expected_mod_dir_1 = f"{core.install_path}/_LIBRARY/Game1"
+        expected_mod_dir_2 = f"{core.install_path}/_LIBRARY/Game2"
+        mock_mkdir.assert_any_call(expected_mod_dir_1)
+        mock_mkdir.assert_any_call(expected_mod_dir_2)
+
+        # D. Check that definition files were written and saved for BOTH games
+        self.assertEqual(mock_def_write.call_count, 2)
+        self.assertEqual(mock_def_save.call_count, 2)
+
+        # Verify the exact arguments for the first game's definition save
+        mock_def_write.assert_any_call(
+            mod_directory=expected_mod_dir_1,
+            changes_source=dummy_games[0],
+            description="Initial Game1 - created automatically"
+        )
+        mock_def_save.assert_any_call("dummy_definition_object", expected_mod_dir_1)
+
 
 if __name__ == '__main__':
     unittest.main()
