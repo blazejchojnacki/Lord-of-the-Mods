@@ -155,5 +155,99 @@ class Test_Constructor(unittest.TestCase):
         self.assertEqual(files, ["Root/SubFolder/sub_file.ini", "Root/root_file.txt"])
 
 
+class Test_ConstructFile_Construct(unittest.TestCase):
+
+    # --- 1. Test Invalid Files ---
+
+    @patch('source.constructor.os.path.isfile')
+    @patch.object(constructor.ConstructFile, 'recognize_structure')
+    def test_construct__invalid_file(self, mock_recognize, mock_isfile):
+        # Pretend the file doesn't exist
+        mock_isfile.return_value = False
+
+        # Initialize with an empty string to bypass the auto-construct in __init__
+        file_obj = constructor.ConstructFile("")
+        file_obj.name = "test.ini"
+
+        # It should raise an InternalError because the file either doesn't exist
+        # or doesn't have a valid extension
+        self.assertRaisesRegex(s.InternalError, "invalid", file_obj.construct)
+
+    # --- 2. Test Macros and Includes ---
+
+    @patch('source.constructor.os.path.isfile')
+    @patch.object(constructor.ConstructFile, 'recognize_structure')
+    @patch('builtins.open', new_callable=mock_open, read_data="#define MY_MACRO 100\n#include \"file.inc\"\n")
+    def test_construct__defines_and_includes(self, mock_file, mock_recognize, mock_isfile):
+        mock_isfile.return_value = True
+
+        file_obj = constructor.ConstructFile("")
+        file_obj.name = "test.ini"
+        file_obj.start_level = 0
+        file_obj.delimiters = [[]]
+
+        file_obj.construct()
+
+        # It should extract the #define into the dedicated defines list
+        self.assertEqual(file_obj.defines, ["#define MY_MACRO 100"])
+
+        # It should extract the #include as an assigned dictionary on the root object
+        self.assertEqual(file_obj[0], {"include": "#include \"file.inc\""})
+
+    # --- 3. Test Blocks and Statements ---
+
+    @patch('source.constructor.os.path.isfile')
+    @patch.object(constructor.ConstructFile, 'recognize_structure')
+    @patch('builtins.open', new_callable=mock_open, read_data="Object FakeUnit\n  Health = 100\nEnd\n")
+    def test_construct__blocks_and_statements(self, mock_file, mock_recognize, mock_isfile):
+        mock_isfile.return_value = True
+
+        file_obj = constructor.ConstructFile("")
+        file_obj.name = "test.ini"
+        file_obj.start_level = 0
+        # Tell the parser to treat "Object" as a block delimiter
+        file_obj.delimiters = [["Object"], []]
+
+        file_obj.construct()
+
+        # The parser should have created exactly 1 ConstructLevel inside the main file
+        self.assertEqual(len(file_obj), 1)
+        level = file_obj[0]
+        self.assertIsInstance(level, constructor.ConstructLevel)
+
+        # Index 0 holds the block declaration (updated by level.assign)
+        self.assertEqual(level[0], {"class": "Object", "name": "FakeUnit"})
+
+        # Index 1 holds the parsed statement
+        self.assertEqual(level[1], {"statement": "Health = 100"})
+
+        # Index 2 holds the end of the block
+        self.assertEqual(level[2], {"end": "End"})
+
+    # --- 4. Test Comments (The tricky part!) ---
+
+    @patch('source.constructor.os.path.isfile')
+    @patch.object(constructor.ConstructFile, 'recognize_structure')
+    @patch('builtins.open', new_callable=mock_open,
+           read_data="; Main Comment\n\nObject FakeUnit // inline comment\nEnd\n")
+    def test_construct__comments(self, mock_file, mock_recognize, mock_isfile):
+        mock_isfile.return_value = True
+
+        file_obj = constructor.ConstructFile("")
+        file_obj.name = "test.ini"
+        file_obj.start_level = 0
+        file_obj.delimiters = [["Object"], []]
+
+        file_obj.construct()
+
+        # 1. The first comment precedes an empty line, so it should be appended to the root file object
+        self.assertEqual(file_obj[0], {"comment": "; Main Comment"})
+
+        # 2. The block should have been created with the inline comment attached to its declaration
+        level = file_obj[1]
+        self.assertIsInstance(level, constructor.ConstructLevel)
+        self.assertEqual(level[0], {"class": "Object", "name": "FakeUnit", "comment": "// inline comment"})
+
+
 if __name__ == '__main__':
     unittest.main()
