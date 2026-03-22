@@ -549,9 +549,10 @@ def initiate_comparison(mod_directory, start_mod='', changes_source='directory')
 
 def evaluate_changes(comparison):
     changes = {}
-    if os.path.isfile(comparison):
-        with open(comparison) as comparison_buffer:
-            comparison_dict = json.load(comparison_buffer)
+    if isinstance(comparison, str):
+        if os.path.isfile(comparison):
+            with open(comparison) as comparison_buffer:
+                comparison_dict = json.load(comparison_buffer)
     elif isinstance(comparison, dict):
         comparison_dict = comparison
     else:
@@ -617,6 +618,7 @@ def make_transfer(src, dst='', transfer_type: Transfer = Transfer.COPY, error_se
     global error_sensitivity
     try:
         if transfer_type == Transfer.COPY:
+
             ensure_path_exists(src, dst)
             copy2(src, dst)
         elif transfer_type == Transfer.MOVE:
@@ -833,10 +835,15 @@ def mod_attach(mod_object=None, mod_directory=None, check_type='ancestor'):
                 raise s.InternalError('ancestor mod not attached')
     elif check_type == 'pass':
         error_sensitivity = False
-    mod_name = mod_directory.split('/')[-1]
+    if mod_object[Property.NAME]:
+        mod_name = mod_object[Property.NAME]
+    elif mod_directory:
+        mod_name = mod_directory.split('/')[-1]
+    else:
+        raise s.InternalError("unnamed mod")
     if not os.path.isdir(f'{core.archive}/{mod_name}'):
         os.mkdir(f'{core.archive}/{mod_name}')
-    comparison_dict = mod_object[Property.CHANGES].copy
+    comparison_dict = mod_object[Property.CHANGES].copy()
     if not comparison_dict and os.path.isfile(f"{mod_directory}/{COMPARISON_NAME}{mod_name}.json"):
         with open(f"{mod_directory}/{COMPARISON_NAME}{mod_name}.json") as comparison_buffer:
             comparison_dict = json.load(comparison_buffer)
