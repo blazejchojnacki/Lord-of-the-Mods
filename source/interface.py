@@ -12,7 +12,7 @@ import source.shared as s
 from source.shared import MOD_DEF_FILE_NAME, internal_message, InternalError, Setting
 from source.constructor import load_file, load_directories
 from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
-from source.module_control import mods_select, mods_sort, snapshot_take, snapshot_compare, \
+from source.modificator import mods_select, mods_sort, snapshot_take, snapshot_compare, \
     mod_detect_changes, mod_copy, mod_new, hash_file, Property, \
     definition_edit, DEFINITION_TEMPLATE, DEFINITION_CLASSES, Change, mod_check_relative, snapshot_save
 

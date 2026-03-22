@@ -15,6 +15,5 @@ if __name__ == "__main__":
         os.chdir('\\'.join(sys.argv[0].split('\\')[0:-1]))
     else:
         start_file = None
-    # # # importing the modules before managing the base path results in errors related to relative paths
     initiate()
     main_window = source.interface.Window(start_file)

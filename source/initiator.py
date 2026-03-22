@@ -11,7 +11,7 @@ import source.core as core
 import source.shared
 from source.shared import PROGRAM_NAME, MAIN_DIRECTORY, ICON_PATH, SETTINGS_FILE_PATH, Setting, InternalError, \
     invoke_choice, KEY_LABEL, KEY_RETURN, KEY_INFO
-from source.module_control import definition_write, SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARISON_DIRECTORY, definition_save
+from source.modificator import definition_write, SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARISON_DIRECTORY, definition_save
 
 default_folders_dict = {
     'library': f'{MAIN_DIRECTORY}/_LIBRARY',
