@@ -19,6 +19,9 @@ from source.modificator import mods_select, mods_sort, snapshot_take, snapshot_c
 MOD_COLUMNS = {Property.NAME: 1, Property.TRANSFER_TYPE: 1, Property.DESCRIPTION: 5}
 CHANGES_COLUMNS = {'path': 6, 'type': 1}
 
+# TODO: create new mod based on currently edited file
+# FIX: mod changes not displayed with change type
+
 
 class ColumnedListbox(tkinter.ttk.Treeview):
     """ a Tk/Tcl Treeview-based class with predefined columns"""
@@ -1175,8 +1178,10 @@ class Window(tkinter.Tk):
         """ Creates a new mod after asking for a name and a way to create it. """
         self.new_mod_name = self.entry_mod_new_name.get()
         self.new_mod_source = self.variable_option.get()
-        # TODO: test 'not in os.listdir(core.library)'
-        if self.new_mod_name and self.new_mod_name not in os.listdir(core.library):
+        # 'not in os.listdir(core.library)' not working when creating triggered by a folder without definition.
+        forbidden_names = [_ for _ in os.listdir(core.library)
+                           if (os.path.isfile(f"{core.library}/{_}/{MOD_DEF_FILE_NAME}") or _ in core.exceptions)]
+        if self.new_mod_name and self.new_mod_name not in forbidden_names:
             self.set_log_update(f'command_mod_new: creating mod {self.new_mod_name}. Please wait ...')
             output = mod_new(self.new_mod_name, changes_source=self.new_mod_source)
             self.set_window_mods()
