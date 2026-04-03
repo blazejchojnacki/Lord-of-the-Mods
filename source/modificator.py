@@ -325,7 +325,7 @@ def hash_directory(file_or_folder, path_to_omit='', skip_first_level_files=False
 
 def get_available_name(snapshot_directory, prefix=SNAPSHOT_NAME):
     """ Given a directory, returns the name of the next file to save into. """
-    counter = 1
+    counter = '1'
     if not os.path.isdir(snapshot_directory):
         os.mkdir(snapshot_directory)
     elif os.path.exists(f'{snapshot_directory}/{prefix}{counter}.json'):
@@ -353,17 +353,12 @@ def snapshot_take(game_paths=None, add_paths=False):
     """
     if not game_paths:
         add_paths = True
+        game_paths = []
     while add_paths:
-        game_full_path = askdirectory(initialdir=f'{s.MAIN_DIRECTORY}',
+        game_full_path = askdirectory(initialdir=f'{core.install_path}',
                                       title=f'{s.PROGRAM_NAME}: select game directory to take a snapshot of')
         if game_full_path:
-            if os.path.abspath(core.library).replace('\\', '/') in game_full_path:
-                mod_name = game_full_path[len(os.path.abspath(core.library)):].split('/')[1]
-                path_to_omit = f'{os.path.abspath(core.library).replace('\\', '/')}/{mod_name}'
-            else:
-                path_to_omit = core.install_path
-            game_path = os.path.relpath(path_to_omit, game_full_path)
-            game_paths.append(game_path)
+            game_paths.append(game_full_path)
         elif not game_full_path:
             add_paths = False
         elif len(game_paths) == 0:
@@ -371,11 +366,12 @@ def snapshot_take(game_paths=None, add_paths=False):
 
     game_snapshot = {"date": f"{datetime.now()}"}
     for game_path in game_paths:
-        if os.path.abspath(core.library).replace('\\', '/') in game_path:
-            mod_name = game_path[len(os.path.abspath(core.library)):].split('/')[1]
-            path_to_omit = f'{os.path.abspath(core.library).replace('\\', '/')}/{mod_name}'
+        if core.library in game_path:
+            mod_name = game_path[len(core.library):].split('/')[1]
+            path_to_omit = f'{core.library}/{mod_name}'
         else:
             path_to_omit = core.install_path
+        game_path = game_path.replace(path_to_omit + '/', '')
         game_snapshot.update(hash_directory(game_path, path_to_omit=path_to_omit))
     return game_snapshot
 

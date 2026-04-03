@@ -542,8 +542,9 @@ class Test_Modificator_Snapshots(unittest.TestCase):
         ]
 
         # We trick `max(..., key=os.path.getctime)` into picking the file with "3"
-        # by making getctime return the length of the string
-        mock_getctime.side_effect = len
+        # by extracting the numeric suffix from the string and using it as the "time"
+        # (e.g., "1" -> 1, "2" -> 2, "3" -> 3)
+        mock_getctime.side_effect = lambda path: int(path.split('_')[-1].split('.')[0])
 
         result = modificator.get_available_name("C:/Snapshots", "file_snapshot_")
 
@@ -618,7 +619,9 @@ class Test_Modificator_Snapshots(unittest.TestCase):
             self, mock_isdir, mock_askdirectory, mock_askopenfilenames,
             mock_hash_directory, mock_hash_file, mock_snapshot_save, mock_snapshot_take
     ):
-        mock_isdir.return_value = True
+        # We explicitly tell isdir to return False if the literal keyword "directory"
+        # is checked, but True for our actual fake paths.
+        mock_isdir.side_effect = lambda path: path != "directory"
 
         # Pretend the user selects the start mod directory via the UI popup
         mock_askdirectory.return_value = "C:/Fake/StartMod"
