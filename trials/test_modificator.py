@@ -659,5 +659,148 @@ class Test_Modificator_Snapshots(unittest.TestCase):
         self.assertEqual(changes["C:/Fake/StartMod/data/remove_me.txt"][1], "hash_removed")
 
 
+class Test_Modificator_Definitions(unittest.TestCase):
+
+    def setUp(self):
+        # Prevent actual logging
+        self.patcher_log = patch('source.modificator.log')
+        self.mock_log = self.patcher_log.start()
+
+        # Predictable library path
+        core.library = "C:/Fake/Library"
+        core.exceptions = ["_ignore_me"]
+
+    def tearDown(self):
+        self.patcher_log.stop()
+
+    # --- 1. Definition Editor (definition_edit) ---
+
+    @patch('source.modificator.definition_save')
+    def test_definition_edit__simple_property(self, mock_def_save):
+        fake_mod = Mod({Property.NAME: "MyMod", Property.ACTIVE: False})
+
+        # Edit a simple property that does NOT trigger directory renaming
+        result = modificator.definition_edit(
+            definition_object=fake_mod,
+            active=True,
+            description="A test mod"
+        )
+
+        # It should update the dictionary and save the file
+        self.assertTrue(result[Property.ACTIVE])
+        self.assertEqual(result[Property.DESCRIPTION], "A test mod")
+        mock_def_save.assert_called_once_with(fake_mod, "C:/Fake/Library/MyMod")
+
+    @patch('source.modificator.os.rename')
+    @patch('source.modificator.definition_read')
+    @patch('source.modificator.os.listdir')
+    @patch('source.modificator.definition_save')
+    def test_definition_edit__renaming_updates_links(self, mock_def_save, mock_listdir, mock_def_read, mock_rename):
+        fake_mod = Mod({Property.NAME: "OldName"})
+
+        # Mock the library containing a child mod that depends on "OldName"
+        mock_listdir.return_value = ["ChildMod"]
+        fake_child = Mod({Property.NAME: "ChildMod", Property.OVERRIDES: "OldName"})
+        mock_def_read.return_value = fake_child
+
+        # Trigger a rename edit
+        result = modificator.definition_edit(
+            definition_object=fake_mod,
+            name="NewName"
+        )
+
+        # 1. It should rename the physical directory
+        mock_rename.assert_called_once_with(
+            src="C:/Fake/Library/OldName",
+            dst="C:/Fake/Library/NewName"
+        )
+
+        # 2. It should have recursively updated the ChildMod's ancestor link!
+        # (This is tested by checking if definition_save was called for the ChildMod)
+        self.assertEqual(fake_child[Property.OVERRIDES], "NewName")
+        mock_def_save.assert_any_call(fake_child, "C:/Fake/Library/ChildMod")
+
+        # 3. It should save the renamed target mod
+        self.assertEqual(result[Property.NAME], "NewName")
+        mock_def_save.assert_any_call(fake_mod, "C:/Fake/Library/OldName")
+
+    # --- 2. Definition Writer (definition_write) ---
+
+    @patch('source.modificator.initiate_comparison')
+    @patch('os.listdir')
+    @patch('os.path.isdir')
+    def test_definition_write__from_directory(self, mock_isdir, mock_listdir, mock_init_comp):
+        mock_isdir.return_value = True
+        # Mock initiate_comparison to return (Active Status, Changes Dict)
+        mock_init_comp.return_value = (False, {"data/file.txt": [modificator.Change.ADDED, "hash"]})
+
+        # We pass a mod_directory. The function should infer the name and set it up.
+        result = modificator.definition_write(
+            mod_directory="C:/Fake/Library/AutoMod",
+            changes_source="directory"
+        )
+
+        # Verify it auto-filled the missing properties correctly
+        self.assertEqual(result[Property.NAME], "AutoMod")
+        self.assertEqual(result[Property.TRANSFER_TYPE], modificator.DEFINITION_CLASSES[0])
+        self.assertEqual(result[Property.ACTIVE], False)
+        self.assertIn("data/file.txt", result[Property.CHANGES])
+
+        mock_init_comp.assert_called_once_with("C:/Fake/Library/AutoMod", changes_source="directory")
+
+    # --- 3. Mod Select Filter (mods_select) ---
+
+    @patch('source.modificator.definition_read')
+    @patch('os.listdir')
+    def test_mods_select(self, mock_listdir, mock_def_read):
+        # We put 3 folders in the library, plus 1 exception
+        mock_listdir.return_value = ["ModA", "ModB", "ModC", "_ignore_me"]
+
+        # We mock the read function to return different Definition objects
+        def fake_read(mod_path):
+            if "ModA" in mod_path: return Mod(
+                {Property.NAME: "ModA", Property.ACTIVE: True, Property.TRANSFER_TYPE: "General"})
+            if "ModB" in mod_path: return Mod(
+                {Property.NAME: "ModB", Property.ACTIVE: False, Property.TRANSFER_TYPE: "General"})
+            if "ModC" in mod_path: return Mod(
+                {Property.NAME: "ModC", Property.ACTIVE: True, Property.TRANSFER_TYPE: "Template"})
+            return Mod()
+
+        mock_def_read.side_effect = fake_read
+
+        # Test 1: Select ALL valid mods (Template class is ignored by mods_select by default)
+        all_mods = modificator.mods_select()
+        self.assertEqual(len(all_mods), 2)  # Only ModA and ModB are "General" or "Clone"
+
+        # Test 2: Select with filtering criteria
+        active_mods = modificator.mods_select(active=True)
+        self.assertEqual(len(active_mods), 1)
+        self.assertEqual(active_mods[0][Property.NAME], "ModA")
+
+    # --- 4. Mod Creator (mod_new) ---
+
+    @patch('source.modificator.definition_save')
+    @patch('source.modificator.definition_write')
+    @patch('os.mkdir')
+    @patch('os.path.isdir')
+    def test_mod_new(self, mock_isdir, mock_mkdir, mock_def_write, mock_def_save):
+        # Pretend the directory doesn't exist yet
+        mock_isdir.return_value = False
+
+        # Mock the definition_write return object
+        fake_def = Mod({Property.NAME: "BrandNewMod"})
+        mock_def_write.return_value = fake_def
+
+        modificator.mod_new("BrandNewMod", changes_source="directory")
+
+        # Verify it created the folder, generated the definition, and saved it
+        mock_mkdir.assert_called_once_with("C:/Fake/Library/BrandNewMod")
+        mock_def_write.assert_called_once_with(
+            mod_directory="C:/Fake/Library/BrandNewMod",
+            changes_source="directory"
+        )
+        mock_def_save.assert_called_once_with(fake_def, "C:/Fake/Library/BrandNewMod")
+
+
 if __name__ == '__main__':
     unittest.main()
