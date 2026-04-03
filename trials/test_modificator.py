@@ -38,10 +38,10 @@ class Test_Modificator(unittest.TestCase):
     def test_definition_read(self, mock_file, mock_isfile):
         mock_isfile.return_value = True
 
-        result = modificator.definition_read("C:/Fake/Library/MyMod")
+        result = modificator.definition_read(f"{core.install_path}/Fake/Library/MyMod")
 
         # Verify it loaded the JSON and converted it into a Mod object
-        mock_file.assert_called_once_with("C:/Fake/Library/MyMod/_definition.json")
+        mock_file.assert_called_once_with(f"{core.install_path}/Fake/Library/MyMod/_definition.json")
         self.assertIsInstance(result, Mod)
         self.assertEqual(result[Property.NAME], "LoadedMod")
 
@@ -50,10 +50,10 @@ class Test_Modificator(unittest.TestCase):
     def test_definition_save(self, mock_json_dump, mock_file):
         dummy_mod = Mod({Property.NAME: "SaveMe"})
 
-        modificator.definition_save(dummy_mod, "C:/Fake/Library/SaveMe")
+        modificator.definition_save(dummy_mod, f"{core.install_path}/Fake/Library/SaveMe")
 
         # Verify it wrote to the correct file path using json.dump
-        mock_file.assert_called_once_with("C:/Fake/Library/SaveMe/_definition.json", 'w')
+        mock_file.assert_called_once_with(f"{core.install_path}/Fake/Library/SaveMe/_definition.json", 'w')
         mock_json_dump.assert_called_once_with(dummy_mod, mock_file(), indent=4)
 
     # --- 2. Test Hashing and Directory Traversal ---
@@ -136,14 +136,12 @@ class Test_Modificator(unittest.TestCase):
     @patch('source.modificator.os.remove')
     @patch('source.modificator.move')
     @patch('source.modificator.copy2')
-    @patch('source.modificator.ensure_path_exists')
-    def test_make_transfer__routing(self, mock_ensure_path, mock_copy, mock_move, mock_remove):
+    def test_make_transfer__routing(self, mock_copy, mock_move, mock_remove):
         src = "C:/source/file.txt"
         dst = "C:/dest/file.txt"
 
         # Test COPY
         modificator.make_transfer(src, dst, transfer_type=Transfer.COPY, error_sensitive=False)
-        mock_ensure_path.assert_called_with(src, dst)
         mock_copy.assert_called_once_with(src, dst)
 
         # Test MOVE
@@ -163,9 +161,9 @@ class Test_Modificator_Attach(unittest.TestCase):
         self.mock_log = self.patcher_log.start()
 
         # Set up predictable paths for our core directories
-        core.library = "C:/Fake/Library"
-        core.archive = "C:/Fake/Archive"
-        s.MAIN_DIRECTORY = "C:/Fake/Game/"
+        core.library = f"{core.install_path}/Fake/Library"
+        core.archive = f"{core.install_path}/Fake/Archive"
+        s.MAIN_DIRECTORY = f"{core.install_path}/Fake"
 
     def tearDown(self):
         self.patcher_log.stop()
@@ -179,8 +177,10 @@ class Test_Modificator_Attach(unittest.TestCase):
         # 1. Arrange
         # Pretend the library mod folder exists, but the archive folder does NOT
         def isdir_mock(path):
-            if "Library/MyMod" in path: return True
-            if "Archive/MyMod" in path: return False
+            if "Library/MyMod" in path:
+                return True
+            if "Archive/MyMod" in path:
+                return False
             return True
 
         mock_isdir.side_effect = isdir_mock
@@ -190,10 +190,10 @@ class Test_Modificator_Attach(unittest.TestCase):
             Property.NAME: "MyMod",
             Property.TRANSFER_TYPE: modificator.DEFINITION_CLASSES[0],  # General (uses MOVE)
             Property.CHANGES: {
-                "data/ini/added.ini": [Change.ADDED, "hash1"],
-                "data/ini/changed.ini": [Change.CHANGED, "hash2", "hash3"],
-                "data/ini/removed.ini": [Change.REMOVED, "hash4"],
-                "data/ini/unchanged.ini": [Change.UNCHANGED, "hash5"]
+                "game/data/ini/added.ini": [Change.ADDED, "hash1"],
+                "game/data/ini/changed.ini": [Change.CHANGED, "hash2", "hash3"],
+                "game/data/ini/removed.ini": [Change.REMOVED, "hash4"],
+                "game/data/ini/unchanged.ini": [Change.UNCHANGED, "hash5"]
             }
         })
 
@@ -207,32 +207,32 @@ class Test_Modificator_Attach(unittest.TestCase):
 
         # 3. Assert
         self.assertTrue(result)
-        mock_mkdir.assert_called_once_with("C:/Fake/Archive/MyMod")
+        mock_mkdir.assert_called_once_with(f"{core.install_path}/Fake/Archive/MyMod")
 
         # Verify the exact routing of files!
         # ADDED files move from Library to Game
         mock_transfer.assert_any_call(
-            "C:/Fake/Library/MyMod/data/ini/added.ini",
-            "C:/Fake/Game/data/ini",
+            f"{core.install_path}/Fake/Library/MyMod/game/data/ini/added.ini",
+            f"{core.install_path}/game/data/ini",
             Transfer.MOVE, False
         )
 
         # CHANGED files move Source -> Archive, THEN Mod -> Game
         mock_transfer.assert_any_call(
-            "C:/Fake/Game/data/ini/changed.ini",
-            "C:/Fake/Archive/MyMod/data/ini",
+            f"{core.install_path}/game/data/ini/changed.ini",
+            f"{core.install_path}/Fake/Archive/MyMod/game/data/ini",
             Transfer.MOVE, False
         )
         mock_transfer.assert_any_call(
-            "C:/Fake/Library/MyMod/data/ini/changed.ini",
-            "C:/Fake/Game/data/ini",
+            f"{core.install_path}/Fake/Library/MyMod/game/data/ini/changed.ini",
+            f"{core.install_path}/game/data/ini",
             Transfer.MOVE, False
         )
 
         # REMOVED files move from Source -> Archive
         mock_transfer.assert_any_call(
-            "C:/Fake/Game/data/ini/removed.ini",
-            "C:/Fake/Archive/MyMod/data/ini",
+            f"{core.install_path}/game/data/ini/removed.ini",
+            f"{core.install_path}/Fake/Archive/MyMod/game/data/ini",
             Transfer.MOVE, False
         )
 
@@ -282,9 +282,9 @@ class Test_Modificator_Reverse(unittest.TestCase):
         self.mock_log = self.patcher_log.start()
 
         # Set up predictable paths
-        core.library = "C:/Fake/Library"
-        core.archive = "C:/Fake/Archive"
-        s.MAIN_DIRECTORY = "C:/Fake/Game"
+        core.library = f"{core.install_path}/Fake/Library"
+        core.archive = f"{core.install_path}/Fake/Archive"
+        s.MAIN_DIRECTORY = f"{core.install_path}/Fake"
 
     def tearDown(self):
         self.patcher_log.stop()
@@ -304,10 +304,10 @@ class Test_Modificator_Reverse(unittest.TestCase):
             Property.ACTIVE: True,
             Property.TRANSFER_TYPE: modificator.DEFINITION_CLASSES[0],  # General class
             Property.CHANGES: {
-                "data/ini/added.ini": [Change.ADDED, "hash1"],
-                "data/ini/changed.ini": [Change.CHANGED, "hash2", "hash3"],
-                "data/ini/removed.ini": [Change.REMOVED, "hash4"],
-                "data/ini/unchanged.ini": [Change.UNCHANGED, "hash5"]
+                "Game/data/ini/added.ini": [Change.ADDED, "hash1"],
+                "Game/data/ini/changed.ini": [Change.CHANGED, "hash2", "hash3"],
+                "Game/data/ini/removed.ini": [Change.REMOVED, "hash4"],
+                "Game/data/ini/unchanged.ini": [Change.UNCHANGED, "hash5"]
             }
         })
 
@@ -323,33 +323,33 @@ class Test_Modificator_Reverse(unittest.TestCase):
 
         # 3. Assert
         self.assertTrue(result)
-        mock_mkdir.assert_called_once_with("C:/Fake/Library/MyMod")
+        mock_mkdir.assert_called_once_with(f"{core.install_path}/Fake/Library/MyMod")
 
         # Verify the exact routing of files!
 
         # ADDED files move from Source (Game) -> Mod (Library)
         mock_transfer.assert_any_call(
-            "C:/Fake/Game/data/ini/added.ini",
-            "C:/Fake/Library/MyMod/data/ini",
+            f"{core.install_path}/Game/data/ini/added.ini",
+            f"{core.install_path}/Fake/Library/MyMod/Game/data/ini",
             Transfer.MOVE, False
         )
 
         # CHANGED files move Source -> Mod, THEN Archive -> Game
         mock_transfer.assert_any_call(
-            "C:/Fake/Game/data/ini/changed.ini",
-            "C:/Fake/Library/MyMod/data/ini",
+            f"{core.install_path}/Game/data/ini/changed.ini",
+            f"{core.install_path}/Fake/Library/MyMod/Game/data/ini",
             Transfer.MOVE, False
         )
         mock_transfer.assert_any_call(
-            "C:/Fake/Archive/MyMod/data/ini/changed.ini",
-            "C:/Fake/Game/data/ini",
+            f"{core.install_path}/Fake/Archive/MyMod/Game/data/ini/changed.ini",
+            f"{core.install_path}/Game/data/ini",
             Transfer.MOVE, False
         )
 
         # REMOVED files move Archive -> Game
         mock_transfer.assert_any_call(
-            "C:/Fake/Archive/MyMod/data/ini/removed.ini",
-            "C:/Fake/Game/data/ini",
+            f"{core.install_path}/Fake/Archive/MyMod/Game/data/ini/removed.ini",
+            f"{core.install_path}/Game/data/ini",
             Transfer.MOVE, False
         )
 
@@ -389,7 +389,7 @@ class Test_Modificator_Reverse(unittest.TestCase):
 
         # Verify the rollback mechanism kicked in to re-attach the mod
         mock_attach.assert_called_once_with(
-            mod_directory="C:/Fake/Library/MyMod",
+            mod_directory=f"{core.install_path}/Fake/Library/MyMod",
             check_type='pass'
         )
 
@@ -402,38 +402,7 @@ class Test_Modificator_Helpers(unittest.TestCase):
 
     def setUp(self):
         # Set a predictable library path for path-slicing tests
-        core.library = "C:/Fake/Library"
-
-    # --- 1. Path Generation (ensure_path_exists) ---
-
-    @patch('os.makedirs')
-    @patch('os.mkdir')
-    @patch('os.path.exists')
-    def test_ensure_path_exists__standard(self, mock_exists, mock_mkdir, mock_makedirs):
-        # Pretend no directories exist yet
-        mock_exists.return_value = False
-
-        # Test standard relative directory creation
-        modificator.ensure_path_exists("C:/Fake/Dir/file.txt", check_path="C:/Fake/Base")
-
-        # It should make the base dir, and then create the subdirectories
-        mock_makedirs.assert_called_with("C:/Fake/Base", exist_ok=True)
-        mock_mkdir.assert_called_with("C:/Fake/Base/Dir")
-
-    @patch('os.makedirs')
-    @patch('os.mkdir')
-    @patch('os.path.exists')
-    def test_ensure_path_exists__with_library(self, mock_exists, mock_mkdir, mock_makedirs):
-        mock_exists.return_value = False
-
-        # Pass a path that includes the core library
-        test_path = f"{core.library}/MyMod/data/ini/file.txt"
-        modificator.ensure_path_exists(test_path)
-
-        # It should automatically extract "MyMod" as the base path and step through the rest
-        mock_makedirs.assert_called_with("C:/Fake/Library/MyMod", exist_ok=True)
-        mock_mkdir.assert_any_call("C:/Fake/Library/MyMod/data")
-        mock_mkdir.assert_any_call("C:/Fake/Library/MyMod/data/ini")
+        core.library = f"{core.install_path}/Fake/Library"
 
     # --- 2. Hashing Engine (hash_file) ---
 
