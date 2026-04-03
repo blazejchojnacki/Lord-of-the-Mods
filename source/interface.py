@@ -9,15 +9,18 @@ from tklinenums import TkLineNumbers
 
 import source.core as core
 import source.shared as s
-from source.shared import MOD_DEF_FILE_NAME
+from source.shared import MOD_DEF_FILE_NAME, internal_message, InternalError, Setting
 from source.constructor import load_file, load_directories
 from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
-from source.module_control import mods_select, mods_sort, snapshot_take, snapshot_compare, \
+from source.modificator import mods_select, mods_sort, snapshot_take, snapshot_compare, \
     mod_detect_changes, mod_copy, mod_new, hash_file, Property, \
     definition_edit, DEFINITION_TEMPLATE, DEFINITION_CLASSES, Change, mod_check_relative, snapshot_save
 
 MOD_COLUMNS = {Property.NAME: 1, Property.TRANSFER_TYPE: 1, Property.DESCRIPTION: 5}
 CHANGES_COLUMNS = {'path': 6, 'type': 1}
+
+# TODO: create new mod based on currently edited file
+# FIX: mod changes not displayed with change type
 
 
 class ColumnedListbox(tkinter.ttk.Treeview):
@@ -97,7 +100,7 @@ class PoppingList(tkinter.Toplevel):
                     f'+{self.master.winfo_x() + self.offset_x}+{self.master.winfo_y() + self.offset_y}'
                 )
         except _tkinter.TclError:
-            print(s.internal_message('selection aborted: window closed'))
+            print(internal_message('selection aborted: window closed'))
 
     def on_select_option(self, event):
         global popping_list_chosen, popping_list_deployed
@@ -110,7 +113,7 @@ class PoppingList(tkinter.Toplevel):
             self.destroy()
             popping_list_deployed = False
         except _tkinter.TclError:
-            print(s.internal_message('TclError'))
+            print(internal_message('TclError'))
 
     def on_select_cancel(self, event=None):
         global popping_list_deployed
@@ -246,6 +249,7 @@ class Window(tkinter.Tk):
             list_buttons_settings[2].configure(command=lambda: self.settings_select_new_directory(2))
             list_buttons_settings[3].configure(command=lambda: self.settings_select_new_directory(3))
             list_buttons_settings[4].configure(command=lambda: self.settings_select_add_directory(4))
+            list_buttons_settings[5].configure(command=lambda: self.settings_select_add_directory(5))
         except IndexError:
             pass
 
@@ -853,7 +857,7 @@ class Window(tkinter.Tk):
             self.current_path = f"{self.label_browser.cget('text')}/{self.listbox_browser.selection_get()}".replace(
                 '\\', '/')
         except _tkinter.TclError:
-            print(s.internal_message('file not selected'))
+            print(internal_message('file not selected'))
         self.label_scope_select.configure(text='file')
         self.text_scope_select.delete('1.0', 'end')
         try:
@@ -915,9 +919,9 @@ class Window(tkinter.Tk):
             self.text_find.delete('1.0', 'end')
             self.text_find.insert('1.0', selection)
         except UnboundLocalError:
-            print(s.internal_message('UnboundLocalError'))
+            print(internal_message('UnboundLocalError'))
         except _tkinter.TclError:
-            print(s.internal_message('no text selected'))
+            print(internal_message('no text selected'))
         self.text_result.focus()
         self.current_window = 'text_find'
         self.set_log_update('find feature loaded')
@@ -948,9 +952,9 @@ class Window(tkinter.Tk):
             self.text_find.delete('1.0', 'end')
             self.text_find.insert('1.0', selection)
         except UnboundLocalError:
-            print(s.internal_message('UnboundLocalError'))
+            print(internal_message('UnboundLocalError'))
         except _tkinter.TclError:
-            print(s.internal_message('no text selected'))
+            print(internal_message('no text selected'))
         self.current_window = 'self.text_replace'
         self.set_log_update('replace feature loaded')
 
@@ -1004,23 +1008,25 @@ class Window(tkinter.Tk):
             counter += 1
         if new_settings:
             try:
-                if core.settings.load(new_settings):
-                    self.set_log_update('Settings saved and checked.')
-                else:
-                    self.set_log_update('The provided value seems to be incorrect.')
-            except s.InternalError as error:
+                core.settings.save(new_settings)
+                self.set_log_update('Settings saved and checked.')
+            except InternalError as error:
                 self.set_log_update(error.message)
                 self.command_settings_reload()
+        else:
+            self.set_log_update('Settings unchanged')
 
     def command_settings_reload(self):
         """ Reads the settings from the SETTINGS_FILE and inserts them into the settings text fields. """
         counter = 0
         for setting_key in core.settings:
+            self.list_entry_settings[counter].configure(state='normal')
             self.list_entry_settings[counter].delete('0', 'end')
             if isinstance(core.settings[setting_key], list):
                 self.list_entry_settings[counter].insert('end', ', '.join(core.settings[setting_key]))
             else:
                 self.list_entry_settings[counter].insert('end', core.settings[setting_key])
+            self.list_entry_settings[counter].configure(state='disabled')
             counter += 1
 
     def on_select_mod_idle(self, event):
@@ -1105,8 +1111,7 @@ class Window(tkinter.Tk):
     def refresh_definitions(self):
         """ Refreshes the lists of active and non-active mods. """
         try:
-            self.treeview_mods_active.delete(*self.treeview_mods_active.get_children())
-            library_folders = [_ for _ in os.listdir(core.library) if _ not in core.settings[s.Setting.EXCEPTIONS]]
+            library_folders = [_ for _ in os.listdir(core.library) if _ not in core.exceptions]
             for folder in library_folders:
                 if not os.path.isfile(f'{core.library}/{folder}/{MOD_DEF_FILE_NAME}'):
                     self.set_log_update(f'Detected a definition-less folder in the library - {folder}')
@@ -1121,7 +1126,13 @@ class Window(tkinter.Tk):
                         self.set_window_mod_new(start_name=folder)
                         return
                     if not do_initiate:
-                        core.settings.save({s.Setting.EXCEPTIONS: folder})
+                        exceptions = core.settings[Setting.EXCEPTIONS].copy()
+                        exceptions.append(f'{core.settings[Setting.LIBRARY]}/{folder}')
+                        core.settings.save({s.Setting.EXCEPTIONS: exceptions})
+        except InternalError:
+            self.set_log_update('library exception error')
+        try:
+            self.treeview_mods_active.delete(*self.treeview_mods_active.get_children())
             active_mods = mods_select(**{Property.ACTIVE: True})
             active_mod_parent_dict = mods_sort(mods=active_mods)
             for mod in active_mods:
@@ -1137,7 +1148,9 @@ class Window(tkinter.Tk):
                 except KeyError:
                     pass
             self.treeview_mods_active.open_children()
-
+        except InternalError as err:
+            self.set_log_update('active_mods not loaded')
+        try:
             self.treeview_mods_idle.delete(*self.treeview_mods_idle.get_children())
             idle_mods = mods_select(**{Property.ACTIVE: False})
             idle_mod_parent_dict = mods_sort(mods=idle_mods)
@@ -1154,8 +1167,8 @@ class Window(tkinter.Tk):
                 except KeyError:
                     pass
             self.treeview_mods_idle.open_children()
-        except s.InternalError:
-            self.set_log_update('definitions not loaded - settings not loaded.')
+        except InternalError as err:
+            self.set_log_update('inactive mods not loaded')
             return
         except _tkinter.TclError:
             self.set_log_update('loading mod error')
@@ -1165,8 +1178,10 @@ class Window(tkinter.Tk):
         """ Creates a new mod after asking for a name and a way to create it. """
         self.new_mod_name = self.entry_mod_new_name.get()
         self.new_mod_source = self.variable_option.get()
-        # TODO: test 'not in os.listdir(core.library)'
-        if self.new_mod_name and self.new_mod_name not in os.listdir(core.library):
+        # 'not in os.listdir(core.library)' not working when creating triggered by a folder without definition.
+        forbidden_names = [_ for _ in os.listdir(core.library)
+                           if (os.path.isfile(f"{core.library}/{_}/{MOD_DEF_FILE_NAME}") or _ in core.exceptions)]
+        if self.new_mod_name and self.new_mod_name not in forbidden_names:
             self.set_log_update(f'command_mod_new: creating mod {self.new_mod_name}. Please wait ...')
             output = mod_new(self.new_mod_name, changes_source=self.new_mod_source)
             self.set_window_mods()
@@ -1237,7 +1252,7 @@ class Window(tkinter.Tk):
                 self.set_log_update(f'command_mod_attach error: mod {name_mod_selected} not found')
         except _tkinter.TclError:
             self.set_log_update('command_mod_attach warning: TclError')
-        except s.InternalError as err:
+        except InternalError as err:
             self.set_log_update(err.message)
 
     def command_mod_retrieve(self):
@@ -1301,7 +1316,7 @@ class Window(tkinter.Tk):
                 self.set_log_update(f'command_mod_retrieve error: mod {mod_selected} not found')
         except _tkinter.TclError:
             self.set_log_update('command_mod_retrieve error: mod not selected')
-        except s.InternalError as err:
+        except InternalError as err:
             self.set_log_update(err.message)
 
     def command_mod_reload(self):
@@ -1342,9 +1357,9 @@ class Window(tkinter.Tk):
                                 command_exe = command[:command.index('.exe') + len('.exe')]
                                 command_mod = command.split(' -mod ')[1]
                             else:
-                                raise s.InternalError
+                                raise InternalError
                         else:
-                            raise s.InternalError
+                            raise InternalError
                         if command_exe:
                             # # # OPTIMIZE: allow using LotM commands
                             if command_mod:
@@ -1358,10 +1373,10 @@ class Window(tkinter.Tk):
                                 subprocess.run(f"{command_exe}")
                                 self.set_log_update('Application resumed.')
                         else:
-                            raise s.InternalError
+                            raise InternalError
                     else:
-                        raise s.InternalError
-            except s.InternalError:
+                        raise InternalError
+            except InternalError:
                 return self.set_log_update('launch command is incorrect')
 
     def command_definition_save(self):
@@ -1391,7 +1406,7 @@ class Window(tkinter.Tk):
                     if Property.TRANSFER_TYPE in edited_parameters and mod[Property.ACTIVE] is True:
                         mod.reload_after_class_change()
                     break
-                except s.InternalError as error:
+                except InternalError as error:
                     output = error.message
         self.set_log_update(output)
 
@@ -1500,11 +1515,11 @@ class Window(tkinter.Tk):
                     self.new_changes.pop(file_path)
                     self.treeview_changes_new.delete(selected)
         except _tkinter.TclError:
-            print(s.internal_message('TclError'))
+            print(internal_message('TclError'))
         except IndexError:
-            print(s.internal_message('IndexError'))
+            print(internal_message('IndexError'))
         except KeyError:
-            print(s.internal_message('KeyError'))
+            print(internal_message('KeyError'))
 
     def command_mod_browse(self, event=None):
         """ Allows to start browsing from the object folder if it can be found. """
@@ -1564,7 +1579,7 @@ class Window(tkinter.Tk):
             try:
                 file_name = self.listbox_browser.selection_get()
                 if file_name == MOD_DEF_FILE_NAME or file_name.endswith('.big'):
-                    raise s.InternalError
+                    raise InternalError
                 elif os.path.isfile(f'{self.current_path}/{self.listbox_browser.selection_get()}'):
                     self.key_to_command_current = self.key_to_command_browser.copy()
                     self.button_run.configure(text='open file'.upper())
@@ -1575,7 +1590,7 @@ class Window(tkinter.Tk):
                 self.position(self.button_run)
                 self.button_run.configure(text='open folder'.upper())
                 self.retrieve(self.button_execute)
-            except s.InternalError:
+            except InternalError:
                 self.retrieve(self.button_run, self.button_execute)
                 try:
                     self.key_to_command_current.pop('<Return>')
@@ -1594,7 +1609,7 @@ class Window(tkinter.Tk):
             self.set_log_update(f'going to {os.path.abspath(self.current_path)}')
             self.open_browser_item()
         except _tkinter.TclError:
-            print(s.internal_message('_tkinter.TclError - no selection'))
+            print(internal_message('_tkinter.TclError - no selection'))
         except PermissionError as error:
             self.set_log_update(error.strerror)
             self.current_path = self.current_path[:self.current_path.rfind('/')]
@@ -1628,7 +1643,7 @@ class Window(tkinter.Tk):
                     self.retrieve(self.button_execute)
                 self.listbox_browser.select_set(0)
                 self.set_log_update(f'opened {os.path.abspath(self.current_path)}')
-            except s.InternalError as error:
+            except InternalError as error:
                 self.set_log_update(error.message)
         elif os.path.isfile(self.current_path):
             self.text_scope_select.delete('1.0', 'end')
@@ -1657,7 +1672,7 @@ class Window(tkinter.Tk):
         except TypeError:
             self.command_browser_back()
             self.set_log_update('cannot open this type of file')
-        except s.InternalError as error:
+        except InternalError as error:
             self.command_browser_back()
             self.set_log_update(error.message)
         return False
@@ -1812,7 +1827,7 @@ class Window(tkinter.Tk):
             file_named = file_named.replace('{', '').replace('}', '')
             try:
                 output += move_file(file_named, to_folder)
-            except s.InternalError as error:
+            except InternalError as error:
                 output += error.message
             else:
                 mod_index_start = self.current_path.find(core.library) + len(core.library) + 1
@@ -1854,7 +1869,7 @@ class Window(tkinter.Tk):
         try:
             new_snapshot = snapshot_take()
             result_path = snapshot_save(new_snapshot)
-        except s.InternalError:
+        except InternalError:
             self.set_log_update(f'snapshot not generated. path not selected')
         else:
             self.set_log_update(f'snapshot generated. path: {result_path}')
@@ -1864,7 +1879,7 @@ class Window(tkinter.Tk):
         self.set_log_update('generating snapshot comparison - please wait')
         try:
             result_path = snapshot_compare(return_type='path')
-        except s.InternalError:
+        except InternalError:
             self.set_log_update(f'snapshot comparison not generated. Snapshots not selected.')
         else:
             self.set_log_update(f'snapshot comparison generated. path: {result_path}')
@@ -1883,7 +1898,7 @@ class Window(tkinter.Tk):
             else:
                 print(event.keysym)
         except UnboundLocalError:
-            print(s.internal_message("selection seems empty"))
+            print(internal_message("selection seems empty"))
 
     def press_key_in_current_mode(self, event=None):
         """ Binds key presses to functions in the current dictionary of key-functions. """

@@ -247,9 +247,9 @@ def load_directories(full_path, mode=0):
             if mode == 1:
                 add_folders, add_files = load_directories(output_folders[-1], mode=1)
                 if add_folders:
-                    output_folders.append(add_folders)
+                    output_folders.extend(add_folders)
                 if add_files:
-                    output_files.append(add_files)
+                    output_files.extend(add_files)
         elif os.path.isfile(f'{full_path}/{item}'):
             output_files.append(f'{(full_path + "/") * mode}{item}')
     return output_folders, output_files

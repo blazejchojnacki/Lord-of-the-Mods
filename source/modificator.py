@@ -325,7 +325,7 @@ def hash_directory(file_or_folder, path_to_omit='', skip_first_level_files=False
 
 def get_available_name(snapshot_directory, prefix=SNAPSHOT_NAME):
     """ Given a directory, returns the name of the next file to save into. """
-    counter = 1
+    counter = '1'
     if not os.path.isdir(snapshot_directory):
         os.mkdir(snapshot_directory)
     elif os.path.exists(f'{snapshot_directory}/{prefix}{counter}.json'):
@@ -353,17 +353,12 @@ def snapshot_take(game_paths=None, add_paths=False):
     """
     if not game_paths:
         add_paths = True
+        game_paths = []
     while add_paths:
-        game_full_path = askdirectory(initialdir=f'{s.MAIN_DIRECTORY}',
+        game_full_path = askdirectory(initialdir=f'{core.install_path}',
                                       title=f'{s.PROGRAM_NAME}: select game directory to take a snapshot of')
         if game_full_path:
-            if os.path.abspath(core.library).replace('\\', '/') in game_full_path:
-                mod_name = game_full_path[len(os.path.abspath(core.library)):].split('/')[1]
-                path_to_omit = f'{os.path.abspath(core.library).replace('\\', '/')}/{mod_name}'
-            else:
-                path_to_omit = core.install_path
-            game_path = os.path.relpath(path_to_omit, game_full_path)
-            game_paths.append(game_path)
+            game_paths.append(game_full_path)
         elif not game_full_path:
             add_paths = False
         elif len(game_paths) == 0:
@@ -371,11 +366,12 @@ def snapshot_take(game_paths=None, add_paths=False):
 
     game_snapshot = {"date": f"{datetime.now()}"}
     for game_path in game_paths:
-        if os.path.abspath(core.library).replace('\\', '/') in game_path:
-            mod_name = game_path[len(os.path.abspath(core.library)):].split('/')[1]
-            path_to_omit = f'{os.path.abspath(core.library).replace('\\', '/')}/{mod_name}'
+        if core.library in game_path:
+            mod_name = game_path[len(core.library):].split('/')[1]
+            path_to_omit = f'{core.library}/{mod_name}'
         else:
             path_to_omit = core.install_path
+        game_path = game_path.replace(path_to_omit + '/', '')
         game_snapshot.update(hash_directory(game_path, path_to_omit=path_to_omit))
     return game_snapshot
 
@@ -494,7 +490,7 @@ def initiate_comparison(mod_directory, start_mod='', changes_source='directory')
     elif changes_source == 'directory':
         if not start_mod:
             start_mod = askdirectory(title=f'{s.PROGRAM_NAME}: select the game directory to define the mod',
-                                        initialdir=s.MAIN_DIRECTORY)
+                                     initialdir=s.MAIN_DIRECTORY)
         new_files_dict = hash_directory(mod_directory, path_to_omit=mod_directory, skip_first_level_files=True)
         if start_mod and new_files_dict:
             active = False
@@ -549,9 +545,10 @@ def initiate_comparison(mod_directory, start_mod='', changes_source='directory')
 
 def evaluate_changes(comparison):
     changes = {}
-    if os.path.isfile(comparison):
-        with open(comparison) as comparison_buffer:
-            comparison_dict = json.load(comparison_buffer)
+    if isinstance(comparison, str):
+        if os.path.isfile(comparison):
+            with open(comparison) as comparison_buffer:
+                comparison_dict = json.load(comparison_buffer)
     elif isinstance(comparison, dict):
         comparison_dict = comparison
     else:
@@ -617,10 +614,10 @@ def make_transfer(src, dst='', transfer_type: Transfer = Transfer.COPY, error_se
     global error_sensitivity
     try:
         if transfer_type == Transfer.COPY:
-            ensure_path_exists(src, dst)
+            os.makedirs(dst, exist_ok=True)
             copy2(src, dst)
         elif transfer_type == Transfer.MOVE:
-            ensure_path_exists(src, dst)
+            os.makedirs(dst, exist_ok=True)
             move(src, dst)
         elif transfer_type == Transfer.DELETE:
             os.remove(src)
@@ -659,23 +656,6 @@ def make_transfer(src, dst='', transfer_type: Transfer = Transfer.COPY, error_se
                 error_sensitivity = False
             elif do_proceed is None:
                 raise s.InternalError(err.strerror)
-
-
-def ensure_path_exists(file_path, check_path='..'):
-    """ Creates the directories in the ARCHIVE and LIBRARY folders where the files will be transferred. """
-    # # # 'if' added for case of transfer_switch - copy.
-    if core.library in file_path:
-        check_path = '/'.join(file_path.split('/')[:core.library.count('/') + 2])
-        file_path = file_path[file_path.index(check_path) + len(check_path) + 1:]
-    # note: changed in #lord_of_the_mods
-    if not os.path.exists(check_path):
-        os.makedirs(check_path, exist_ok=True)
-    path_folders = file_path.split('/')
-    file_path_part = ''
-    for file_folder in path_folders[1:-1]:
-        file_path_part += f'/{file_folder}'
-        if not os.path.exists(f'{check_path}{file_path_part}'):
-            os.mkdir(f'{check_path}{file_path_part}')
 
 
 def check_library(mod_object):
@@ -739,13 +719,11 @@ def mod_reverse(mod_object, transfer: Transfer = Transfer.COPY, check_type='hash
                 raise s.InternalError('heir mod not retrieved')
     elif check_type == 'pass':
         error_sensitivity = False
-    output = ''
     try:
         for path_key in comparison_dict:
-            file_path_source = f"{s.MAIN_DIRECTORY}/{path_key}"
-            file_path_game = f"{s.MAIN_DIRECTORY}/{'/'.join(path_key.split('/')[:-1])}"
-            file_path_mod = (f"{core.library}/{mod_name}/"
-                                f"{'/'.join(path_key.split('/')[0:-1])}")
+            file_path_source = f"{core.install_path}/{path_key}"
+            file_path_game = f"{core.install_path}/{'/'.join(path_key.split('/')[:-1])}"
+            file_path_mod = f"{core.library}/{mod_name}/{'/'.join(path_key.split('/')[0:-1])}"
             file_path_archive = f"{core.archive}/{mod_name}/{path_key}"
             if 'hash' in check_type:
                 pass
@@ -753,24 +731,24 @@ def mod_reverse(mod_object, transfer: Transfer = Transfer.COPY, check_type='hash
                 pass
             elif comparison_dict[path_key][0] == Change.CHANGED:
                 if transfer in Transfer:
-                    output += transfer_switch(file_path_source, file_path_mod, transfer, error_sensitivity)
+                    transfer_switch(file_path_source, file_path_mod, transfer, error_sensitivity)
                 if transfer == Transfer.MOVE or transfer == Transfer.DELETE:
-                    output += transfer_switch(file_path_archive, file_path_game, Transfer.MOVE, error_sensitivity)
+                    transfer_switch(file_path_archive, file_path_game, Transfer.MOVE, error_sensitivity)
             elif comparison_dict[path_key][0] == Change.ADDED:
-                output += transfer_switch(file_path_source, file_path_mod, transfer, error_sensitivity)
+                transfer_switch(file_path_source, file_path_mod, transfer, error_sensitivity)
             elif comparison_dict[path_key][0] == Change.REMOVED:
                 if transfer == Transfer.MOVE or transfer == Transfer.DELETE:
-                    output += transfer_switch(file_path_archive, file_path_game, Transfer.MOVE, error_sensitivity)
+                    transfer_switch(file_path_archive, file_path_game, Transfer.MOVE, error_sensitivity)
                 else:
                     pass
     except s.InternalError:
-        log(f'mod_reverse {mod_name} CANCELLED\n{output}')
+        log(f'mod_reverse {mod_name} CANCELLED\n')
         mod_attach(mod_directory=f'{core.library}/{mod_name}', check_type='pass')
         return False
     if TEST:
         raise s.InternalError('under TEST phase: mod_reverse not applied')
     definition_edit(definition_object=mod_object, active=False)
-    log(f'mod_reverse {mod_name}\n{output}')
+    log(f'mod_reverse {mod_name}\n')
     return True
 
 
@@ -833,32 +811,37 @@ def mod_attach(mod_object=None, mod_directory=None, check_type='ancestor'):
                 raise s.InternalError('ancestor mod not attached')
     elif check_type == 'pass':
         error_sensitivity = False
-    mod_name = mod_directory.split('/')[-1]
+    if mod_object[Property.NAME]:
+        mod_name = mod_object[Property.NAME]
+    elif mod_directory:
+        mod_name = mod_directory.split('/')[-1]
+    else:
+        raise s.InternalError("unnamed mod")
     if not os.path.isdir(f'{core.archive}/{mod_name}'):
         os.mkdir(f'{core.archive}/{mod_name}')
-    comparison_dict = mod_object[Property.CHANGES].copy
+    comparison_dict = mod_object[Property.CHANGES].copy()
     if not comparison_dict and os.path.isfile(f"{mod_directory}/{COMPARISON_NAME}{mod_name}.json"):
         with open(f"{mod_directory}/{COMPARISON_NAME}{mod_name}.json") as comparison_buffer:
             comparison_dict = json.load(comparison_buffer)
     if comparison_dict:
-        output = ''
+        # output = ''
         try:
             for path_key in comparison_dict:
-                file_path_source = f"{s.MAIN_DIRECTORY}{path_key}"
-                file_path_game = f"{s.MAIN_DIRECTORY}{'/'.join(path_key.split('/')[:-1])}"
+                file_path_source = f"{core.install_path}/{path_key}"
+                file_path_game = f"{core.install_path}/{'/'.join(path_key.split('/')[:-1])}"
                 file_path_archive = f"{core.archive}/{mod_name}/{'/'.join(path_key.split('/')[0:-1])}"
                 file_path_mod = f"{core.library}/{mod_name}/{path_key}"
                 if comparison_dict[path_key][0] == Change.UNCHANGED:
                     pass
                 elif comparison_dict[path_key][0] == Change.CHANGED:
-                    output += transfer_switch(file_path_source, file_path_archive, transfer, error_sensitivity)
-                    output += transfer_switch(file_path_mod, file_path_game, transfer, error_sensitivity)
+                    transfer_switch(file_path_source, file_path_archive, transfer, error_sensitivity)
+                    transfer_switch(file_path_mod, file_path_game, transfer, error_sensitivity)
                 elif comparison_dict[path_key][0] == Change.ADDED:
-                    output += transfer_switch(file_path_mod, file_path_game, transfer, error_sensitivity)
+                    transfer_switch(file_path_mod, file_path_game, transfer, error_sensitivity)
                 elif comparison_dict[path_key][0] == Change.REMOVED:
-                    output += transfer_switch(file_path_source, file_path_archive, transfer, error_sensitivity)
+                    transfer_switch(file_path_source, file_path_archive, transfer, error_sensitivity)
         except s.InternalError:
-            log(f'mod_attach {mod_name} CANCELLED\n{output}')
+            log(f'mod_attach {mod_name} CANCELLED\n')
             mod_reverse(mod_object=mod_object, transfer=Transfer.REMOVE, check_type='pass')
             return False
     else:
@@ -866,7 +849,7 @@ def mod_attach(mod_object=None, mod_directory=None, check_type='ancestor'):
     if TEST:
         raise s.InternalError('Test phase: mod_attach not applied')
     definition_edit(definition_object=mod_object, active=True)
-    log(f'mod_attach {mod_name}\n{output}')
+    log(f'mod_attach {mod_name}\n')
     return True
 
 

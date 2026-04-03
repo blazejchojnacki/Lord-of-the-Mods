@@ -3,15 +3,35 @@ import json
 import os.path
 from pathlib import Path
 
-from source.shared import SETTINGS_FILE_PATH, _SETTINGS_FORMAT, Setting, \
+from source.shared import SETTINGS_FILE_PATH, _SETTINGS_FORMAT, Setting, MAIN_DIRECTORY, \
     InternalError
 
-install_path = os.path.abspath('../..').strip('\\').replace('\\', '/')
+install_path = str(Path(__file__).parent.parent.parent.resolve()).replace('\\', '/').strip('/')
 
-library = '_LIBRARY'
-archive = '_ARCHIVE'
+library = f'{MAIN_DIRECTORY}/_LIBRARY'
+archive = f'{MAIN_DIRECTORY}/_ARCHIVE'
 games = []
 exceptions = []
+
+
+def complete_paths(paths_dict):
+    return_paths = []
+    if Setting.LIBRARY in paths_dict:
+        if paths_dict[Setting.LIBRARY]:
+            library_path = f"{install_path}/{paths_dict[Setting.LIBRARY]}"
+            return_paths.append(library_path)
+        else:
+            raise InternalError("empty path")
+    if Setting.ARCHIVE in paths_dict:
+        if paths_dict[Setting.ARCHIVE]:
+            return_paths.append(f"{install_path}/{paths_dict[Setting.ARCHIVE]}")
+        else:
+            raise InternalError("empty path")
+    if Setting.GAMES in paths_dict:
+        return_paths.extend([f"{install_path}/{_}" for _ in paths_dict[Setting.GAMES]])
+    if Setting.EXCEPTIONS in paths_dict:
+        return_paths.extend([f"{install_path}/{_}" for _ in paths_dict[Setting.EXCEPTIONS]])
+    return return_paths
 
 
 class Settings(dict):
@@ -19,24 +39,17 @@ class Settings(dict):
         super().__init__()
 
     def create_directories(self, settings_dict):
-        for key in settings_dict:
-            if key not in _SETTINGS_FORMAT:
-                pass
-            elif settings_dict[key]:
-                paths = []
-                if isinstance(settings_dict[key], list):
-                    paths = settings_dict[key]
-                elif isinstance(settings_dict[key], str):
-                    paths = [settings_dict[key]]
-                for path in paths:
-                    os.makedirs(path, exist_ok=True)
+        for path in complete_paths(settings_dict):
+            os.makedirs(path, exist_ok=True)
 
     def propagate(self):
         global library, archive, games, exceptions
-        library = self[Setting.LIBRARY]
-        archive = self[Setting.ARCHIVE]
-        games = self[Setting.GAMES]
-        exceptions = self[Setting.EXCEPTIONS]
+        library = f'{install_path}/{self[Setting.LIBRARY]}'
+        archive = f'{install_path}/{self[Setting.ARCHIVE]}'
+        games = [f'{install_path}/{_}' for _ in self[Setting.GAMES]]
+        # # # use cases require only the folder names in the library
+        # exceptions = [f'{install_path}/{_}' for _ in self[Setting.EXCEPTIONS]]
+        exceptions = [_.split('/')[-1] for _ in self[Setting.EXCEPTIONS]]
 
     def load(self):
         if os.path.isfile(SETTINGS_FILE_PATH):
@@ -47,7 +60,6 @@ class Settings(dict):
             self.propagate()
             return True
         else:
-            # raise g.InternalError(f"{g.SETTINGS_FILE_PATH} not found")
             self.update(_SETTINGS_FORMAT)
             return False
 
@@ -62,29 +74,20 @@ class Settings(dict):
     def check_paths(self, new_settings_dict):
         settings_result = self.copy()
         settings_result.update(new_settings_dict)
-        for key in _SETTINGS_FORMAT:
-            if settings_result[key] and key not in [Setting.TITLE, Setting.VERSION]:
-                paths = []
-                # if isinstance(settings_result[key], list):
-                if key == Setting.GAMES:
-                    paths = [f'{install_path}/{_}' for _ in settings_result[key]]
-                elif key == Setting.EXCEPTIONS:
-                    paths = [f'{library}/{_}' for _ in settings_result[key]]
-                elif isinstance(settings_result[key], str):
-                    paths = [settings_result[key]]
-                for path in paths:
-                    if not os.path.isdir(path):
-                        # raise g.InternalError(f"{path} not found")
-                        return False
-            elif key == Setting.LIBRARY or key == Setting.ARCHIVE:
-                return False
+        try:
+            completed_paths = complete_paths(settings_result)
+            for path in completed_paths:
+                if not os.path.isdir(path):
+                    return False
+        except InternalError:
+            return False
         return True
 
     def save(self, settings_dict):
         if self.check_paths(settings_dict):
             self.update(settings_dict)
             self.check_format()
-            with open(SETTINGS_FILE_PATH, 'x') as file_stream:
+            with open(SETTINGS_FILE_PATH, 'w') as file_stream:
                 file_stream.write(json.dumps(self, indent=4))
             self.propagate()
         else:

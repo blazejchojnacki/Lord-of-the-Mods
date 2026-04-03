@@ -63,12 +63,12 @@ KEY_INFO = 'info'
 AESTHETIC_PATH = f'{MAIN_DIRECTORY}/aesthetic/'
 
 # # # global variable
-current_info: tkinter.Toplevel
 main_window: tkinter.Tk
+current_info: tkinter.Toplevel
 
 
 def log(output, file='file_changes.txt'):
-    if not os.path.isfile(LOG_PATH):
+    if not os.path.isdir(LOG_PATH):
         os.mkdir(LOG_PATH)
     if os.path.isfile(f'{LOG_PATH}/{file}'):
         with open(f'{LOG_PATH}/{file}', 'a') as log_file:

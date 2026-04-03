@@ -133,9 +133,10 @@ def text_find_replace(find, replace_with=None, scope='', exceptions=None, mode='
         for scope_element in scope.split(', '):
             output += text_find_replace(find, replace_with, scope_element, exceptions, mode='part')
         return output
-    for exception in exceptions:
-        if scope.replace('\\', '/') == exception.replace('\\', '/'):
-            return output
+    if exceptions:
+        for exception in exceptions:
+            if scope.replace('\\', '/') == exception.replace('\\', '/'):
+                return output
     if os.path.isfile(scope):
         try:
             # file_content = c.load_file(scope)  # faster to read without reformatting
@@ -311,10 +312,7 @@ def duplicates_find(of_object_or_file, in_file_or_directory=None):
     """
     if in_file_or_directory is None:
         in_file_or_directory = of_object_or_file
-    if of_object_or_file.endswith('.str'):
-        space = ':'
-    else:
-        space = ' '
+    space = ' '
     output = f'{datetime.now()}'
     output += f' command: find duplicates from {of_object_or_file} in {in_file_or_directory}:\n'
     if os.path.isfile(in_file_or_directory):
@@ -329,6 +327,8 @@ def duplicates_find(of_object_or_file, in_file_or_directory=None):
         items_to_look_for = of_object_or_file
     elif os.path.isfile(of_object_or_file):
         items_to_look_for = c.ConstructFile(of_object_or_file)
+        if of_object_or_file.endswith('.str'):
+            space = ':'
     else:
         raise s.InternalError(f"wrong input type {of_object_or_file}")
     items_number = len(items_to_look_for)
