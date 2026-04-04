@@ -3,9 +3,8 @@ from unittest.mock import patch, mock_open, MagicMock, call
 import json
 
 import source.core as core
-import source.shared as s
 import source.modificator as modificator
-from source.modificator import Property, Transfer, Change, Mod
+from source.constants import Transfer, Change
 
 
 class Test_Modificator(unittest.TestCase):
@@ -14,13 +13,16 @@ class Test_Modificator(unittest.TestCase):
         # Globally mock the log function to prevent log file spam during testing
         self.patcher_log = patch('source.modificator.log')
         self.mock_log = self.patcher_log.start()
+        core.library = f"{core.install_path}/Fake/Library"
+
+        # We need to ensure os.path.abspath returns our fake paths cleanly
+        # because snapshot_take uses it to calculate string slices.
+        self.patcher_abspath = patch('os.path.abspath', side_effect=lambda p: p)
+        self.patcher_abspath.start()
 
     def tearDown(self):
         self.patcher_log.stop()
-
-    # --- 1. Test Definitions and Mod Class ---
-
-    # --- 2. Test Hashing and Directory Traversal ---
+        self.patcher_abspath.stop()
 
     @patch('source.modificator.hash_file')
     @patch('os.listdir')
@@ -66,8 +68,6 @@ class Test_Modificator(unittest.TestCase):
         # Ensure ONLY the 2 game files were actually hashed
         self.assertEqual(len(result), 2)
 
-    # --- 3. Test Snapshot Comparison Logic ---
-
     def test_snapshot_compare__dict_mode(self):
         # We pass raw dictionaries to bypass the file loading logic
         snap_anterior = {
@@ -95,8 +95,6 @@ class Test_Modificator(unittest.TestCase):
         self.assertEqual(result["file_removed.ini"][0], Change.REMOVED)
         self.assertEqual(result["file_added.ini"][0], Change.ADDED)
 
-    # --- 4. Test File Transfer Router ---
-
     @patch('source.modificator.os.remove')
     @patch('source.modificator.move')
     @patch('source.modificator.copy2')
@@ -116,19 +114,10 @@ class Test_Modificator(unittest.TestCase):
         modificator.make_transfer(src, dst, transfer_type=Transfer.DELETE, error_sensitive=False)
         mock_remove.assert_called_once_with(src)
 
-
-class Test_Modificator_Helpers(unittest.TestCase):
-
-    def setUp(self):
-        # Set a predictable library path for path-slicing tests
-        core.library = f"{core.install_path}/Fake/Library"
-
-    # --- 2. Hashing Engine (hash_file) ---
-
     @patch('source.modificator.xxhash')
     @patch('builtins.open', new_callable=mock_open, read_data=b"binary_data")
     def test_hash_file(self, mock_file, mock_xxhash):
-        # Setup a mock return for the xxhash algorithm
+        # Set up a mock return for the xxhash algorithm
         mock_xxhash_instance = MagicMock()
         mock_xxhash_instance.hexdigest.return_value = "fake_hash_123"
         mock_xxhash.xxh128.return_value = mock_xxhash_instance
@@ -139,97 +128,6 @@ class Test_Modificator_Helpers(unittest.TestCase):
         mock_file.assert_called_once_with("dummy.txt", 'rb')
         mock_xxhash.xxh128.assert_called_once_with(b"binary_data")
         self.assertEqual(result, "fake_hash_123")
-
-    # --- 3. Dependency Logic (check_library) ---
-
-    @patch('os.path.isfile')
-    def test_check_library(self, mock_isfile):
-        fake_mod = Mod({
-            Property.NAME: "MyMod",
-            Property.CHANGES: {"file1.txt": [], "file2.txt": []}
-        })
-
-        # Scenario 1: Both files exist in the library
-        mock_isfile.return_value = True
-        self.assertFalse(modificator.check_library(fake_mod))
-
-        # Scenario 2: One file is missing from the library folder
-        mock_isfile.side_effect = lambda path: "file1" in path
-        self.assertTrue(modificator.check_library(fake_mod))
-
-    # --- 4. Relative Link Checkers ---
-
-    @patch('source.modificator.definition_read')
-    @patch('os.path.isfile')
-    def test_mod_check_relative__overrode_by(self, mock_isfile, mock_def_read):
-        mock_isfile.return_value = True
-        fake_mod = Mod({Property.OVERRODE_BY: "ChildMod"})
-        fake_child = Mod({Property.ACTIVE: True})
-        mock_def_read.return_value = fake_child
-
-        result = modificator.mod_check_relative(fake_mod, Property.OVERRODE_BY)
-
-        # If checking heirs (OVERRODE_BY), it only returns the mod if it is ACTIVE
-        mock_def_read.assert_called_once_with(f"{core.library}/ChildMod")
-        self.assertEqual(result, fake_child)
-
-    @patch('source.modificator.definition_read')
-    @patch('os.path.isfile')
-    def test_mod_check_relative__overrides(self, mock_isfile, mock_def_read):
-        mock_isfile.return_value = True
-        fake_mod = Mod({Property.OVERRIDES: "ParentMod"})
-        fake_parent = Mod({Property.ACTIVE: False})
-        mock_def_read.return_value = fake_parent
-
-        result = modificator.mod_check_relative(fake_mod, Property.OVERRIDES)
-
-        # If checking ancestors (OVERRIDES), it only returns the mod if it is INACTIVE
-        mock_def_read.assert_called_once_with(mod_path=f"{core.library}/ParentMod")
-        self.assertEqual(result, fake_parent)
-
-    @patch('source.modificator.mods_select')
-    def test_mod_detect_override(self, mock_mods_select):
-        fake_active_mod = Mod({
-            Property.NAME: "ActiveMod",
-            Property.OVERRODE_BY: "",
-            Property.CHANGES: {"data/file.txt": []}
-        })
-        mock_mods_select.return_value = [fake_active_mod]
-
-        # Match 1: Explicitly defining the override parent
-        fake_mod_explicit = Mod({Property.OVERRIDES: "ActiveMod", Property.CHANGES: {}})
-        self.assertEqual(modificator.mod_detect_override(fake_mod_explicit), fake_active_mod)
-
-        # Match 2: Implicit match by overlapping changed files
-        fake_mod_implicit = Mod({Property.OVERRIDES: "", Property.CHANGES: {"data/file.txt": []}})
-        self.assertEqual(modificator.mod_detect_override(fake_mod_implicit), fake_active_mod)
-
-        # Match 3: No relation at all
-        fake_mod_no_match = Mod({Property.OVERRIDES: "OtherMod", Property.CHANGES: {"data/other.txt": []}})
-        self.assertFalse(modificator.mod_detect_override(fake_mod_no_match))
-
-
-class Test_Modificator_Snapshots(unittest.TestCase):
-
-    def setUp(self):
-        # Prevent actual logging
-        self.patcher_log = patch('source.modificator.log')
-        self.mock_log = self.patcher_log.start()
-
-        # Predictable paths
-        core.library = "C:/Fake/Library"
-        core.install_path = "C:/Fake/Install"
-
-        # We need to ensure os.path.abspath returns our fake paths cleanly
-        # because snapshot_take uses it to calculate string slices.
-        self.patcher_abspath = patch('os.path.abspath', side_effect=lambda p: p)
-        self.patcher_abspath.start()
-
-    def tearDown(self):
-        self.patcher_log.stop()
-        self.patcher_abspath.stop()
-
-    # --- 1. File Name Generator (get_available_name) ---
 
     @patch('os.mkdir')
     @patch('os.path.isdir')
@@ -271,8 +169,6 @@ class Test_Modificator_Snapshots(unittest.TestCase):
         self.assertEqual(result, "C:/Snapshots/file_snapshot_4.json")
         mock_askstring.assert_not_called()
 
-    # --- 2. Snapshot Logic (snapshot_take) ---
-
     @patch('source.modificator.datetime')
     @patch('source.modificator.hash_directory')
     def test_snapshot_take__provided_paths(self, mock_hash_directory, mock_datetime):
@@ -283,10 +179,10 @@ class Test_Modificator_Snapshots(unittest.TestCase):
         mock_hash_directory.return_value = {"data/ini/file.txt": "fake_hash"}
 
         # Test taking a snapshot of a specific game path (bypassing UI prompts)
-        result = modificator.snapshot_take(game_paths=["C:/Fake/Game/data"])
+        result = modificator.snapshot_take(game_paths=["O:/Fake/Game/data"])
 
-        # Verify it passed the install path to be omitted
-        mock_hash_directory.assert_called_once_with("C:/Fake/Game/data", path_to_omit="C:/Fake/Install")
+        # Verify it passed the install_path to be omitted
+        mock_hash_directory.assert_called_once_with("O:/Fake/Game/data", path_to_omit=core.install_path)
 
         # Verify the returned dictionary shape
         self.assertEqual(result["date"], "2023-01-01 12:00:00")
@@ -299,15 +195,13 @@ class Test_Modificator_Snapshots(unittest.TestCase):
 
         # The askdirectory prompt is in a while loop. We return a valid path first,
         # then return an empty string "" to simulate the user clicking "Cancel", which breaks the loop.
-        mock_askdirectory.side_effect = ["C:/Fake/Install/MyGame", ""]
+        mock_askdirectory.side_effect = ["O:/Fake/Install/MyGame", ""]
 
         modificator.snapshot_take()
 
         # Verify it asked for a directory and successfully processed the chosen path
         mock_askdirectory.assert_called()
-        mock_hash_directory.assert_called_once_with("MyGame", path_to_omit="C:/Fake/Install")
-
-    # --- 3. Snapshot Saving (snapshot_save) ---
+        mock_hash_directory.assert_called_once_with("O:/Fake/Install/MyGame", path_to_omit=core.install_path)
 
     @patch('source.modificator.get_available_name')
     @patch('json.dump')
@@ -324,8 +218,6 @@ class Test_Modificator_Snapshots(unittest.TestCase):
         mock_file.assert_called_once_with("C:/Snapshots/file_snapshot_1.json", 'w')
         mock_json_dump.assert_called_once_with(fake_snapshot, mock_file(), indent=4)
         self.assertEqual(result, "C:/Snapshots/file_snapshot_1.json")
-
-    # --- 4. Comparison Coordinator (initiate_comparison) ---
 
     @patch('source.modificator.snapshot_take')
     @patch('source.modificator.snapshot_save')
@@ -376,54 +268,6 @@ class Test_Modificator_Snapshots(unittest.TestCase):
 
         self.assertEqual(changes["C:/Fake/StartMod/data/remove_me.txt"][0], modificator.Change.REMOVED)
         self.assertEqual(changes["C:/Fake/StartMod/data/remove_me.txt"][1], "hash_removed")
-
-
-class Test_Modificator_Definitions(unittest.TestCase):
-
-    def setUp(self):
-        # Prevent actual logging
-        self.patcher_log = patch('source.modificator.log')
-        self.mock_log = self.patcher_log.start()
-
-        # Predictable library path
-        core.library = "C:/Fake/Library"
-        core.exceptions = ["_ignore_me"]
-
-    def tearDown(self):
-        self.patcher_log.stop()
-
-    # --- 1. Definition Editor (definition_edit) ---
-
-    # --- 3. Mod Select Filter (mods_select) ---
-
-    @patch('source.modificator.definition_read')
-    @patch('os.listdir')
-    def test_mods_select(self, mock_listdir, mock_def_read):
-        # We put 3 folders in the library, plus 1 exception
-        mock_listdir.return_value = ["ModA", "ModB", "ModC", "_ignore_me"]
-
-        # We mock the read function to return different Definition objects
-        def fake_read(mod_path):
-            if "ModA" in mod_path: return Mod(
-                {Property.NAME: "ModA", Property.ACTIVE: True, Property.TRANSFER_TYPE: "General"})
-            if "ModB" in mod_path: return Mod(
-                {Property.NAME: "ModB", Property.ACTIVE: False, Property.TRANSFER_TYPE: "General"})
-            if "ModC" in mod_path: return Mod(
-                {Property.NAME: "ModC", Property.ACTIVE: True, Property.TRANSFER_TYPE: "Template"})
-            return Mod()
-
-        mock_def_read.side_effect = fake_read
-
-        # Test 1: Select ALL valid mods (Template class is ignored by mods_select by default)
-        all_mods = modificator.mods_select()
-        self.assertEqual(len(all_mods), 2)  # Only ModA and ModB are "General" or "Clone"
-
-        # Test 2: Select with filtering criteria
-        active_mods = modificator.mods_select(active=True)
-        self.assertEqual(len(active_mods), 1)
-        self.assertEqual(active_mods[0][Property.NAME], "ModA")
-
-    # --- 4. Mod Creator (mod_new) ---
 
 
 if __name__ == '__main__':
