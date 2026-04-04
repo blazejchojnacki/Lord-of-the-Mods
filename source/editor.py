@@ -3,8 +3,8 @@ import os
 import shutil
 import re
 
-from source.messaging import InternalError, InternalWarning, internal_message
-from source.constants import log, INI_COMMENTS
+from source.messaging import log, InternalError, InternalWarning, internal_message, get_custom_logger
+from source.constants import INI_COMMENTS
 import source.constructor as c
 
 # FUTURE: automated proposition of #include creation or child adopting
@@ -50,6 +50,7 @@ def text_find_multiple(find_list: list, scope='', exceptions=None, not_used=None
     if not_used is None:
         not_used = set(find_list)
     output = ''
+    output_log = get_custom_logger("find_multiple", output_file)
     for exception in exceptions:
         if scope.replace('\\', '/') == exception.replace('\\', '/'):
             return not_used
@@ -81,7 +82,7 @@ def text_find_multiple(find_list: list, scope='', exceptions=None, not_used=None
                         for key in find_dict:
                             output += f'\t\tin line {key} "{find_dict[key]}"\n'
             if output and output_file:
-                log(output, file=output_file)
+                output_log.info(output)
         except UnicodeDecodeError:
             raise InternalWarning(f'file {scope} unreadable')
     elif os.path.isdir(scope):
@@ -95,6 +96,7 @@ def text_find_multiple(find_list: list, scope='', exceptions=None, not_used=None
 
 def find_objects_in_str_file(file, scope, exceptions, used_file='reference_RotWK_lotr_str.txt',
                              unused_file='reference_RotWK_lotr_str_unused.txt'):
+    output_log = get_custom_logger("find_objects_in_str_file", unused_file)
     items = c.ConstructFile(file)
     if file.endswith('.str'):
         titles_list = []
@@ -106,7 +108,7 @@ def find_objects_in_str_file(file, scope, exceptions, used_file='reference_RotWK
         output = 'Unused references:\n'
         for not_used_ref in output_ordered:
             output += f'{not_used_ref}\n'
-        log(output, file=unused_file)
+        output_log.info(output)
     elif file.endswith('.ini'):
         pass
 
@@ -178,7 +180,7 @@ def text_find_replace(find, replace_with=None, scope='', exceptions=None, mode='
         for file_path in file_paths:
             output += text_find_replace(find, replace_with, f'{scope}/{file_path}', exceptions, mode='part')
     if 'initiate' in mode:
-        log(output)
+        log.info(output)
     return output
 
 
@@ -241,7 +243,7 @@ def update_links_to_inc(new_path, in_file_or_folder, inc_file=None, overwrite=Tr
         if ''.join(lines) != new_content and overwrite is True:
             with open(in_file_or_folder, 'w') as file_overwritten:
                 file_overwritten.write(new_content)
-    log(output)
+    log.info(output)
     return output
 
 
@@ -300,7 +302,7 @@ def move_file(full_path, to_folder, mode=0):
             output += update_links_in_ini(old_path=full_path, new_path=f'{to_folder}/{file_name}', mode=mode)
     except shutil.Error:
         raise InternalError('erroneous path')
-    log(output)
+    log.info(output)
     return output
 
 

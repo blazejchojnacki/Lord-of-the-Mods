@@ -3,9 +3,9 @@ import json
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 
-from source.messaging import InternalError
+from source.messaging import InternalError, log
 import source.core as core
-from source.constants import Property, log, DEFINITION_CLASSES, Transfer, Change, MOD_DEF_FILE_NAME, MAIN_DIRECTORY
+from source.constants import Property, DEFINITION_CLASSES, Transfer, Change, MOD_DEF_FILE_NAME, MAIN_DIRECTORY
 from source.modificator import initiate_comparison, hash_file, transfer_switch, TEST
 
 
@@ -101,7 +101,7 @@ class Mod:
         file_path = f'{self.directory}/{MOD_DEF_FILE_NAME}'
         with open(file_path, 'w') as definition_buffer:
             json.dump(self.to_dict(), definition_buffer, indent=4)
-        log(f'definition saved in {self.directory}')
+        log.info(f'definition saved in {self.directory}')
 
     def edit(self, **kwargs) -> 'Mod':
         """ Updates the mod's attributes and saves the changes. """
@@ -113,7 +113,7 @@ class Mod:
             if hasattr(self, key):
                 setattr(self, key, value)
             else:
-                log(f"Warning: Attempted to edit unrecognized property '{key}'")
+                log.warning(f"Attempted to edit unrecognized property '{key}'")
         self.save()
         return self
 
@@ -208,7 +208,7 @@ class Mod:
                 elif status == Change.REMOVED:
                     transfer_switch(file_path_source, file_path_archive, transfer, error_sensitive)
         except InternalError:
-            log(f'mod_attach {self.name} CANCELLED\n')
+            log.warning(f'{self.name} CANCELLED\n')
             self.detach(transfer=Transfer.REMOVE, check_type='pass')
             return False
 
@@ -216,7 +216,7 @@ class Mod:
             raise InternalError('Test phase: mod_attach not applied')
 
         self.edit(active=True)
-        log(f'mod_attach {self.name}\n')
+        log.info(f'{self.name} attached successfully')
         return True
 
     def detach(self, transfer: Transfer = Transfer.COPY, check_type: str = 'hash, heir') -> bool:
@@ -267,7 +267,7 @@ class Mod:
                     if transfer in (Transfer.MOVE, Transfer.DELETE):
                         transfer_switch(file_path_archive, file_path_game, Transfer.MOVE, error_sensitive)
         except InternalError:
-            log(f'mod_reverse {self.name} CANCELLED\n')
+            log.warning(f'{self.name} CANCELLED\n')
             self.attach(check_type='pass')
             return False
 
@@ -275,7 +275,7 @@ class Mod:
             raise InternalError('under TEST phase: mod_reverse not applied')
 
         self.edit(active=False)
-        log(f'mod_reverse {self.name}\n')
+        log.info(f'{self.name} detach successfully')
         return True
 
     def retrieve(self) -> bool:

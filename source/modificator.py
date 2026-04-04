@@ -8,11 +8,11 @@ from glob import glob
 import json
 from typing import Literal
 
-from source.messaging import InternalError
+from source.messaging import log, InternalError
 import source.core as core
 import source.shared as s
 from source.constants import SNAPSHOT_NAME, SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARISON_DIRECTORY, COMPARISON_NAME, \
-    Change, Transfer, log, MOD_DEF_FILE_NAME, PROGRAM_NAME, MAIN_DIRECTORY
+    Change, Transfer, MOD_DEF_FILE_NAME, PROGRAM_NAME, MAIN_DIRECTORY
 
 
 # TODO: check if correct business logic
@@ -119,7 +119,7 @@ def snapshot_save(game_snapshot, name=None):
         snapshot_path = f'{SNAPSHOT_DIRECTORY}/{SNAPSHOT_NAME}{name}.json'
     with open(snapshot_path, 'w') as snapshot_buffer:
         json.dump(game_snapshot, snapshot_buffer, indent=4)
-    log(f'snapshot successfully saved in file {snapshot_path}')
+    log.info(f'snapshot successfully saved in file {snapshot_path}')
     return snapshot_path
 
 
@@ -189,7 +189,7 @@ def snapshot_compare(snap_anterior=None, snap_posterior=None, return_type: Liter
         comparison_path = get_available_name(SNAPSHOT_COMPARISON_DIRECTORY, COMPARISON_NAME)
         with open(comparison_path, 'w') as last_comparison:
             json.dump(dict_output, last_comparison, indent=4)
-        log(f'snapshot comparison saved to {comparison_path}')
+        log.info(f'snapshot comparison saved to {comparison_path}')
         return comparison_path
 
 
@@ -268,7 +268,7 @@ def initiate_comparison(mod_directory, start_mod='', changes_source='directory')
             active, changes = evaluate_changes(comparison_dict)
         else:
             raise InternalError('snapshot not selected')
-    log(f'comparison generated for {mod_directory}')
+    log.info(f'comparison generated for {mod_directory}')
     return active, changes
 
 
@@ -307,26 +307,26 @@ def simulate_transfer(src, dst='', transfer_type: Transfer = Transfer.COPY):
     output = ''
     if os.path.exists(src):
         if transfer_type == Transfer.DELETE:
-            output += log(f'for deletion: {src}')
+            output += log.info(f'for deletion: {src}')
             if not os.path.isfile(f"{dst}/{src.split('/')[-1]}"):
-                output += log(f"warning: original absent {dst}/{src.split('/')[-1]}")
+                output += log.warning(f"original absent {dst}/{src.split('/')[-1]}")
         else:
-            output += log(f'source: {src}')
+            output += log.info(f'source: {src}')
     else:
-        output += log(f'error: source absent {src}')
+        output += log.error(f'source absent {src}')
     if dst and transfer_type != Transfer.DELETE:
         if os.path.exists(dst):
             if os.path.isfile(f"{dst}/{src.split('/')[-1]}") and test_previous_src == f"{dst}/{src.split('/')[-1]}":
                 if test_previous_type == Transfer.DELETE:
-                    output += log(f'information: destination {test_previous_src} deleted')
+                    output += log.info(f'destination {test_previous_src} deleted')
                 elif test_previous_type == Transfer.MOVE:
-                    output += log(f'destination: {dst} (correct)')
+                    output += log.info(f'destination: {dst} (correct)')
                 else:
-                    output += log(f"warning: destination present {dst}/{src.split('/')[-1]}")
+                    output += log.warning(f"destination present {dst}/{src.split('/')[-1]}")
             else:
-                output += log(f'destination: {dst}')
+                output += log.info(f'destination: {dst}')
         else:
-            output += log(f'error: destination absent {dst}')
+            output += log.error(f'destination absent {dst}')
     test_previous_src, test_previous_dst, test_previous_type = src, dst, transfer_type
     return output
 

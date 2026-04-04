@@ -11,7 +11,7 @@ class Test_Editor(unittest.TestCase):
 
     def setUp(self):
         # Globally mock the log function for all tests in this class to prevent actual file writes
-        self.patcher_log = patch('source.constants.log')
+        self.patcher_log = patch('source.messaging.log')
         self.mock_log = self.patcher_log.start()
 
     def tearDown(self):
