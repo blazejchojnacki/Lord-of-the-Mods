@@ -7,7 +7,7 @@ import source.core as core
 import source.shared as s
 from source.shared import MOD_DEF_FILE_NAME
 from source.constants import Property, log, DEFINITION_CLASSES, Transfer, Change
-from source.modificator import initiate_comparison
+from source.modificator import initiate_comparison, hash_file, transfer_switch, TEST
 
 
 @dataclass
@@ -129,7 +129,6 @@ class Mod:
 
     def detect_changes(self) -> dict:
         """ Inspects if the files of the mod have been changed from their original hashes. """
-        from source.modificator import hash_file
         changes_dict = {}
         for mod_file, change_data in self.changes.items():
             if self.active:
@@ -152,8 +151,6 @@ class Mod:
 
     def attach(self, check_type: str = 'ancestor') -> bool:
         """ Attaches the mod to the game directory, routing files and managing archives. """
-        from source.modificator import transfer_switch, TEST
-
         error_sensitive = True
         transfer = Transfer.MOVE
 
@@ -225,8 +222,6 @@ class Mod:
 
     def detach(self, transfer: Transfer = Transfer.COPY, check_type: str = 'hash, heir') -> bool:
         """ Formally mod_reverse(). Detaches the mod, routing files back to the library/archive. """
-        from source.modificator import transfer_switch, TEST
-
         error_sensitive = True
         if not os.path.isdir(self.directory):
             os.makedirs(self.directory, exist_ok=True)
