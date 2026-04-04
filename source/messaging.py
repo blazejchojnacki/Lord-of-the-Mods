@@ -1,24 +1,4 @@
 import inspect
-import os
-
-from constants import LOG_PATH
-
-
-def log(output, file='file_changes.txt'):
-    if not os.path.isdir(LOG_PATH):
-        os.mkdir(LOG_PATH)
-    if os.path.isfile(f'{LOG_PATH}/{file}'):
-        with open(f'{LOG_PATH}/{file}', 'a') as log_file:
-            log_file.write(output + '\n')
-    elif os.path.isfile(f'.{LOG_PATH}/{file}'):
-        with open(f'.{LOG_PATH}/{file}', 'a') as log_file:
-            log_file.write(output + '\n')
-    elif os.path.isdir(LOG_PATH):
-        with open(f'{LOG_PATH}/{file}', 'w') as log_file:
-            log_file.write(output + '\n')
-    elif os.path.isdir(f'.{LOG_PATH}'):
-        with open(f'.{LOG_PATH}/{file}', 'w') as log_file:
-            log_file.write(output + '\n')
 
 
 def get_calling_module(steps: int = 2):
