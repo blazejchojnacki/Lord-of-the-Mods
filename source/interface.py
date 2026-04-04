@@ -10,14 +10,13 @@ from tkinter.ttk import Treeview
 from tklinenums import TkLineNumbers
 
 import source.core as core
+from source.constants import Property, Change, DEFINITION_TEMPLATE, DEFINITION_CLASSES
 import source.shared as s
 from source.shared import MOD_DEF_FILE_NAME, internal_message, InternalError, Setting
 from models.mod import Mod, LibraryManager
 from source.constructor import load_file, load_directories
 from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
-from source.modificator import snapshot_take, snapshot_compare, \
-    hash_file, Property, \
-    DEFINITION_TEMPLATE, DEFINITION_CLASSES, Change, snapshot_save
+from source.modificator import snapshot_take, snapshot_compare, hash_file, snapshot_save
 
 MOD_COLUMNS = {Property.NAME: 1, Property.TRANSFER_TYPE: 1, Property.DESCRIPTION: 5}
 CHANGES_COLUMNS = {'path': 6, 'type': 1}
@@ -160,7 +159,7 @@ def count_files_recursive(path, counter: int = -1):
 
 def get_change_statistics(mod):
     if mod.name:
-        mod_path = f"{core.library}/{mod.name}"
+        mod_path = f"{core.state.library}/{mod.name}"
         output = (f"mentioned: {len(mod.changes)} ("
                   f" removed: {len([_ for _ in mod.changes if _[0] == Change.REMOVED])}"
                   f') | present in mod: {count_files_recursive(mod_path)}')
@@ -255,7 +254,7 @@ class Window(tkinter.Tk):
         list_labels_settings = []
         self.list_entry_settings = []
         list_buttons_settings = []
-        for setting in core.settings:
+        for setting in core.state.raw_settings:
             list_labels_settings.append(tkinter.Label(master=self.container_settings, text=setting))
             self.list_entry_settings.append(tkinter.Entry(master=self.container_settings))
             list_buttons_settings.append(s.ReactiveButton(master=self.container_settings, small=True,
@@ -505,7 +504,7 @@ class Window(tkinter.Tk):
         tkinter.ttk.Style().configure(
             'Treeview.Heading', borderwidth=0, overbackground=s.TEXT_COLORS[0], overforeground=s.TEXT_COLORS[-1])
 
-        for index in range(len(core.settings)):
+        for index in range(len(core.state.raw_settings)):
             list_labels_settings[index].place(x=0, y=s.UNIT_HEIGHT * index, width=s.UNIT_WIDTH * 2,
                                               height=s.UNIT_HEIGHT)
             self.list_entry_settings[index].place(
@@ -1001,23 +1000,23 @@ class Window(tkinter.Tk):
         new_settings = {}
         for entry_setting in self.list_entry_settings:
             setting_value.append(entry_setting.get())
-        for setting_key in core.settings:
-            if core.settings[setting_key] != setting_value[counter]:
-                if isinstance(core.settings[setting_key], list):
+        for setting_key in core.state.raw_settings:
+            if core.state.raw_settings[setting_key] != setting_value[counter]:
+                if isinstance(core.state.raw_settings[setting_key], list):
                     setting_dict_list = setting_value[counter].split(', ')
-                    if core.settings[setting_key] and setting_dict_list:
-                        if core.settings[setting_key] != setting_dict_list:
+                    if core.state.raw_settings[setting_key] and setting_dict_list:
+                        if core.state.raw_settings[setting_key] != setting_dict_list:
                             new_settings[setting_key] = setting_dict_list
                     elif setting_dict_list != ['']:
                         new_settings[setting_key] = setting_dict_list
                     else:
                         pass
-                elif isinstance(core.settings[setting_key], str):
+                elif isinstance(core.state.raw_settings[setting_key], str):
                     new_settings[setting_key] = setting_value[counter]
             counter += 1
         if new_settings:
             try:
-                core.settings.save(new_settings)
+                core.state.raw_settings.save(new_settings)
                 self.set_log_update('Settings saved and checked.')
             except InternalError as error:
                 self.set_log_update(error.message)
@@ -1028,13 +1027,13 @@ class Window(tkinter.Tk):
     def command_settings_reload(self):
         """ Reads the settings from the SETTINGS_FILE and inserts them into the settings text fields. """
         counter = 0
-        for setting_key in core.settings:
+        for setting_key in core.state.raw_settings:
             self.list_entry_settings[counter].configure(state='normal')
             self.list_entry_settings[counter].delete('0', 'end')
-            if isinstance(core.settings[setting_key], list):
-                self.list_entry_settings[counter].insert('end', ', '.join(core.settings[setting_key]))
+            if isinstance(core.state.raw_settings[setting_key], list):
+                self.list_entry_settings[counter].insert('end', ', '.join(core.state.raw_settings[setting_key]))
             else:
-                self.list_entry_settings[counter].insert('end', core.settings[setting_key])
+                self.list_entry_settings[counter].insert('end', core.state.raw_settings[setting_key])
             self.list_entry_settings[counter].configure(state='disabled')
             counter += 1
 
@@ -1047,7 +1046,7 @@ class Window(tkinter.Tk):
                 **{Property.NAME:
                     self.treeview_mods_idle.item(self.treeview_mods_idle.selection()[0], 'values')[0]})[0]
             self.current_path = (
-                f"{core.library}/"
+                f"{core.state.library}/"
                 f"{self.treeview_mods_idle.item(self.treeview_mods_idle.selection()[0], 'values')[0]}")
             self.treeview_mods_active.selection_remove(self.treeview_mods_active.selection()[0])
             # # # selection_remove is a selection event steeling focus to the other list
@@ -1068,7 +1067,7 @@ class Window(tkinter.Tk):
                 **{Property.NAME:
                     self.treeview_mods_active.item(self.treeview_mods_active.selection()[0], 'values')[0]})[0]
             self.current_path = (
-                f"{core.library}/"
+                f"{core.state.library}/"
                 f"{self.treeview_mods_active.item(self.treeview_mods_active.selection()[0], 'values')[0]}")
             self.treeview_mods_idle.selection_remove(self.treeview_mods_idle.selection()[0])
             self.treeview_mods_active.selection_set(self.treeview_mods_active.selection()[0])
@@ -1120,13 +1119,13 @@ class Window(tkinter.Tk):
     def refresh_definitions(self):
         """ Refreshes the lists of active and non-active mods. """
         try:
-            library_folders = [_ for _ in os.listdir(core.library) if _ not in core.exceptions]
+            library_folders = [_ for _ in os.listdir(core.state.library) if _ not in core.state.exceptions]
             for folder in library_folders:
-                if not os.path.isfile(f'{core.library}/{folder}/{MOD_DEF_FILE_NAME}'):
+                if not os.path.isfile(f'{core.state.library}/{folder}/{MOD_DEF_FILE_NAME}'):
                     self.set_log_update(f'Detected a definition-less folder in the library - {folder}')
                     do_initiate = s.invoke_choice(
                         title='unsaved changes',
-                        text=f'The folder {core.library}/{folder}\n seems to have no properties.\n'
+                        text=f'The folder {core.state.library}/{folder}\n seems to have no properties.\n'
                              'Do you wish it to become a mod?\n',
                         buttons=({s.KEY_LABEL: 'yes', s.KEY_RETURN: True, s.KEY_INFO: ''},
                                  {s.KEY_LABEL: 'no', s.KEY_RETURN: False, s.KEY_INFO: ''})
@@ -1135,9 +1134,9 @@ class Window(tkinter.Tk):
                         self.set_window_mod_new(start_name=folder)
                         return
                     if not do_initiate:
-                        exceptions = core.settings[Setting.EXCEPTIONS].copy()
-                        exceptions.append(f'{core.settings[Setting.LIBRARY]}/{folder}')
-                        core.settings.save({s.Setting.EXCEPTIONS: exceptions})
+                        exceptions = core.state.raw_settings[Setting.EXCEPTIONS].copy()
+                        exceptions.append(f'{core.state.raw_settings[Setting.LIBRARY]}/{folder}')
+                        core.state.raw_settings.save({s.Setting.EXCEPTIONS: exceptions})
         except InternalError:
             self.set_log_update('library exception error')
         try:
@@ -1188,8 +1187,8 @@ class Window(tkinter.Tk):
         self.new_mod_name = self.entry_mod_new_name.get()
         self.new_mod_source = self.variable_option.get()
         # 'not in os.listdir(core.library)' not working when creating triggered by a folder without definition.
-        forbidden_names = [_ for _ in os.listdir(core.library)
-                           if (os.path.isfile(f"{core.library}/{_}/{MOD_DEF_FILE_NAME}") or _ in core.exceptions)]
+        forbidden_names = [_ for _ in os.listdir(core.state.library)
+                           if (os.path.isfile(f"{core.state.library}/{_}/{MOD_DEF_FILE_NAME}") or _ in core.state.exceptions)]
         if self.new_mod_name and self.new_mod_name not in forbidden_names:
             self.set_log_update(f'command_mod_new: creating mod {self.new_mod_name}. Please wait ...')
             # output = mod_new(self.new_mod_name, changes_source=self.new_mod_source)
@@ -1422,7 +1421,7 @@ class Window(tkinter.Tk):
         if current_treeview == self.treeview_changes or current_treeview == self.treeview_changes_new:
             try:
                 self.current_path = (
-                    f"{core.library}/{self.loaded_mod.name}/"
+                    f"{core.state.library}/{self.loaded_mod.name}/"
                     f"{current_treeview.item(current_treeview.selection()[0], 'values')[0]}")
                 self.position(self.button_execute)
             except IndexError:
@@ -1462,7 +1461,7 @@ class Window(tkinter.Tk):
 
     def command_change_path(self):
         """ - """
-        mod_path = f'{core.library}/{self.loaded_mod.name}'
+        mod_path = f'{core.state.library}/{self.loaded_mod.name}'
         paths_added = tkinter.filedialog.askopenfilenames(title=s.PROGRAM_NAME, initialdir=mod_path)
         for path_added in paths_added:
             hash_value = hash_file(path_added)
@@ -1476,7 +1475,7 @@ class Window(tkinter.Tk):
 
     def command_change_copy(self):
         """ Copies selected files in the change list """
-        mod_path = f'{core.library}/{self.loaded_mod.name}'
+        mod_path = f'{core.state.library}/{self.loaded_mod.name}'
         game_directory = os.path.abspath('../').replace('\\', '/')
         paths_added = tkinter.filedialog.askopenfilenames(title=s.PROGRAM_NAME, initialdir='../')
         for path_added in paths_added:
@@ -1529,7 +1528,7 @@ class Window(tkinter.Tk):
         if event:
             pass
         self.loaded_mod = LibraryManager.select_mods(**{Property.NAME: self.current_path.split('/')[-1]})[0]
-        game_paths = core.games
+        game_paths = core.state.games
         if self.loaded_mod.transfer_type == DEFINITION_CLASSES[0] and self.loaded_mod.active:
             if not self.loaded_mod.game:
                 for change_key in self.loaded_mod.changes:
@@ -1833,7 +1832,7 @@ class Window(tkinter.Tk):
             except InternalError as error:
                 output += error.message
             else:
-                mod_index_start = self.current_path.find(core.library) + len(core.library) + 1
+                mod_index_start = self.current_path.find(core.state.library) + len(core.state.library) + 1
                 mod_index_end = self.current_path.replace('\\', '/').find('/', mod_index_start)
                 current_mod_name = self.current_path[mod_index_start: mod_index_end]
                 current_mod_list = LibraryManager.select_mods(**{Property.NAME: current_mod_name})
