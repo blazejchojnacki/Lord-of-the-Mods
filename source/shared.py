@@ -1,44 +1,10 @@
 import os.path
 import json
-import inspect
 import tkinter
 import _tkinter
 from ctypes import windll, byref, sizeof, c_int, create_unicode_buffer
-from enum import StrEnum
-from pathlib import Path
 
-PROGRAM_NAME = 'Lord of the Mods'
-THIS_PATH = Path(__file__).parent.resolve()
-MAIN_DIRECTORY = Path(__file__).parent.parent.resolve()
-MOD_DEF_FILE_NAME = '_definition.json'
-LOG_PATH = f'{MAIN_DIRECTORY}/change_logs'
-LEVEL_INDENT = ' ' * 4
-INI_COMMENTS = [';', '/']
-INI_ENDS = ['End', 'END', 'EndScript']
-INI_DELIMITERS = []
-STR_DELIMITERS = []
-
-
-class Setting(StrEnum):
-    TITLE = "title"
-    VERSION = "version"
-    INSTALL = "InstallPath"
-    LIBRARY = "LibraryDirectory"
-    ARCHIVE = "ArchiveDirectory"
-    GAMES = "GamesDirectories"
-    EXCEPTIONS = "LibraryExceptions"
-
-
-SETTINGS_FILE_PATH = f'{MAIN_DIRECTORY}/_settings.json'
-_SETTINGS_FORMAT = {
-    Setting.TITLE: "Lord of the Mods Settings",
-    Setting.VERSION: "",
-    Setting.INSTALL: "",
-    Setting.LIBRARY: "",
-    Setting.ARCHIVE: "",
-    Setting.GAMES: [],
-    Setting.EXCEPTIONS: []
-}
+from source.constants import MAIN_DIRECTORY
 
 UNIT_WIDTH = 80
 UNIT_HEIGHT = 40
@@ -67,74 +33,6 @@ AESTHETIC_PATH = f'{MAIN_DIRECTORY}/aesthetic/'
 # # # global variable
 main_window: tkinter.Tk
 current_info: tkinter.Toplevel
-
-
-def log(output, file='file_changes.txt'):
-    if not os.path.isdir(LOG_PATH):
-        os.mkdir(LOG_PATH)
-    if os.path.isfile(f'{LOG_PATH}/{file}'):
-        with open(f'{LOG_PATH}/{file}', 'a') as log_file:
-            log_file.write(output + '\n')
-    elif os.path.isfile(f'.{LOG_PATH}/{file}'):
-        with open(f'.{LOG_PATH}/{file}', 'a') as log_file:
-            log_file.write(output + '\n')
-    elif os.path.isdir(LOG_PATH):
-        with open(f'{LOG_PATH}/{file}', 'w') as log_file:
-            log_file.write(output + '\n')
-    elif os.path.isdir(f'.{LOG_PATH}'):
-        with open(f'.{LOG_PATH}/{file}', 'w') as log_file:
-            log_file.write(output + '\n')
-
-
-def get_calling_module(steps: int = 2):
-    frame = inspect.currentframe()
-    for step_back in range(steps):
-        frame = frame.f_back
-    module_name_full = str(inspect.getmodule(frame))
-    return module_name_full[module_name_full.rfind('\\') + len('\\'):module_name_full.rfind('.')]
-
-
-def get_calling_object(steps: int = 1):
-    frame = inspect.currentframe()
-    for step_back in range(steps):
-        frame = frame.f_back
-    return frame.f_code.co_qualname
-
-
-class InternalError(Exception):
-    """
-    The Error internal to this program - called when a behavior has to be blocked
-    :param: message (optional) - details conveyed after the module name and function name that called it
-    """
-    def __init__(self, message: str = ''):
-        self.message = f'{get_calling_module()}.{get_calling_object(2)} error: {message}'
-        super().__init__(message)
-
-
-class InternalWarning(Warning):
-    """
-    The warning internal to this program - called when a behavior has to be pointed out
-    :param: message (optional) - details conveyed after the module name and function name that called it
-    """
-    def __init__(self, message: str = ''):
-        self.message = f'{get_calling_module()}.{get_calling_object(2)} warning: {message}'
-        super().__init__(self.message)
-
-
-def internal_message(message):
-    return f'{get_calling_module()}.{get_calling_object(2)}: {message}'
-
-
-# # # load delimiters
-for delimiter_path in [f'{MAIN_DIRECTORY}/_delimiters_ini.json', f'{MAIN_DIRECTORY}/_delimiters_str.json']:
-    if os.path.isfile(delimiter_path):
-        with open(delimiter_path) as delimiters_buffer:
-            if '_ini' in delimiter_path:
-                INI_DELIMITERS = json.load(delimiters_buffer)
-            elif '_str' in delimiter_path:
-                STR_DELIMITERS = json.load(delimiters_buffer)
-    else:
-        raise InternalError("delimiters files not found")
 
 
 class ReactiveButton(tkinter.Button):
