@@ -127,7 +127,7 @@ def cancel_initiation():
 def set_directories(directories_dict, game_paths_list):
     for key in directories_dict:
         directories_dict[key] = os.path.relpath(directories_dict[key], core.state.install_path).replace('\\', '/')
-    core.state.update_and_save(
+    core.state.save(
         settings_dict={
             Setting.LIBRARY: directories_dict['library'],
             Setting.ARCHIVE: directories_dict['archive'],

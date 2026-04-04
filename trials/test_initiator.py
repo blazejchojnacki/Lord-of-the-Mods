@@ -119,7 +119,7 @@ class Test_Initiator(unittest.TestCase):
     @patch('source.initiator.os.path.isdir')
     @patch.object(core.AppConfig, 'save')
     @patch('source.initiator.Mod.create')
-    def test_set_directories(self, mock_mod_create, mock_update_and_save, mock_isdir, mock_mkdir):
+    def test_set_directories(self, mock_mod_create, mock_save, mock_isdir, mock_mkdir):
         # 1. Arrange: Pretend no directories exist yet so os.mkdir gets called
         mock_isdir.return_value = False
 
@@ -143,7 +143,7 @@ class Test_Initiator(unittest.TestCase):
         # 3. Assert: Verify the logic worked exactly as expected
 
         # A. Check that the state was updated and saved with relative paths
-        mock_update_and_save.assert_called_once_with(
+        mock_save.assert_called_once_with(
             settings_dict={
                 Setting.LIBRARY: '_LIBRARY',
                 Setting.ARCHIVE: '_ARCHIVE',
