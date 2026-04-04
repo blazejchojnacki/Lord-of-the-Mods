@@ -11,7 +11,9 @@ import source.core as core
 import source.shared
 from source.shared import PROGRAM_NAME, MAIN_DIRECTORY, ICON_PATH, SETTINGS_FILE_PATH, Setting, InternalError, \
     invoke_choice, KEY_LABEL, KEY_RETURN, KEY_INFO
-from source.modificator import definition_write, SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARISON_DIRECTORY, definition_save
+from models.mod import Mod
+from source.modificator import SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARISON_DIRECTORY
+
 
 default_folders_dict = {
     'library': f'{MAIN_DIRECTORY}/_LIBRARY',
@@ -138,13 +140,11 @@ def set_directories(directories_dict, game_paths_list):
         os.mkdir(SNAPSHOT_COMPARISON_DIRECTORY)
     for game_path in game_paths_list:
         try:
-            mod_directory = f"{core.install_path}/{directories_dict['library']}/{game_path.split('/')[-1]}"
-            if not os.path.isdir(mod_directory):
-                os.mkdir(mod_directory)
-            definition_object = definition_write(
-                mod_directory=mod_directory, changes_source=game_path,
+            mod_name = game_path.split('/')[-1]
+            definition_object = Mod.create(
+                name=mod_name, changes_source=game_path,
                 description=f"Initial {game_path.split('/')[-1]} - created automatically")
-            definition_save(definition_object, mod_directory)
+            definition_object.save()
         except InternalError:
             pass
 

@@ -59,7 +59,7 @@ class Mod:
         })
 
     @classmethod
-    def create(cls, name: str, changes_source: str = '') -> 'Mod':
+    def create(cls, name: str, changes_source: str = '', **kwargs) -> 'Mod':
         """ Replaces mod_new and definition_write. Creates a new mod from scratch. """
         mod_directory = f'{core.library}/{name}'
         if not os.path.isdir(mod_directory):
@@ -74,6 +74,9 @@ class Mod:
             changes=changes,
             directory=mod_directory
         )
+        for key, value in kwargs.items():
+            if hasattr(new_mod, key):
+                setattr(new_mod, key, value)
         new_mod.save()
         return new_mod
 
