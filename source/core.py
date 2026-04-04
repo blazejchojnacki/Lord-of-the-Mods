@@ -36,6 +36,10 @@ class AppConfig:
             return_paths.extend([f"{self.install_path}/{_}" for _ in paths_dict[Setting.EXCEPTIONS]])
         return return_paths
 
+    def create_directories(self, settings_dict: dict):
+        for path in self.complete_paths(settings_dict):
+            os.makedirs(path, exist_ok=True)
+
     def propagate(self):
         """ Updates the active state properties based on the loaded raw_settings. """
         self.install_path = self.raw_settings.get("install_path", DEFAULT_INSTALL_PATH)
@@ -75,12 +79,19 @@ class AppConfig:
             return False
         return True
 
-    def save(self, key: str, value: Any):
-        self.raw_settings[key] = value
-        self.propagate()
-
-        with open(SETTINGS_FILE_PATH, 'w') as file_stream:
-            json.dump(self.raw_settings, file_stream, indent=4)
+    def save(self, settings_dict: dict):
+        """
+        Receives a dictionary of updates, validates them,
+        updates the raw settings, saves to disk, and propagates the state.
+        """
+        if self.check_paths(settings_dict):
+            self.raw_settings.update(settings_dict)
+            self.check_format()
+            with open(SETTINGS_FILE_PATH, 'w') as file_stream:
+                json.dump(self.raw_settings, file_stream, indent=4)
+            self.propagate()
+        else:
+            raise InternalError("invalid path")
 
 
 # Initialize the state

@@ -22,6 +22,7 @@ STR_DELIMITERS = []
 class Setting(StrEnum):
     TITLE = "title"
     VERSION = "version"
+    INSTALL = "InstallPath"
     LIBRARY = "LibraryDirectory"
     ARCHIVE = "ArchiveDirectory"
     GAMES = "GamesDirectories"
@@ -32,6 +33,7 @@ SETTINGS_FILE_PATH = f'{MAIN_DIRECTORY}/_settings.json'
 _SETTINGS_FORMAT = {
     Setting.TITLE: "Lord of the Mods Settings",
     Setting.VERSION: "",
+    Setting.INSTALL: "",
     Setting.LIBRARY: "",
     Setting.ARCHIVE: "",
     Setting.GAMES: [],
