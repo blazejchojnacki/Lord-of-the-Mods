@@ -1,17 +1,15 @@
 import inspect
 import logging
 import os
-from datetime import datetime
 
 LOG_PATH = './logging'
 
 
-# 1. Custom Formatter to keep your colors for the console!
 class ColorFormatter(logging.Formatter):
     COLORS = {
-        logging.INFO: '\033[96m',     # Cyan for information
-        logging.WARNING: '\033[93m',  # Yellow for warnings
-        logging.ERROR: '\033[91m',    # Red for errors
+        logging.INFO: '\033[96m',
+        logging.WARNING: '\033[93m',
+        logging.ERROR: '\033[91m',
         'END': '\033[0m'
     }
 
@@ -21,31 +19,37 @@ class ColorFormatter(logging.Formatter):
         return f"{color}{log_message}{self.COLORS['END']}"
 
 
-def setup_logger():
-    if not os.path.isdir(LOG_PATH):
-        os.mkdir(LOG_PATH)
+def get_custom_logger(logger_name: str, file_name: str) -> logging.Logger:
+    """
+    Creates or retrieves a logger mapped to a specific file.
+    """
+    # Ask Python for a logger with this specific name
+    custom_logger = logging.getLogger(logger_name)
 
-    # 2. Create the core logger
-    app_logger = logging.getLogger("Modificator")
-    app_logger.setLevel(logging.DEBUG)
+    # IMPORTANT: If it already has handlers, we already set it up previously!
+    # We just return it to avoid duplicating lines in the log file.
+    if custom_logger.hasHandlers():
+        return custom_logger
 
-    # 3. Create File Handler (writes standard text to the file)
-    file_path = f"{LOG_PATH}/main_change_log.txt"
+    custom_logger.setLevel(logging.DEBUG)
+    os.makedirs(LOG_PATH, exist_ok=True)
+
+    # 1. Attach the File Handler for this specific file
+    file_path = f"{LOG_PATH}/{file_name}"
     file_handler = logging.FileHandler(file_path, mode='a', encoding='utf-8')
-    file_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
-    file_handler.setFormatter(file_format)
-    app_logger.addHandler(file_handler)
+    file_handler.setFormatter(logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s'))
+    custom_logger.addHandler(file_handler)
 
-    # 4. Create Console Handler (prints colors to the terminal)
+    # 2. Attach the Console Handler (Optional: remove this if you want
+    # secondary logs to ONLY go to the file and not clutter the console)
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(ColorFormatter('%(levelname)s: %(message)s'))
-    app_logger.addHandler(console_handler)
+    custom_logger.addHandler(console_handler)
 
-    return app_logger
+    return custom_logger
 
 
-# Initialize it once so the rest of the app can use it
-log = setup_logger()
+log = get_custom_logger("main", "main_change_log.txt")
 
 
 def get_calling_module(steps: int = 2):
