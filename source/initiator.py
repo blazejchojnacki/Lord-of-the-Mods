@@ -7,10 +7,11 @@ from pathlib import Path
 from tkinter.filedialog import askdirectory
 from tkinter.messagebox import showerror, showwarning
 
+from source.messaging import InternalError
 import source.core as core
+from source.constants import PROGRAM_NAME, MAIN_DIRECTORY, SETTINGS_FILE_PATH, Setting
 import source.shared
-from source.shared import PROGRAM_NAME, MAIN_DIRECTORY, ICON_PATH, SETTINGS_FILE_PATH, Setting, InternalError, \
-    invoke_choice, KEY_LABEL, KEY_RETURN, KEY_INFO
+from source.shared import ICON_PATH, KEY_LABEL, KEY_RETURN, KEY_INFO, invoke_choice
 from models.mod import Mod
 from source.modificator import SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARISON_DIRECTORY
 

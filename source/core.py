@@ -5,7 +5,8 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import List, Dict, Any
 
-from source.shared import SETTINGS_FILE_PATH, _SETTINGS_FORMAT, Setting, InternalError
+from source.constants import SETTINGS_FILE_PATH, _SETTINGS_FORMAT, Setting
+from source.messaging import InternalError
 
 DEFAULT_INSTALL_PATH = str(Path(__file__).parent.parent.parent.resolve()).replace('\\', '/').strip('/')
 

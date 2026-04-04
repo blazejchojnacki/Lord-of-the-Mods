@@ -1,17 +1,17 @@
 import unittest
-from unittest.mock import patch, mock_open, call
-import os
+from unittest.mock import patch, mock_open  # , call
+# import os
 
 import source.editor as editor
-import source.shared as s
-import source.constructor as c
+# import source.shared as s
+# import source.constructor as c
 
 
 class Test_Editor(unittest.TestCase):
 
     def setUp(self):
         # Globally mock the log function for all tests in this class to prevent actual file writes
-        self.patcher_log = patch('source.shared.log')
+        self.patcher_log = patch('source.constants.log')
         self.mock_log = self.patcher_log.start()
 
     def tearDown(self):

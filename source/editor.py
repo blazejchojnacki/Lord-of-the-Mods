@@ -3,10 +3,11 @@ import os
 import shutil
 import re
 
+from source.messaging import InternalError, InternalWarning, internal_message
+from source.constants import log, INI_COMMENTS
 import source.constructor as c
-import source.shared as s
 
-# TODO later: automated proposition of #include creation or child adopting
+# FUTURE: automated proposition of #include creation or child adopting
 
 
 def reformat_string(string, direction='automatic'):
@@ -80,9 +81,9 @@ def text_find_multiple(find_list: list, scope='', exceptions=None, not_used=None
                         for key in find_dict:
                             output += f'\t\tin line {key} "{find_dict[key]}"\n'
             if output and output_file:
-                s.log(output, file=output_file)
+                log(output, file=output_file)
         except UnicodeDecodeError:
-            raise s.InternalWarning(f'file {scope} unreadable')
+            raise InternalWarning(f'file {scope} unreadable')
     elif os.path.isdir(scope):
         file_paths = os.listdir(scope)
         for file_path in file_paths:
@@ -105,7 +106,7 @@ def find_objects_in_str_file(file, scope, exceptions, used_file='reference_RotWK
         output = 'Unused references:\n'
         for not_used_ref in output_ordered:
             output += f'{not_used_ref}\n'
-        s.log(output, file=unused_file)
+        log(output, file=unused_file)
     elif file.endswith('.ini'):
         pass
 
@@ -114,7 +115,7 @@ def text_find_replace(find, replace_with=None, scope='', exceptions=None, mode='
     """ replaces a given string by another in a given file or folder of files """
     output = ''
     if not find:
-        return s.internal_message('aborted - empty string to find')
+        return internal_message('aborted - empty string to find')
     if 'initiate' in mode:
         output += f'{datetime.now()}'
         if replace_with is not None:
@@ -171,13 +172,13 @@ def text_find_replace(find, replace_with=None, scope='', exceptions=None, mode='
             elif 'initiate' in mode:
                 output += f'\tfound none\n'
         except UnicodeDecodeError:
-            raise s.InternalWarning(f"file {scope} unreadable")
+            raise InternalWarning(f"file {scope} unreadable")
     elif os.path.isdir(scope):
         file_paths = os.listdir(scope)
         for file_path in file_paths:
             output += text_find_replace(find, replace_with, f'{scope}/{file_path}', exceptions, mode='part')
     if 'initiate' in mode:
-        s.log(output)
+        log(output)
     return output
 
 
@@ -218,7 +219,7 @@ def update_links_to_inc(new_path, in_file_or_folder, inc_file=None, overwrite=Tr
         line_counter = 0
         for line in lines:
             line_counter += 1
-            if "#include" in line and line.strip()[0] not in s.INI_COMMENTS and inc_file.casefold() in line.casefold():
+            if "#include" in line and line.strip()[0] not in INI_COMMENTS and inc_file.casefold() in line.casefold():
                 path_old_include, path_new_include = '', ''
                 if line_include in line:
                     path_old_include = line_include.strip()[len('#include "'):line_include.strip().rfind('"')]
@@ -240,7 +241,7 @@ def update_links_to_inc(new_path, in_file_or_folder, inc_file=None, overwrite=Tr
         if ''.join(lines) != new_content and overwrite is True:
             with open(in_file_or_folder, 'w') as file_overwritten:
                 file_overwritten.write(new_content)
-    s.log(output)
+    log(output)
     return output
 
 
@@ -262,7 +263,7 @@ def update_links_in_ini(old_path, new_path, mode=0):
     line_counter = 0
     for line in lines:
         line_counter += 1
-        if "#include" in line and line.strip()[0] not in s.INI_COMMENTS:
+        if "#include" in line and line.strip()[0] not in INI_COMMENTS:
             path_old_include = line.strip()[len('#include "'):line.strip().rfind('"')]
             path_absolute_include = os.path.normpath(os.path.join(os.path.dirname(old_path), path_old_include))
             path_new_include = os.path.relpath(path_absolute_include, '/'.join(new_path.split('/')[:-1]))
@@ -298,8 +299,8 @@ def move_file(full_path, to_folder, mode=0):
         elif file_name.endswith('.ini'):
             output += update_links_in_ini(old_path=full_path, new_path=f'{to_folder}/{file_name}', mode=mode)
     except shutil.Error:
-        raise s.InternalError('erroneous path')
-    s.log(output)
+        raise InternalError('erroneous path')
+    log(output)
     return output
 
 
@@ -330,7 +331,7 @@ def duplicates_find(of_object_or_file, in_file_or_directory=None):
         if of_object_or_file.endswith('.str'):
             space = ':'
     else:
-        raise s.InternalError(f"wrong input type {of_object_or_file}")
+        raise InternalError(f"wrong input type {of_object_or_file}")
     items_number = len(items_to_look_for)
     for item_index in range(1, items_number):
         is_duplicated = False
@@ -373,7 +374,7 @@ def link_check(construct):
             construct = c.ConstructFile(construct)
             link_check(construct)
         else:
-            raise s.InternalError(f"invalid path {construct}")
+            raise InternalError(f"invalid path {construct}")
     for element in construct:
         if isinstance(element, c.ConstructLevel):
             link_check(element)

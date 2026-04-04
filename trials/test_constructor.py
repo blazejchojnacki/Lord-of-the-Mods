@@ -1,9 +1,9 @@
 import unittest
 from unittest.mock import patch, mock_open
-import os
 
+from source.messaging import InternalError
+from source.constants import MOD_DEF_FILE_NAME
 import source.constructor as constructor
-import source.shared as s
 
 
 class Test_Constructor(unittest.TestCase):
@@ -55,7 +55,7 @@ class Test_Constructor(unittest.TestCase):
 
     # --- 2. Test ConstructFile Structure Recognition ---
 
-    @patch('source.shared.INI_DELIMITERS', [[["Object", "Weapon"], ["SubObject"]]])
+    @patch('source.constants.INI_DELIMITERS', [[["Object", "Weapon"], ["SubObject"]]])
     @patch('builtins.open', new_callable=mock_open, read_data="Object FakeUnit\n  SubObject fake_part\n")
     def test_recognize_structure__ini(self, mock_file):
         file_obj = constructor.ConstructFile("")  # Initialize empty to avoid auto-construction
@@ -72,7 +72,7 @@ class Test_Constructor(unittest.TestCase):
         file_obj.name = "test.str"
 
         # Mock the shared STR_DELIMITERS
-        with patch('source.shared.STR_DELIMITERS', [["StringKey"]]):
+        with patch('source.constants.STR_DELIMITERS', [["StringKey"]]):
             file_obj.recognize_structure()
 
             # .str files hardcode start_level to 0 and append an empty list to delimiters
@@ -81,10 +81,10 @@ class Test_Constructor(unittest.TestCase):
 
     def test_recognize_structure__functional_file(self):
         file_obj = constructor.ConstructFile("")
-        file_obj.name = s.MOD_DEF_FILE_NAME
+        file_obj.name = MOD_DEF_FILE_NAME
 
         # It should raise an InternalError if trying to parse the mod definition file
-        self.assertRaisesRegex(s.InternalError, "functional file", file_obj.recognize_structure)
+        self.assertRaisesRegex(InternalError, "functional file", file_obj.recognize_structure)
 
     # --- 3. Test load_file Helper ---
 
@@ -92,14 +92,14 @@ class Test_Constructor(unittest.TestCase):
     def test_load_file__invalid_paths(self, mock_isfile):
         # Path does not exist
         mock_isfile.return_value = False
-        self.assertRaisesRegex(s.InternalError, "wrong path", constructor.load_file, "fake.txt")
+        self.assertRaisesRegex(InternalError, "wrong path", constructor.load_file, "fake.txt")
 
         # Empty path
         mock_isfile.return_value = True
-        self.assertRaisesRegex(s.InternalError, "empty path", constructor.load_file, "")
+        self.assertRaisesRegex(InternalError, "empty path", constructor.load_file, "")
 
         # Unsupported extension
-        self.assertRaisesRegex(s.InternalError, "unsupported file type", constructor.load_file, "file.png")
+        self.assertRaisesRegex(InternalError, "unsupported file type", constructor.load_file, "file.png")
 
     @patch('os.path.isfile')
     @patch('builtins.open', new_callable=mock_open, read_data="Just some text")
@@ -171,7 +171,7 @@ class Test_ConstructFile_Construct(unittest.TestCase):
 
         # It should raise an InternalError because the file either doesn't exist
         # or doesn't have a valid extension
-        self.assertRaisesRegex(s.InternalError, "invalid", file_obj.construct)
+        self.assertRaisesRegex(InternalError, "invalid", file_obj.construct)
 
     # --- 2. Test Macros and Includes ---
 

@@ -4,6 +4,8 @@ from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 
+from source.messaging import InternalError
+
 PROGRAM_NAME = 'Lord of the Mods'
 THIS_PATH = Path(__file__).parent.resolve()
 MAIN_DIRECTORY = Path(__file__).parent.parent.resolve()

@@ -3,10 +3,9 @@ import json
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 
+from source.messaging import InternalError
 import source.core as core
-import source.shared as s
-from source.shared import MOD_DEF_FILE_NAME
-from source.constants import Property, log, DEFINITION_CLASSES, Transfer, Change
+from source.constants import Property, log, DEFINITION_CLASSES, Transfer, Change, MOD_DEF_FILE_NAME, MAIN_DIRECTORY
 from source.modificator import initiate_comparison, hash_file, transfer_switch, TEST
 
 
@@ -85,11 +84,11 @@ class Mod:
         if not mod_directory:
             raise ValueError("A directory path must be provided to load a Mod.")
         if mod_directory in core.state.exceptions:
-            raise s.InternalError("The provided path is defined as an exception.")
+            raise InternalError("The provided path is defined as an exception.")
 
         file_path = f'{mod_directory}/{MOD_DEF_FILE_NAME}'
         if not os.path.isfile(file_path):
-            raise s.InternalError(f'No definition found under {mod_directory}')
+            raise InternalError(f'No definition found under {mod_directory}')
 
         with open(file_path, 'r') as definition_buffer:
             raw_dict = json.load(definition_buffer)
@@ -98,7 +97,7 @@ class Mod:
     def save(self) -> None:
         """ Saves the mod's current state to its definition file. """
         if not self.directory:
-            raise s.InternalError("Cannot save Mod: No directory specified.")
+            raise InternalError("Cannot save Mod: No directory specified.")
         file_path = f'{self.directory}/{MOD_DEF_FILE_NAME}'
         with open(file_path, 'w') as definition_buffer:
             json.dump(self.to_dict(), definition_buffer, indent=4)
@@ -107,7 +106,7 @@ class Mod:
     def edit(self, **kwargs) -> 'Mod':
         """ Updates the mod's attributes and saves the changes. """
         if Property.NAME in kwargs or "name" in kwargs:
-            raise s.InternalError(
+            raise InternalError(
                 "Cannot change mod name via simple edit. Use LibraryManager.rename_mod() instead."
             )
         for key, value in kwargs.items():
@@ -132,7 +131,7 @@ class Mod:
         changes_dict = {}
         for mod_file, change_data in self.changes.items():
             if self.active:
-                file_path = f'{s.MAIN_DIRECTORY}/{mod_file}'
+                file_path = f'{MAIN_DIRECTORY}/{mod_file}'
             else:
                 file_path = f'{self.directory}/{mod_file}'
 
@@ -162,9 +161,9 @@ class Mod:
 
         if Property.OVERRIDES in check_type:
             if not os.path.isdir(self.directory):
-                raise s.InternalError('path not recognized')
+                raise InternalError('path not recognized')
             if self.active and check_type != 'pass':
-                raise s.InternalError('activation of active mod aborted')
+                raise InternalError('activation of active mod aborted')
 
             if self.transfer_type == DEFINITION_CLASSES[0]:
                 transfer = Transfer.MOVE
@@ -174,7 +173,7 @@ class Mod:
             ancestor_mod_object = LibraryManager.check_relative(self, Property.OVERRIDES)
             if ancestor_mod_object:
                 if not ancestor_mod_object.attach():
-                    raise s.InternalError('ancestor mod not attached')
+                    raise InternalError('ancestor mod not attached')
         elif check_type == 'pass':
             error_sensitive = False
 
@@ -188,7 +187,7 @@ class Mod:
             with open(f"{self.directory}/comparison_{self.name}.json") as comp_buffer:
                 comparison_dict = json.load(comp_buffer)
         if not comparison_dict:
-            raise s.InternalError('comparison missing')
+            raise InternalError('comparison missing')
 
         # 3. Transfer Routing
         try:
@@ -208,13 +207,13 @@ class Mod:
                     transfer_switch(file_path_mod, file_path_game, transfer, error_sensitive)
                 elif status == Change.REMOVED:
                     transfer_switch(file_path_source, file_path_archive, transfer, error_sensitive)
-        except s.InternalError:
+        except InternalError:
             log(f'mod_attach {self.name} CANCELLED\n')
             self.detach(transfer=Transfer.REMOVE, check_type='pass')
             return False
 
         if TEST:
-            raise s.InternalError('Test phase: mod_attach not applied')
+            raise InternalError('Test phase: mod_attach not applied')
 
         self.edit(active=True)
         log(f'mod_attach {self.name}\n')
@@ -228,7 +227,7 @@ class Mod:
 
         if transfer == Transfer.REMOVE:
             if not self.active and check_type != 'pass':
-                raise s.InternalError('deactivation of inactive mod aborted')
+                raise InternalError('deactivation of inactive mod aborted')
             if self.transfer_type == DEFINITION_CLASSES[0]:
                 transfer = Transfer.MOVE
             elif self.transfer_type == DEFINITION_CLASSES[1] and self.check_library():
@@ -237,13 +236,13 @@ class Mod:
                 transfer = Transfer.DELETE
 
         if not self.changes:
-            raise s.InternalError('comparison missing')
+            raise InternalError('comparison missing')
 
         if Property.OVERRODE_BY in check_type:
             heir_mod = LibraryManager.check_relative(self, Property.OVERRODE_BY)
             if heir_mod:
                 if not heir_mod.detach(transfer=Transfer.REMOVE):
-                    raise s.InternalError('heir mod not retrieved')
+                    raise InternalError('heir mod not retrieved')
         elif check_type == 'pass':
             error_sensitive = False
 
@@ -267,13 +266,13 @@ class Mod:
                 elif status == Change.REMOVED:
                     if transfer in (Transfer.MOVE, Transfer.DELETE):
                         transfer_switch(file_path_archive, file_path_game, Transfer.MOVE, error_sensitive)
-        except s.InternalError:
+        except InternalError:
             log(f'mod_reverse {self.name} CANCELLED\n')
             self.attach(check_type='pass')
             return False
 
         if TEST:
-            raise s.InternalError('under TEST phase: mod_reverse not applied')
+            raise InternalError('under TEST phase: mod_reverse not applied')
 
         self.edit(active=False)
         log(f'mod_reverse {self.name}\n')
@@ -302,7 +301,7 @@ class LibraryManager:
             if name not in core.state.exceptions:
                 try:
                     mods.append(Mod.load(f"{core.state.library}/{name}"))
-                except s.InternalError:
+                except InternalError:
                     pass  # Safely ignore folders that don't have valid definitions
         return mods
 
@@ -335,7 +334,7 @@ class LibraryManager:
                         break
             return sorted_dict
         else:
-            raise s.InternalError(message='unrecognized criteria')
+            raise InternalError(message='unrecognized criteria')
 
     @staticmethod
     def check_relative(mod: Mod, relation: str) -> Optional[Mod]:
@@ -375,11 +374,11 @@ class LibraryManager:
     def rename_mod(mod: Mod, new_name: str) -> Mod:
         """ Safely renames a mod's directory and recursively updates sibling links. """
         if not mod.directory:
-            raise s.InternalError('Cannot rename mod: Mod directory is unknown.')
+            raise InternalError('Cannot rename mod: Mod directory is unknown.')
 
         list_mods = [_ for _ in os.listdir(core.state.library) if _ not in core.state.exceptions]
         if new_name in list_mods:
-            raise s.InternalError(f'rename_mod error: name {new_name} is already in use')
+            raise InternalError(f'rename_mod error: name {new_name} is already in use')
 
         old_name = mod.name
 
@@ -391,7 +390,7 @@ class LibraryManager:
                     sibling_mod.edit(overrides=new_name)
                 if sibling_mod.overrode_by == old_name:
                     sibling_mod.edit(overrode_by=new_name)
-            except s.InternalError:
+            except InternalError:
                 pass  # Skip folders without definitions
 
         new_directory = f"{'/'.join(mod.directory.split('/')[:-1])}/{new_name}"

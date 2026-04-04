@@ -9,10 +9,11 @@ from tkinter.filedialog import askopenfilenames, askdirectory
 from tkinter.ttk import Treeview
 from tklinenums import TkLineNumbers
 
+from source.messaging import internal_message, InternalError
 import source.core as core
-from source.constants import Property, Change, DEFINITION_TEMPLATE, DEFINITION_CLASSES
+from source.constants import Property, Change, Setting, DEFINITION_TEMPLATE, DEFINITION_CLASSES, MOD_DEF_FILE_NAME, \
+    PROGRAM_NAME, INI_COMMENTS, INI_ENDS, LEVEL_INDENT
 import source.shared as s
-from source.shared import MOD_DEF_FILE_NAME, internal_message, InternalError, Setting
 from models.mod import Mod, LibraryManager
 from source.constructor import load_file, load_directories
 from source.editor import reformat_string, text_find_replace, move_file, duplicates_find
@@ -180,7 +181,7 @@ class Window(tkinter.Tk):
         s.set_title_bar_color(self)
 
         self.iconbitmap(s.ICON_PATH)
-        self.title(s.PROGRAM_NAME)
+        self.title(PROGRAM_NAME)
         self.minsize(width=1100, height=400)
         self.maxsize(width=1600, height=900)
         self.geometry('1250x650')
@@ -968,7 +969,7 @@ class Window(tkinter.Tk):
 
     def settings_select_new_directory(self, index_funct):
         """ Prompts to select a directory and replaces the old one with it in a settings entry field. """
-        added = askdirectory(title=f'{s.PROGRAM_NAME}: select a new directory', initialdir='../')
+        added = askdirectory(title=f'{PROGRAM_NAME}: select a new directory', initialdir='../')
         if added:
             self.list_entry_settings[index_funct].delete(0, 'end')
             if '/' == added[-1]:
@@ -982,7 +983,7 @@ class Window(tkinter.Tk):
     def settings_select_add_directory(self, index_funct):
         """ Prompts to select a directory and adds it to a settings entry field. """
         present = self.list_entry_settings[index_funct].get()
-        added = f"{askdirectory(title=f'{s.PROGRAM_NAME}: select a new directory', initialdir='../')}"
+        added = f"{askdirectory(title=f'{PROGRAM_NAME}: select a new directory', initialdir='../')}"
         if added:
             new_path = os.path.relpath(added).replace('\\', '/')
             if not present:
@@ -1136,7 +1137,7 @@ class Window(tkinter.Tk):
                     if not do_initiate:
                         exceptions = core.state.raw_settings[Setting.EXCEPTIONS].copy()
                         exceptions.append(f'{core.state.raw_settings[Setting.LIBRARY]}/{folder}')
-                        core.state.raw_settings.save({s.Setting.EXCEPTIONS: exceptions})
+                        core.state.raw_settings.save({Setting.EXCEPTIONS: exceptions})
         except InternalError:
             self.set_log_update('library exception error')
         try:
@@ -1462,7 +1463,7 @@ class Window(tkinter.Tk):
     def command_change_path(self):
         """ - """
         mod_path = f'{core.state.library}/{self.loaded_mod.name}'
-        paths_added = tkinter.filedialog.askopenfilenames(title=s.PROGRAM_NAME, initialdir=mod_path)
+        paths_added = tkinter.filedialog.askopenfilenames(title=PROGRAM_NAME, initialdir=mod_path)
         for path_added in paths_added:
             hash_value = hash_file(path_added)
             if mod_path in path_added:
@@ -1477,7 +1478,7 @@ class Window(tkinter.Tk):
         """ Copies selected files in the change list """
         mod_path = f'{core.state.library}/{self.loaded_mod.name}'
         game_directory = os.path.abspath('../').replace('\\', '/')
-        paths_added = tkinter.filedialog.askopenfilenames(title=s.PROGRAM_NAME, initialdir='../')
+        paths_added = tkinter.filedialog.askopenfilenames(title=PROGRAM_NAME, initialdir='../')
         for path_added in paths_added:
             if game_directory in path_added and mod_path not in path_added:
                 new_path = path_added[path_added.rfind(game_directory) + len(game_directory):]
@@ -1691,7 +1692,7 @@ class Window(tkinter.Tk):
     def command_select_folder(self, text_widget):
         """ Launches a window for selecting a folder and pastes it into the folder text field. """
         selected_folder = askdirectory(
-            title=f'{s.PROGRAM_NAME}: select a folder',
+            title=f'{PROGRAM_NAME}: select a folder',
             initialdir=self.current_path if os.path.isdir(self.current_path) else self.current_path[
                                                                                   :self.current_path.rfind('/')])
         if len(text_widget.get('1.0', 'end')) > 1:
@@ -1703,7 +1704,7 @@ class Window(tkinter.Tk):
     def command_select_file(self, text_widget):
         """ Launches a window for selecting one or more file(s) and pastes it into the file text field. """
         selected_files = askopenfilenames(
-            title=f'{s.PROGRAM_NAME}: select one or multiple files',
+            title=f'{PROGRAM_NAME}: select one or multiple files',
             initialdir=self.current_path if os.path.isdir(self.current_path) else self.current_path[
                                                                                   :self.current_path.rfind('/')])
         if selected_files:
@@ -1726,25 +1727,25 @@ class Window(tkinter.Tk):
             rest_of_line = line
             if line.strip() == '':
                 continue
-            elif line.strip()[0] in s.INI_COMMENTS:
+            elif line.strip()[0] in INI_COMMENTS:
                 self.text_file_content.tag_add('comment', f'{line_index}.0', f'{line_index}.end')
                 rest_of_line = ''
-            elif s.INI_COMMENTS[0] in line:
-                self.text_file_content.tag_add('comment', f'{line_index}.{line.index(s.INI_COMMENTS[0])}',
+            elif INI_COMMENTS[0] in line:
+                self.text_file_content.tag_add('comment', f'{line_index}.{line.index(INI_COMMENTS[0])}',
                                                f'{line_index}.end')
-                rest_of_line = line[:line.index(s.INI_COMMENTS[0])]
-            elif s.INI_COMMENTS[1] * 2 in line:
-                self.text_file_content.tag_add('comment', f'{line_index}.{line.index(s.INI_COMMENTS[1] * 2)}',
+                rest_of_line = line[:line.index(INI_COMMENTS[0])]
+            elif INI_COMMENTS[1] * 2 in line:
+                self.text_file_content.tag_add('comment', f'{line_index}.{line.index(INI_COMMENTS[1] * 2)}',
                                                f'{line_index}.end')
-                rest_of_line = line[:line.index(s.INI_COMMENTS[1] * 2)]
+                rest_of_line = line[:line.index(INI_COMMENTS[1] * 2)]
             self.text_file_content.tag_config('comment', foreground='grey')
             if rest_of_line:
-                level = rest_of_line.rstrip().count(s.LEVEL_INDENT)
+                level = rest_of_line.rstrip().count(LEVEL_INDENT)
                 self.text_file_content.tag_config(f'level{level}', foreground=s.INI_LEVEL_COLORS[level])
                 if rest_of_line.split()[0].strip() in self.current_levels[level]:
                     self.text_file_content.tag_add(f'level{level}', f'{line_index}.0',
                                                    f'{line_index}.{len(rest_of_line)}')
-                elif rest_of_line.strip() in s.INI_ENDS:
+                elif rest_of_line.strip() in INI_ENDS:
                     self.text_file_content.tag_add(f'level{level}', f'{line_index}.0',
                                                    f'{line_index}.{len(rest_of_line)}')
 
@@ -1760,8 +1761,8 @@ class Window(tkinter.Tk):
         text_commented = ''
         for line in lines_to_comment:
             for level in range(7):
-                if line.startswith(s.LEVEL_INDENT * (6 - level)):
-                    text_commented += f'{s.LEVEL_INDENT * (6 - level)}; {line.strip()}\n'
+                if line.startswith(LEVEL_INDENT * (6 - level)):
+                    text_commented += f'{LEVEL_INDENT * (6 - level)}; {line.strip()}\n'
                     break
         if text_commented:
             self.text_file_content.replace('sel.first linestart', 'sel.last lineend + 1 chars', text_commented)
@@ -1780,11 +1781,11 @@ class Window(tkinter.Tk):
         text_commented = ''
         for line in lines_to_comment:
             for level in range(7):
-                if line.startswith(s.LEVEL_INDENT * (6 - level)):
+                if line.startswith(LEVEL_INDENT * (6 - level)):
                     if '; ' in line:
-                        text_commented += f"{s.LEVEL_INDENT * (6 - level)}{line.strip()[len('; '):]}\n"
+                        text_commented += f"{LEVEL_INDENT * (6 - level)}{line.strip()[len('; '):]}\n"
                     elif '//' in line:
-                        text_commented += f"{s.LEVEL_INDENT * (6 - level)}{line.strip()[len('//'):]}\n"
+                        text_commented += f"{LEVEL_INDENT * (6 - level)}{line.strip()[len('//'):]}\n"
                     break
         if text_commented:
             self.text_file_content.replace('sel.first linestart', 'sel.last lineend + 1 chars', text_commented)

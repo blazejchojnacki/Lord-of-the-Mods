@@ -1,10 +1,10 @@
-import os.path
 import unittest
 from unittest.mock import patch, mock_open
 from pathlib import Path
 
+from source.messaging import InternalError
+from source.constants import Setting, _SETTINGS_FORMAT, SETTINGS_FILE_PATH
 import source.core as core
-import source.shared as shared
 
 TRIALS_PATH = "/".join(str(Path(__file__).parent).split('\\')[-2:])
 
@@ -19,13 +19,13 @@ class Test_AppConfig(unittest.TestCase):
         self.state.install_path = self.install_path
 
         settings_dict = {
-            shared.Setting.TITLE: "Lord of the Mods Settings",
-            shared.Setting.VERSION: "",
-            shared.Setting.INSTALL: "O:",
-            shared.Setting.LIBRARY: f"{TRIALS_PATH}/_LIBRARY",
-            shared.Setting.ARCHIVE: f"{TRIALS_PATH}/_ARCHIVE",
-            shared.Setting.GAMES: ["_GAME1", "_GAME2"],
-            shared.Setting.EXCEPTIONS: [f"{TRIALS_PATH}/_LIBRARY/_EXCEPTION"]
+            Setting.TITLE: "Lord of the Mods Settings",
+            Setting.VERSION: "",
+            Setting.INSTALL: "O:",
+            Setting.LIBRARY: f"{TRIALS_PATH}/_LIBRARY",
+            Setting.ARCHIVE: f"{TRIALS_PATH}/_ARCHIVE",
+            Setting.GAMES: ["_GAME1", "_GAME2"],
+            Setting.EXCEPTIONS: [f"{TRIALS_PATH}/_LIBRARY/_EXCEPTION"]
         }
 
         # We target raw_settings instead of treating the object itself like a dict
@@ -33,10 +33,10 @@ class Test_AppConfig(unittest.TestCase):
 
     def test_complete_paths__valid(self):
         settings_dict = {
-            shared.Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib",
-            shared.Setting.ARCHIVE: f"{TRIALS_PATH}/__test_arch",
-            shared.Setting.GAMES: ["game1", "game2"],
-            shared.Setting.EXCEPTIONS: [f"{TRIALS_PATH}/__test_lib/__test_not_mod1"]
+            Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib",
+            Setting.ARCHIVE: f"{TRIALS_PATH}/__test_arch",
+            Setting.GAMES: ["game1", "game2"],
+            Setting.EXCEPTIONS: [f"{TRIALS_PATH}/__test_lib/__test_not_mod1"]
         }
 
         # We map against the state's install_path instead of the global core.install_path
@@ -53,21 +53,21 @@ class Test_AppConfig(unittest.TestCase):
         self.assertEqual(result, expected_paths)
 
     def test_complete_paths__empty_library_raises(self):
-        settings_dict = {shared.Setting.LIBRARY: ""}
-        self.assertRaises(shared.InternalError, self.state.complete_paths, settings_dict)
+        settings_dict = {Setting.LIBRARY: ""}
+        self.assertRaises(InternalError, self.state.complete_paths, settings_dict)
 
     def test_complete_paths__empty_archive_raises(self):
-        settings_dict = {shared.Setting.ARCHIVE: ""}
-        self.assertRaises(shared.InternalError, self.state.complete_paths, settings_dict)
+        settings_dict = {Setting.ARCHIVE: ""}
+        self.assertRaises(InternalError, self.state.complete_paths, settings_dict)
 
     @patch('os.makedirs')
     def test_create_directories(self, mock_makedirs):
         settings_to_initiate = {
-            shared.Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib",
-            shared.Setting.ARCHIVE: f"{TRIALS_PATH}/__test_arch",
-            shared.Setting.GAMES: [f"{TRIALS_PATH}/__test_game1",
-                                   f"{TRIALS_PATH}/__test_game2"],
-            shared.Setting.EXCEPTIONS: [f"{TRIALS_PATH}/__test_lib/__test_not_mod1"],
+            Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib",
+            Setting.ARCHIVE: f"{TRIALS_PATH}/__test_arch",
+            Setting.GAMES: [f"{TRIALS_PATH}/__test_game1",
+                            f"{TRIALS_PATH}/__test_game2"],
+            Setting.EXCEPTIONS: [f"{TRIALS_PATH}/__test_lib/__test_not_mod1"],
         }
         self.state.create_directories(settings_to_initiate)
         paths = self.state.complete_paths(settings_to_initiate)
@@ -82,10 +82,10 @@ class Test_AppConfig(unittest.TestCase):
         propagated_paths_games = [f"{TRIALS_PATH}/__test_game1", f"{TRIALS_PATH}/__test_game2"]
         propagated_paths_exceptions = [f"{TRIALS_PATH}/__test_lib/__test_not_mod1"]
 
-        self.state.raw_settings[shared.Setting.LIBRARY] = propagated_path_library
-        self.state.raw_settings[shared.Setting.ARCHIVE] = propagated_path_archive
-        self.state.raw_settings[shared.Setting.GAMES] = propagated_paths_games
-        self.state.raw_settings[shared.Setting.EXCEPTIONS] = propagated_paths_exceptions
+        self.state.raw_settings[Setting.LIBRARY] = propagated_path_library
+        self.state.raw_settings[Setting.ARCHIVE] = propagated_path_archive
+        self.state.raw_settings[Setting.GAMES] = propagated_paths_games
+        self.state.raw_settings[Setting.EXCEPTIONS] = propagated_paths_exceptions
 
         self.state.propagate()
 
@@ -103,17 +103,17 @@ class Test_AppConfig(unittest.TestCase):
     def test_load__existing_file(self, mock_json_load, mock_file, mock_isfile):
         mock_isfile.return_value = True
         mock_json_load.return_value = {
-            shared.Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib",
-            shared.Setting.ARCHIVE: f"{TRIALS_PATH}/__test_arch",
-            shared.Setting.GAMES: [f"{TRIALS_PATH}/__test_game1",
-                                   f"{TRIALS_PATH}/__test_game2"],
-            shared.Setting.EXCEPTIONS: []
+            Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib",
+            Setting.ARCHIVE: f"{TRIALS_PATH}/__test_arch",
+            Setting.GAMES: [f"{TRIALS_PATH}/__test_game1",
+                            f"{TRIALS_PATH}/__test_game2"],
+            Setting.EXCEPTIONS: []
         }
 
         with patch.object(core.AppConfig, 'propagate') as mock_propagate:
             result = self.state.load()
             self.assertTrue(result)
-            self.assertEqual(self.state.raw_settings[shared.Setting.LIBRARY], f"{TRIALS_PATH}/__test_lib")
+            self.assertEqual(self.state.raw_settings[Setting.LIBRARY], f"{TRIALS_PATH}/__test_lib")
             mock_propagate.assert_called_once()
 
     @patch('os.path.isfile')
@@ -122,23 +122,23 @@ class Test_AppConfig(unittest.TestCase):
         result = self.state.load()
 
         self.assertFalse(result)
-        for key in shared._SETTINGS_FORMAT:
+        for key in _SETTINGS_FORMAT:
             self.assertIn(key, self.state.raw_settings)
 
     def test_check_format__missing_key(self):
-        if shared.Setting.LIBRARY in self.state.raw_settings:
-            self.state.raw_settings.pop(shared.Setting.LIBRARY)
-        self.assertRaises(shared.InternalError, self.state.check_format)
+        if Setting.LIBRARY in self.state.raw_settings:
+            self.state.raw_settings.pop(Setting.LIBRARY)
+        self.assertRaises(InternalError, self.state.check_format)
 
     def test_check_format__extra_key(self):
         self.state.raw_settings['unrecognized_key'] = 'test_value'
-        self.assertRaises(shared.InternalError, self.state.check_format)
+        self.assertRaises(InternalError, self.state.check_format)
 
     @patch('os.path.isdir')
     def test_check_paths__existing(self, mock_isdir):
         mock_isdir.return_value = True
         settings_to_check = {
-            shared.Setting.LIBRARY: f"{TRIALS_PATH}",
+            Setting.LIBRARY: f"{TRIALS_PATH}",
         }
         self.assertTrue(self.state.check_paths(settings_to_check))
 
@@ -146,14 +146,14 @@ class Test_AppConfig(unittest.TestCase):
     def test_check_paths__not_existing(self, mock_isdir):
         mock_isdir.return_value = False
         settings_to_check = {
-            shared.Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib",
-            shared.Setting.ARCHIVE: f"{TRIALS_PATH}/__test_arch",
+            Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib",
+            Setting.ARCHIVE: f"{TRIALS_PATH}/__test_arch",
         }
         self.assertFalse(self.state.check_paths(settings_to_check))
 
     def test_check_paths__missing(self):
         settings_to_check = {
-            shared.Setting.LIBRARY: "",
+            Setting.LIBRARY: "",
         }
         self.assertFalse(self.state.check_paths(settings_to_check))
 
@@ -164,13 +164,13 @@ class Test_AppConfig(unittest.TestCase):
     @patch('json.dump')
     def test_save__valid(self, mock_json_dump, mock_file, mock_propagate, mock_check_format, mock_check_paths):
         mock_check_paths.return_value = True
-        settings_to_save = {shared.Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib"}
+        settings_to_save = {Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib"}
 
         self.state.save(settings_to_save)
 
         mock_check_paths.assert_called_once_with(settings_to_save)
         mock_check_format.assert_called_once()
-        mock_file.assert_called_once_with(shared.SETTINGS_FILE_PATH, 'w')
+        mock_file.assert_called_once_with(SETTINGS_FILE_PATH, 'w')
 
         # We test for json.dump since we upgraded to use the native function instead of write(json.dumps())
         mock_json_dump.assert_called_once_with(self.state.raw_settings, mock_file(), indent=4)
@@ -180,9 +180,9 @@ class Test_AppConfig(unittest.TestCase):
     def test_save__invalid(self, mock_check_paths):
         mock_check_paths.return_value = False
         settings_to_save = {
-            shared.Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib",
+            Setting.LIBRARY: f"{TRIALS_PATH}/__test_lib",
         }
-        self.assertRaises(shared.InternalError, self.state.save, settings_to_save)
+        self.assertRaises(InternalError, self.state.save, settings_to_save)
 
 
 if __name__ == '__main__':

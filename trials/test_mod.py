@@ -3,10 +3,10 @@ from unittest.mock import patch, mock_open, MagicMock, call
 import os
 import json
 
+from source.messaging import InternalError
 from models.mod import Mod, LibraryManager
 import source.core as core
-import source.shared as s
-from source.constants import Property, Transfer, Change, DEFINITION_CLASSES
+from source.constants import Property, Transfer, Change, DEFINITION_CLASSES, MAIN_DIRECTORY
 
 
 class Test_Mod_Data_IO(unittest.TestCase):
@@ -89,7 +89,7 @@ class Test_Mod_Data_IO(unittest.TestCase):
             mock_save.assert_called_once()
 
         # Test safety block on renaming
-        with self.assertRaises(s.InternalError):
+        with self.assertRaises(InternalError):
             mod.edit(name="NewName")
 
 
@@ -102,7 +102,7 @@ class Test_Mod_Capabilities(unittest.TestCase):
         core.state.library = "C:/Fake/Library"
         core.state.archive = "C:/Fake/Archive"
         core.state.install_path = "C:/Fake/Install"
-        s.MAIN_DIRECTORY = "C:/Fake/Install"
+        MAIN_DIRECTORY = "C:/Fake/Install"
 
     def tearDown(self):
         self.patcher_log.stop()
@@ -115,7 +115,7 @@ class Test_Mod_Capabilities(unittest.TestCase):
         mod = Mod(
             name="MyMod",
             active=True,
-            changes={"data/ini/file.txt": [Change.CHANGED, "old_hash_123"]}
+            changes={"game/data/ini/file.txt": [Change.CHANGED, "old_hash_123"]}
         )
 
         # Scenario 1: Hash perfectly matches expected "old_hash" (no new changes)
@@ -125,9 +125,9 @@ class Test_Mod_Capabilities(unittest.TestCase):
         # Scenario 2: Hash is different from expected
         mock_hash_file.return_value = "NEW_hash_999"
         detected = mod.detect_changes()
-        self.assertIn("data/ini/file.txt", detected)
-        self.assertEqual(detected["data/ini/file.txt"][0], Change.CHANGED)
-        self.assertEqual(detected["data/ini/file.txt"][1], "NEW_hash_999")
+        self.assertIn("game/data/ini/file.txt", detected)
+        self.assertEqual(detected["game/data/ini/file.txt"][0], Change.CHANGED)
+        self.assertEqual(detected["game/data/ini/file.txt"][1], "NEW_hash_999")
 
     @patch('source.modificator.transfer_switch')  # Patch the local import
     @patch('os.makedirs')
@@ -144,8 +144,8 @@ class Test_Mod_Capabilities(unittest.TestCase):
             active=False,
             transfer_type=DEFINITION_CLASSES[0],  # General (MOVE)
             changes={
-                "data/ini/added.txt": [Change.ADDED, "hash1"],
-                "data/ini/changed.txt": [Change.CHANGED, "hash2", "hash3"]
+                "game/data/ini/added.txt": [Change.ADDED, "hash1"],
+                "game/data/ini/changed.txt": [Change.CHANGED, "hash2", "hash3"]
             }
         )
 
@@ -155,8 +155,8 @@ class Test_Mod_Capabilities(unittest.TestCase):
 
         # Verify routing logic fired for added files
         mock_transfer.assert_any_call(
-            "C:/Fake/Library/MyMod/data/ini/added.txt",
-            "C:/Fake/Install/data/ini",
+            "C:/Fake/Library/MyMod/game/data/ini/added.txt",
+            "C:/Fake/Install/game/data/ini",
             Transfer.MOVE, False
         )
         # Verify active=True was set
@@ -172,8 +172,8 @@ class Test_Mod_Capabilities(unittest.TestCase):
 
         # Verify it routed back to library
         mock_transfer.assert_any_call(
-            "C:/Fake/Install/data/ini/added.txt",
-            "C:/Fake/Library/MyMod/data/ini",
+            "C:/Fake/Install/game/data/ini/added.txt",
+            "C:/Fake/Library/MyMod/game/data/ini",
             Transfer.MOVE, False
         )
         mock_edit.assert_called_with(active=False)
@@ -194,7 +194,7 @@ class Test_LibraryManager(unittest.TestCase):
         def mock_load_side_effect(path):
             if "ModA" in path:
                 return Mod(name="ModA")
-            raise s.InternalError("No definition")
+            raise InternalError("No definition")
 
         mock_mod_load.side_effect = mock_load_side_effect
 
@@ -228,10 +228,10 @@ class Test_LibraryManager(unittest.TestCase):
     def test_rename_mod(self, mock_mod_load, mock_listdir, mock_rename):
         mock_listdir.return_value = ["SiblingMod"]
 
-        # Setup the target mod to rename
+        # Set up the target mod to rename
         target_mod = Mod(name="OldName", directory="C:/Fake/Library/OldName")
 
-        # Setup a sibling mod that depends on OldName
+        # Set up a sibling mod that depends on OldName
         sibling_mod = Mod(name="SiblingMod", overrides="OldName")
         with patch.object(sibling_mod, 'edit') as mock_edit:
             mock_mod_load.return_value = sibling_mod
