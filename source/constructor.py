@@ -1,44 +1,71 @@
 import os
+from dataclasses import dataclass, field
+from typing import List, Any, Dict
 
 import source.shared as s
 
 
-class ConstructShared(list):
-    def __init__(self):
-        super().__init__()
+@dataclass
+class ConstructShared:
+    """ Base dataclass acting as a container for parsed file elements. """
+
+    # This explicitly replaces the inherited list!
+    items: List[Any] = field(default_factory=list)
+
+    # --- Dunder methods to maintain compatibility with external files (like editor.py) ---
+    def __iter__(self):
+        return iter(self.items)
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, index):
+        return self.items[index]
+
+    # --- Class Capabilities ---
+    def append(self, item):
+        """ Replaces the built-in list.append() """
+        self.items.append(item)
 
     def add(self, level):
-        self.append(level)
-        self[-1].is_open = True
-        return self[-1]
+        """ Appends a new level and automatically sets it to open. """
+        self.items.append(level)
+        self.items[-1].is_open = True
+        return self.items[-1]
 
     def assign(self, index=None, **key_args):
+        """ Assigns properties to the current or specified index dictionary. """
         filtered_dict = {key: key_args[key] for key in key_args if key_args[key]}
         if index is None:
-            self.append(filtered_dict)
+            self.items.append(filtered_dict)
         else:
-            self[index].update(filtered_dict)
+            self.items[index].update(filtered_dict)
 
     def last(self):
-        for item_index in range(len(self)):
-            last_child = self[-item_index]
+        """ Recursively finds the deepest open ConstructLevel. """
+        for item_index in range(1, len(self.items) + 1):
+            last_child = self.items[-item_index]
             if isinstance(last_child, ConstructLevel):
-                if last_child.is_open:
+                if getattr(last_child, 'is_open', False):
                     return last_child.last()
-        else:
-            return self
+        return self
 
 
+@dataclass
 class ConstructLevel(ConstructShared):
+    """ Represents an inner block or object within a parsed file. """
 
-    def __init__(self, _class):
-        super().__init__()
-        self.is_open = False
-        self.append({'class': _class})
+    _class: str = ""
+    is_open: bool = False
 
-    def print(self, level: int = 0, file_type: str = '.ini'):
+    def __post_init__(self):
+        """ Automatically executes right after the dataclass initializes. """
+        if self._class:
+            self.items.append({'class': self._class})
+
+    def print(self, level: int = 0, file_type: str = '.ini') -> str:
         output = ''
-        for item in self:
+        for item in self.items:
             if type(item) is dict:
                 values_order = []
                 for key in item:
@@ -65,7 +92,6 @@ class ConstructLevel(ConstructShared):
                 output += line
                 if 'class' in item:
                     level += 1
-                # output += f'{line}\n'
             elif isinstance(item, ConstructLevel):
                 output += item.print(level=level)
             else:
@@ -76,16 +102,19 @@ class ConstructLevel(ConstructShared):
         pass
 
 
+@dataclass
 class ConstructFile(ConstructShared):
+    """ The Root representation of a fully parsed ini/inc/str file. """
 
-    def __init__(self, name):
-        super().__init__()
-        self.name = name
-        self.comment = ''
-        self.defines = []
-        self.delimiters = []
-        self.start_level = 0
-        if name:
+    name: str = ""
+    comment: str = ""
+    defines: List[str] = field(default_factory=list)
+    delimiters: List[List[str]] = field(default_factory=list)
+    start_level: int = 0
+
+    def __post_init__(self):
+        """ Automatically constructs the tree if a filename is provided. """
+        if self.name:
             self.construct()
 
     def recognize_structure(self) -> None:
@@ -132,6 +161,7 @@ class ConstructFile(ConstructShared):
             else:
                 words_signs = raw_line.split()
                 words = raw_line.replace('=', ' ').replace(':', ' ').split()
+
             if comment_index >= 0:
                 words_signs = raw_line[:comment_index].split()
                 words = raw_line[:comment_index].replace('=', ' ').replace(':', ' ').split()
@@ -167,12 +197,13 @@ class ConstructFile(ConstructShared):
             else:
                 self.last().assign(statement=' '.join(words_signs))
 
-    def print(self):
+    def print(self) -> str:
         output = ''
         if self.defines:
             for line in self.defines:
                 output += f'{line}\n'
-        for item in self:
+
+        for item in self.items:
             if isinstance(item, ConstructLevel):
                 output += item.print(self.start_level, self.name[-4:])
             elif isinstance(item, dict):
