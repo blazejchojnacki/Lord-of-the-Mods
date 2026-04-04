@@ -89,8 +89,9 @@ def get_game_directory():
                 cancel_initiation()
     for game_index in range(len(game_directories)):
         if os.path.isdir(game_directories[game_index]):
-            # TODO: handling of cases where the game is not directly in the install path
-            core.state.install_path = Path(game_directories[game_index]).parent.resolve()
+            # FUTURE: handling of cases where the game is not directly in the install_path
+            new_install_path = Path(game_directories[game_index]).parent.resolve()
+            core.state.install_path = str(new_install_path).replace('\\', '/').strip('/')
             game_directories[game_index] = game_directories[game_index].replace(
                 str(core.state.install_path).replace('\\', '/'), '').strip('/')
     return game_directories
@@ -129,6 +130,7 @@ def set_directories(directories_dict, game_paths_list):
         directories_dict[key] = os.path.relpath(directories_dict[key], core.state.install_path).replace('\\', '/')
     core.state.save(
         settings_dict={
+            Setting.INSTALL: core.state.install_path,
             Setting.LIBRARY: directories_dict['library'],
             Setting.ARCHIVE: directories_dict['archive'],
             Setting.GAMES: game_paths_list,

@@ -86,6 +86,8 @@ class AppConfig:
         """
         if self.check_paths(settings_dict):
             self.raw_settings.update(settings_dict)
+            if Setting.INSTALL not in settings_dict:
+                self.raw_settings[Setting.INSTALL] = self.install_path
             self.check_format()
             with open(SETTINGS_FILE_PATH, 'w') as file_stream:
                 json.dump(self.raw_settings, file_stream, indent=4)

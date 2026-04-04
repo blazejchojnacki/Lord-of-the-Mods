@@ -21,6 +21,7 @@ class Test_AppConfig(unittest.TestCase):
         settings_dict = {
             shared.Setting.TITLE: "Lord of the Mods Settings",
             shared.Setting.VERSION: "",
+            shared.Setting.INSTALL: "O:",
             shared.Setting.LIBRARY: f"{TRIALS_PATH}/_LIBRARY",
             shared.Setting.ARCHIVE: f"{TRIALS_PATH}/_ARCHIVE",
             shared.Setting.GAMES: ["_GAME1", "_GAME2"],

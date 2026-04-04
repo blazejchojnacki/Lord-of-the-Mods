@@ -91,7 +91,7 @@ class Test_Initiator(unittest.TestCase):
             # Verify the function formatted the path relative to the install_path
             self.assertEqual(len(directories), 1)
             self.assertTrue(directories[0].startswith("Game") or directories[0] == "")
-            self.assertEqual(str(core.state.install_path), str(Path("C:/install_path").resolve()))
+            self.assertEqual(core.state.install_path, "C:/install_path")
         finally:
             initiator.game_list = original_game_list
 
@@ -145,6 +145,7 @@ class Test_Initiator(unittest.TestCase):
         # A. Check that the state was updated and saved with relative paths
         mock_save.assert_called_once_with(
             settings_dict={
+                Setting.INSTALL: 'C:/Fake/Install/Path',
                 Setting.LIBRARY: '_LIBRARY',
                 Setting.ARCHIVE: '_ARCHIVE',
                 Setting.GAMES: dummy_games,
