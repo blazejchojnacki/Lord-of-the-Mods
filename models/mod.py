@@ -6,11 +6,8 @@ from typing import Dict, Any, List, Optional
 import source.core as core
 import source.shared as s
 from source.shared import MOD_DEF_FILE_NAME
-
-# We import the enums and log function.
-# Note: Heavy modificator functions (like transfer_switch) are imported locally
-# inside the methods below to prevent circular import loops!
-from source.modificator import Property, log, Transfer, Change, DEFINITION_CLASSES, initiate_comparison
+from source.constants import Property, log, DEFINITION_CLASSES, Transfer, Change
+from source.modificator import initiate_comparison
 
 
 @dataclass

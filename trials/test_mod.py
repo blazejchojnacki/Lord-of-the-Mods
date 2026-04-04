@@ -6,7 +6,7 @@ import json
 from models.mod import Mod, LibraryManager
 import source.core as core
 import source.shared as s
-from source.modificator import Property, Transfer, Change, DEFINITION_CLASSES
+from source.constants import Property, Transfer, Change, DEFINITION_CLASSES
 
 
 class Test_Mod_Data_IO(unittest.TestCase):
@@ -192,7 +192,8 @@ class Test_LibraryManager(unittest.TestCase):
 
         # We simulate ModA loading successfully, and ModB throwing an error (e.g. no definition file)
         def mock_load_side_effect(path):
-            if "ModA" in path: return Mod(name="ModA")
+            if "ModA" in path:
+                return Mod(name="ModA")
             raise s.InternalError("No definition")
 
         mock_mod_load.side_effect = mock_load_side_effect
