@@ -1,81 +1,73 @@
-""" This module contains variables that are global for all the modules. """
+""" This module contains the application state and configuration logic. """
 import json
-import os.path
+import os
 from pathlib import Path
+from dataclasses import dataclass, field
+from typing import List, Dict, Any
 
-from source.shared import SETTINGS_FILE_PATH, _SETTINGS_FORMAT, Setting, MAIN_DIRECTORY, \
-    InternalError
+from source.shared import SETTINGS_FILE_PATH, _SETTINGS_FORMAT, Setting, InternalError
 
-install_path = str(Path(__file__).parent.parent.parent.resolve()).replace('\\', '/').strip('/')
-
-library = f'{MAIN_DIRECTORY}/_LIBRARY'
-archive = f'{MAIN_DIRECTORY}/_ARCHIVE'
-games = []
-exceptions = []
+DEFAULT_INSTALL_PATH = str(Path(__file__).parent.parent.parent.resolve()).replace('\\', '/').strip('/')
 
 
-def complete_paths(paths_dict):
-    return_paths = []
-    if Setting.LIBRARY in paths_dict:
-        if paths_dict[Setting.LIBRARY]:
-            library_path = f"{install_path}/{paths_dict[Setting.LIBRARY]}"
-            return_paths.append(library_path)
+@dataclass
+class AppConfig:
+    """ Centralized configuration and state manager. """
+    install_path: str = DEFAULT_INSTALL_PATH
+    library: str = ""
+    archive: str = ""
+    games: List[str] = field(default_factory=list)
+    exceptions: List[str] = field(default_factory=list)
+    raw_settings: Dict[str, Any] = field(default_factory=dict)
+
+    def complete_paths(self, paths_dict: dict) -> List[str]:
+        return_paths = []
+        if Setting.LIBRARY in paths_dict and paths_dict[Setting.LIBRARY]:
+            return_paths.append(f"{self.install_path}/{paths_dict[Setting.LIBRARY]}")
         else:
-            raise InternalError("empty path")
-    if Setting.ARCHIVE in paths_dict:
-        if paths_dict[Setting.ARCHIVE]:
-            return_paths.append(f"{install_path}/{paths_dict[Setting.ARCHIVE]}")
+            raise InternalError("empty library path")
+        if Setting.ARCHIVE in paths_dict and paths_dict[Setting.ARCHIVE]:
+            return_paths.append(f"{self.install_path}/{paths_dict[Setting.ARCHIVE]}")
         else:
-            raise InternalError("empty path")
-    if Setting.GAMES in paths_dict:
-        return_paths.extend([f"{install_path}/{_}" for _ in paths_dict[Setting.GAMES]])
-    if Setting.EXCEPTIONS in paths_dict:
-        return_paths.extend([f"{install_path}/{_}" for _ in paths_dict[Setting.EXCEPTIONS]])
-    return return_paths
-
-
-class Settings(dict):
-    def __init__(self):
-        super().__init__()
-
-    def create_directories(self, settings_dict):
-        for path in complete_paths(settings_dict):
-            os.makedirs(path, exist_ok=True)
+            raise InternalError("empty archive path")
+        if Setting.GAMES in paths_dict:
+            return_paths.extend([f"{self.install_path}/{_}" for _ in paths_dict[Setting.GAMES]])
+        if Setting.EXCEPTIONS in paths_dict:
+            return_paths.extend([f"{self.install_path}/{_}" for _ in paths_dict[Setting.EXCEPTIONS]])
+        return return_paths
 
     def propagate(self):
-        global library, archive, games, exceptions
-        library = f'{install_path}/{self[Setting.LIBRARY]}'
-        archive = f'{install_path}/{self[Setting.ARCHIVE]}'
-        games = [f'{install_path}/{_}' for _ in self[Setting.GAMES]]
-        # # # use cases require only the folder names in the library
-        # exceptions = [f'{install_path}/{_}' for _ in self[Setting.EXCEPTIONS]]
-        exceptions = [_.split('/')[-1] for _ in self[Setting.EXCEPTIONS]]
+        """ Updates the active state properties based on the loaded raw_settings. """
+        self.install_path = self.raw_settings.get("install_path", DEFAULT_INSTALL_PATH)
+        self.library = f'{self.install_path}/{self.raw_settings[Setting.LIBRARY]}'
+        self.archive = f'{self.install_path}/{self.raw_settings[Setting.ARCHIVE]}'
+        self.games = [f'{self.install_path}/{_}' for _ in self.raw_settings[Setting.GAMES]]
+        self.exceptions = [_.split('/')[-1] for _ in self.raw_settings[Setting.EXCEPTIONS]]
 
-    def load(self):
+    def load(self) -> bool:
+        """ Loads settings from disk and populates the application state. """
         if os.path.isfile(SETTINGS_FILE_PATH):
             with open(SETTINGS_FILE_PATH) as file_stream:
-                settings_dict = json.load(file_stream)
-            for key in settings_dict:
-                self[key] = settings_dict[key]
+                self.raw_settings = json.load(file_stream)
             self.propagate()
             return True
         else:
-            self.update(_SETTINGS_FORMAT)
+            self.raw_settings = _SETTINGS_FORMAT.copy()
             return False
 
     def check_format(self):
         for key in _SETTINGS_FORMAT:
-            if key not in self:
+            if key not in self.raw_settings:
                 raise InternalError(f"{key} missing")
-        for key in self:
+        for key in self.raw_settings:
             if key not in _SETTINGS_FORMAT:
                 raise InternalError(f"{key} not recognized")
 
-    def check_paths(self, new_settings_dict):
-        settings_result = self.copy()
+    def check_paths(self, new_settings_dict: dict) -> bool:
+        settings_result = self.raw_settings.copy()
         settings_result.update(new_settings_dict)
         try:
-            completed_paths = complete_paths(settings_result)
+            completed_paths = self.complete_paths(settings_result)
             for path in completed_paths:
                 if not os.path.isdir(path):
                     return False
@@ -83,21 +75,17 @@ class Settings(dict):
             return False
         return True
 
-    def save(self, settings_dict):
-        if self.check_paths(settings_dict):
-            self.update(settings_dict)
-            self.check_format()
-            with open(SETTINGS_FILE_PATH, 'w') as file_stream:
-                file_stream.write(json.dumps(self, indent=4))
-            self.propagate()
-        else:
-            raise InternalError(f"invalid path")
+    def save(self, key: str, value: Any):
+        self.raw_settings[key] = value
+        self.propagate()
+
+        with open(SETTINGS_FILE_PATH, 'w') as file_stream:
+            json.dump(self.raw_settings, file_stream, indent=4)
 
 
+# Initialize the state
 os.chdir(Path(__file__).parent.parent.resolve())
+state = AppConfig()
 
-settings = Settings()
-loaded = settings.load()
-
-if loaded:
+if state.load():
     print("settings loaded")
