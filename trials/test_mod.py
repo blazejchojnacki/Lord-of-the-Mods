@@ -14,8 +14,8 @@ class Test_Mod_Data_IO(unittest.TestCase):
     def setUp(self):
         self.patcher_log = patch('models.mod.log')
         self.mock_log = self.patcher_log.start()
-        core.library = "C:/Fake/Library"
-        core.exceptions = ["_ignore_me"]
+        core.state.library = "C:/Fake/Library"
+        core.state.exceptions = ["_ignore_me"]
 
     def tearDown(self):
         self.patcher_log.stop()
@@ -99,9 +99,9 @@ class Test_Mod_Capabilities(unittest.TestCase):
         self.patcher_log = patch('models.mod.log')
         self.patcher_log.start()
 
-        core.library = "C:/Fake/Library"
-        core.archive = "C:/Fake/Archive"
-        core.install_path = "C:/Fake/Install"
+        core.state.library = "C:/Fake/Library"
+        core.state.archive = "C:/Fake/Archive"
+        core.state.install_path = "C:/Fake/Install"
         s.MAIN_DIRECTORY = "C:/Fake/Install"
 
     def tearDown(self):
@@ -182,8 +182,8 @@ class Test_Mod_Capabilities(unittest.TestCase):
 class Test_LibraryManager(unittest.TestCase):
 
     def setUp(self):
-        core.library = "C:/Fake/Library"
-        core.exceptions = ["_ignore_me"]
+        core.state.library = "C:/Fake/Library"
+        core.state.exceptions = ["_ignore_me"]
 
     @patch('os.listdir')
     @patch.object(Mod, 'load')

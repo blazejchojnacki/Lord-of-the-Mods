@@ -90,9 +90,9 @@ def get_game_directory():
     for game_index in range(len(game_directories)):
         if os.path.isdir(game_directories[game_index]):
             # TODO: handling of cases where the game is not directly in the install path
-            core.install_path = Path(game_directories[game_index]).parent.resolve()
+            core.state.install_path = Path(game_directories[game_index]).parent.resolve()
             game_directories[game_index] = game_directories[game_index].replace(
-                str(core.install_path).replace('\\', '/'), '').strip('/')
+                str(core.state.install_path).replace('\\', '/'), '').strip('/')
     return game_directories
 
 
@@ -126,8 +126,8 @@ def cancel_initiation():
 
 def set_directories(directories_dict, game_paths_list):
     for key in directories_dict:
-        directories_dict[key] = os.path.relpath(directories_dict[key], core.install_path).replace('\\', '/')
-    core.settings.save(
+        directories_dict[key] = os.path.relpath(directories_dict[key], core.state.install_path).replace('\\', '/')
+    core.state.update_and_save(
         settings_dict={
             Setting.LIBRARY: directories_dict['library'],
             Setting.ARCHIVE: directories_dict['archive'],
@@ -206,7 +206,7 @@ def initiate():
         initiator.update()
         set_directories(directories_dict, game_paths_list)
     else:
-        core.settings.load()
+        core.state.load()
     ensure_game_options()
     initiator.destroy()
 

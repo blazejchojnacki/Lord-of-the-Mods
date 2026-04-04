@@ -58,7 +58,7 @@ class Mod:
     @classmethod
     def create(cls, name: str, changes_source: str = '', **kwargs) -> 'Mod':
         """ Replaces mod_new and definition_write. Creates a new mod from scratch. """
-        mod_directory = f'{core.library}/{name}'
+        mod_directory = f'{core.state.library}/{name}'
         if not os.path.isdir(mod_directory):
             os.mkdir(mod_directory)
 
@@ -84,7 +84,7 @@ class Mod:
         """
         if not mod_directory:
             raise ValueError("A directory path must be provided to load a Mod.")
-        if mod_directory in core.exceptions:
+        if mod_directory in core.state.exceptions:
             raise s.InternalError("The provided path is defined as an exception.")
 
         file_path = f'{mod_directory}/{MOD_DEF_FILE_NAME}'
@@ -179,7 +179,7 @@ class Mod:
             error_sensitive = False
 
         # 2. Archive Setup
-        archive_dir = f"{core.archive}/{self.name}"
+        archive_dir = f"{core.state.archive}/{self.name}"
         if not os.path.isdir(archive_dir):
             os.makedirs(archive_dir, exist_ok=True)
 
@@ -193,9 +193,9 @@ class Mod:
         # 3. Transfer Routing
         try:
             for path_key, change_data in comparison_dict.items():
-                file_path_source = f"{core.install_path}/{path_key}"
-                file_path_game = f"{core.install_path}/{'/'.join(path_key.split('/')[:-1])}"
-                file_path_archive = f"{core.archive}/{self.name}/{'/'.join(path_key.split('/')[:-1])}"
+                file_path_source = f"{core.state.install_path}/{path_key}"
+                file_path_game = f"{core.state.install_path}/{'/'.join(path_key.split('/')[:-1])}"
+                file_path_archive = f"{core.state.archive}/{self.name}/{'/'.join(path_key.split('/')[:-1])}"
                 file_path_mod = f"{self.directory}/{path_key}"
 
                 status = change_data[0]
@@ -249,10 +249,10 @@ class Mod:
 
         try:
             for path_key, change_data in self.changes.items():
-                file_path_source = f"{core.install_path}/{path_key}"
-                file_path_game = f"{core.install_path}/{'/'.join(path_key.split('/')[:-1])}"
+                file_path_source = f"{core.state.install_path}/{path_key}"
+                file_path_game = f"{core.state.install_path}/{'/'.join(path_key.split('/')[:-1])}"
                 file_path_mod = f"{self.directory}/{'/'.join(path_key.split('/')[:-1])}"
-                file_path_archive = f"{core.archive}/{self.name}/{path_key}"
+                file_path_archive = f"{core.state.archive}/{self.name}/{path_key}"
 
                 status = change_data[0]
                 if status == Change.UNCHANGED:
@@ -298,10 +298,10 @@ class LibraryManager:
     @staticmethod
     def get_all_mods() -> List[Mod]:
         mods = []
-        for name in os.listdir(core.library):
-            if name not in core.exceptions:
+        for name in os.listdir(core.state.library):
+            if name not in core.state.exceptions:
                 try:
-                    mods.append(Mod.load(f"{core.library}/{name}"))
+                    mods.append(Mod.load(f"{core.state.library}/{name}"))
                 except s.InternalError:
                     pass  # Safely ignore folders that don't have valid definitions
         return mods
@@ -341,13 +341,13 @@ class LibraryManager:
     def check_relative(mod: Mod, relation: str) -> Optional[Mod]:
         """ Fetches the actual Mod object for an ancestor or heir. """
         if relation == Property.OVERRODE_BY and mod.overrode_by:
-            heir_dir = f"{core.library}/{mod.overrode_by}"
+            heir_dir = f"{core.state.library}/{mod.overrode_by}"
             if os.path.isfile(f"{heir_dir}/{MOD_DEF_FILE_NAME}"):
                 heir = Mod.load(heir_dir)
                 if heir.active:
                     return heir
         elif relation == Property.OVERRIDES and mod.overrides:
-            ancestor_dir = f"{core.library}/{mod.overrides}"
+            ancestor_dir = f"{core.state.library}/{mod.overrides}"
             if os.path.isfile(f"{ancestor_dir}/{MOD_DEF_FILE_NAME}"):
                 ancestor = Mod.load(ancestor_dir)
                 if not ancestor.active:
@@ -377,14 +377,14 @@ class LibraryManager:
         if not mod.directory:
             raise s.InternalError('Cannot rename mod: Mod directory is unknown.')
 
-        list_mods = [_ for _ in os.listdir(core.library) if _ not in core.exceptions]
+        list_mods = [_ for _ in os.listdir(core.state.library) if _ not in core.state.exceptions]
         if new_name in list_mods:
             raise s.InternalError(f'rename_mod error: name {new_name} is already in use')
 
         old_name = mod.name
 
         for sibling_name in list_mods:
-            sibling_path = f'{core.library}/{sibling_name}'
+            sibling_path = f'{core.state.library}/{sibling_name}'
             try:
                 sibling_mod = Mod.load(sibling_path)
                 if sibling_mod.overrides == old_name:

@@ -18,9 +18,9 @@ from source.constants import SNAPSHOT_NAME, SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARI
 # TODO: check if correct business logic
 def mods_detect_new():
     output = ''
-    library_folders = [_ for _ in os.listdir(core.library) if _ not in core.exceptions]
+    library_folders = [_ for _ in os.listdir(core.state.library) if _ not in core.state.exceptions]
     for folder in library_folders:
-        if not os.path.isfile(f'{core.library}/{folder}/{MOD_DEF_FILE_NAME}'):
+        if not os.path.isfile(f'{core.state.library}/{folder}/{MOD_DEF_FILE_NAME}'):
             output += f'Registering a definition-less folder in the library - {folder}\n'
     return output
 
@@ -44,7 +44,7 @@ def hash_directory(file_or_folder, path_to_omit='', skip_first_level_files=False
     elif os.path.isdir(file_or_folder):
         next_directory = os.listdir(file_or_folder)
         for next_folder in next_directory:
-            if next_folder in core.games:
+            if next_folder in core.state.games:
                 next_directory = [next_folder]
                 break
         for next_file_or_folder in next_directory:
@@ -84,7 +84,7 @@ def snapshot_take(game_paths=None, add_paths=False):
         add_paths = True
         game_paths = []
     while add_paths:
-        game_full_path = askdirectory(initialdir=f'{core.install_path}',
+        game_full_path = askdirectory(initialdir=f'{core.state.install_path}',
                                       title=f'{s.PROGRAM_NAME}: select game directory to take a snapshot of')
         if game_full_path:
             game_paths.append(game_full_path)
@@ -95,11 +95,11 @@ def snapshot_take(game_paths=None, add_paths=False):
 
     game_snapshot = {"date": f"{datetime.now()}"}
     for game_path in game_paths:
-        if core.library in game_path:
-            mod_name = game_path[len(core.library):].split('/')[1]
-            path_to_omit = f'{core.library}/{mod_name}'
+        if core.state.library in game_path:
+            mod_name = game_path[len(core.state.library):].split('/')[1]
+            path_to_omit = f'{core.state.library}/{mod_name}'
         else:
-            path_to_omit = core.install_path
+            path_to_omit = core.state.install_path
         # game_path = game_path.replace(path_to_omit + '/', '')
         game_snapshot.update(hash_directory(game_path, path_to_omit=path_to_omit))
     return game_snapshot

@@ -88,10 +88,10 @@ class Test_Initiator(unittest.TestCase):
         try:
             directories = initiator.get_game_directory()
 
-            # Verify the function formatted the path relative to the install path
+            # Verify the function formatted the path relative to the install_path
             self.assertEqual(len(directories), 1)
             self.assertTrue(directories[0].startswith("Game") or directories[0] == "")
-            self.assertEqual(str(core.install_path), str(Path("C:/install_path").resolve()))
+            self.assertEqual(str(core.state.install_path), str(Path("C:/install_path").resolve()))
         finally:
             initiator.game_list = original_game_list
 
@@ -115,9 +115,10 @@ class Test_Initiator(unittest.TestCase):
         finally:
             initiator.game_list = original_game_list
 
+    # ERROR: using definition_save, definition_write
     @patch('source.initiator.definition_save')
     @patch('source.initiator.definition_write')
-    @patch('source.core.settings.save')
+    @patch('source.core.state.save')
     @patch('source.initiator.os.mkdir')
     @patch('source.initiator.os.path.isdir')
     def test_set_directories(self, mock_isdir, mock_mkdir, mock_settings_save, mock_def_write,
@@ -126,7 +127,7 @@ class Test_Initiator(unittest.TestCase):
         mock_isdir.return_value = False
 
         # Set up a fake install path so os.path.relpath has something to work with
-        core.install_path = "C:/Fake/Install/Path"
+        core.state.install_path = "C:/Fake/Install/Path"
 
         # Create our dummy inputs (what the user *would* have chosen in the UI)
         dummy_directories = {
@@ -157,8 +158,8 @@ class Test_Initiator(unittest.TestCase):
         mock_mkdir.assert_any_call(initiator.SNAPSHOT_COMPARISON_DIRECTORY)
 
         # C. Check that the individual mod directories were created for BOTH games
-        expected_mod_dir_1 = f"{core.install_path}/_LIBRARY/Game1"
-        expected_mod_dir_2 = f"{core.install_path}/_LIBRARY/Game2"
+        expected_mod_dir_1 = f"{core.state.install_path}/_LIBRARY/Game1"
+        expected_mod_dir_2 = f"{core.state.install_path}/_LIBRARY/Game2"
         mock_mkdir.assert_any_call(expected_mod_dir_1)
         mock_mkdir.assert_any_call(expected_mod_dir_2)
 

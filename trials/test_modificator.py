@@ -13,7 +13,7 @@ class Test_Modificator(unittest.TestCase):
         # Globally mock the log function to prevent log file spam during testing
         self.patcher_log = patch('source.modificator.log')
         self.mock_log = self.patcher_log.start()
-        core.library = f"{core.install_path}/Fake/Library"
+        core.state.library = f"{core.state.install_path}/Fake/Library"
 
         # We need to ensure os.path.abspath returns our fake paths cleanly
         # because snapshot_take uses it to calculate string slices.
@@ -28,7 +28,7 @@ class Test_Modificator(unittest.TestCase):
     @patch('os.listdir')
     @patch('os.path.isdir')
     @patch('os.path.isfile')
-    @patch('source.core.games', ['game'])  # Define 'game' as our recognized game folder
+    @patch('source.core.state.games', ['game'])  # Define 'game' as our recognized game folder
     def test_hash_directory(self, mock_isfile, mock_isdir, mock_listdir, mock_hash_file):
 
         # 1. Setup fake directory structure exactly as requested
@@ -182,7 +182,7 @@ class Test_Modificator(unittest.TestCase):
         result = modificator.snapshot_take(game_paths=["O:/Fake/Game/data"])
 
         # Verify it passed the install_path to be omitted
-        mock_hash_directory.assert_called_once_with("O:/Fake/Game/data", path_to_omit=core.install_path)
+        mock_hash_directory.assert_called_once_with("O:/Fake/Game/data", path_to_omit=core.state.install_path)
 
         # Verify the returned dictionary shape
         self.assertEqual(result["date"], "2023-01-01 12:00:00")
@@ -201,7 +201,7 @@ class Test_Modificator(unittest.TestCase):
 
         # Verify it asked for a directory and successfully processed the chosen path
         mock_askdirectory.assert_called()
-        mock_hash_directory.assert_called_once_with("O:/Fake/Install/MyGame", path_to_omit=core.install_path)
+        mock_hash_directory.assert_called_once_with("O:/Fake/Install/MyGame", path_to_omit=core.state.install_path)
 
     @patch('source.modificator.get_available_name')
     @patch('json.dump')
