@@ -9,8 +9,8 @@ import source.shared as s
 class ConstructShared:
     """ Base dataclass acting as a container for parsed file elements. """
 
-    # This explicitly replaces the inherited list!
-    items: List[Any] = field(default_factory=list)
+    # ADDED init=False: This prevents 'items' from hijacking the first positional argument!
+    items: List[Any] = field(default_factory=list, init=False)
 
     # --- Dunder methods to maintain compatibility with external files (like editor.py) ---
     def __iter__(self):
