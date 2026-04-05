@@ -67,31 +67,20 @@ def get_available_name(snapshot_directory, prefix=SNAPSHOT_NAME):
                 suffix = last_snapshot[last_snapshot.index(prefix) + len(prefix):last_snapshot.index('.json')]
             counter = str(int(suffix) + 1)
         except ValueError:
-            counter = askstring(title=f'{PROGRAM_NAME}', prompt='Please give a name to the new file')
+            raise InternalError('snapshot prefix index error')
         except NameError:
             pass
     return f'{snapshot_directory}/{prefix}{counter}.json'
 
 
-def snapshot_take(game_paths=None, add_paths=False):
+def snapshot_take(game_paths=None):
     """
     Takes a snapshot of a selected directory.
     :param game_paths: directory to take a snapshot of.
-    :param add_paths: True | False - when True, asks for new directories until cancel is pressed.
     :return: dict with paths as keys and hash as values.
     """
     if not game_paths:
-        add_paths = True
-        game_paths = []
-    while add_paths:
-        game_full_path = askdirectory(initialdir=f'{core.state.install_path}',
-                                      title=f'{PROGRAM_NAME}: select game directory to take a snapshot of')
-        if game_full_path:
-            game_paths.append(game_full_path)
-        elif not game_full_path:
-            add_paths = False
-        elif len(game_paths) == 0:
-            raise InternalError('directory not selected')
+        raise InternalError('directory not selected')
 
     game_snapshot = {"date": f"{datetime.now()}"}
     for game_path in game_paths:
@@ -123,7 +112,7 @@ def snapshot_save(game_snapshot, name=None):
     return snapshot_path
 
 
-def snapshot_compare(snap_anterior=None, snap_posterior=None, return_type: Literal['path', 'dict'] = 'path'):
+def snapshot_compare(snap_anterior, snap_posterior, return_type: Literal['path', 'dict'] = 'path'):
     """
     Compares two snapshots, determining which files are different, unchanged, new or removed.
     :param snap_anterior: first snapshot to compare to
@@ -134,22 +123,16 @@ def snapshot_compare(snap_anterior=None, snap_posterior=None, return_type: Liter
     """
     dict_anterior = {}
     dict_posterior = {}
-    if snap_anterior is None:
-        snap_anterior = askopenfilename(title=f'{PROGRAM_NAME}: choose the base snapshot to compare with',
-                                        initialdir=SNAPSHOT_DIRECTORY)
-        if not snap_anterior:
-            raise InternalError('no snapshot selected')
+    if not snap_anterior:
+        raise InternalError('no snapshot selected')
     if isinstance(snap_anterior, dict):
         dict_anterior = snap_anterior.copy()
         snap_anterior = 'unsaved output'
     elif os.path.isfile(snap_anterior):
         with open(snap_anterior) as file_anterior:
             dict_anterior = json.load(file_anterior)
-    if snap_posterior is None:
-        snap_posterior = askopenfilename(title=f'{PROGRAM_NAME}: choose the second snapshot to compare',
-                                         initialdir=SNAPSHOT_DIRECTORY)
-        if not snap_posterior:
-            raise InternalError('no snapshot selected')
+    if not snap_posterior:
+        raise InternalError('no snapshot selected')
     if isinstance(snap_posterior, dict):
         dict_posterior = snap_posterior.copy()
         snap_posterior = 'unsaved output'
@@ -193,7 +176,7 @@ def snapshot_compare(snap_anterior=None, snap_posterior=None, return_type: Liter
         return comparison_path
 
 
-def initiate_comparison(mod_directory, start_mod='', changes_source='directory'):
+def initiate_comparison(mod_directory, start_mod='', changes_source='directory', files_to_remove=None, selected_comparison=None, selected_snapshot=None):
     """
     Creates a change list for a mod definition, based on provided data.
     :param mod_directory: path to the mod, whose definition is being created
@@ -218,8 +201,7 @@ def initiate_comparison(mod_directory, start_mod='', changes_source='directory')
                 changes[new_file] = [Change.ADDED, current_files[new_file]]
     elif changes_source == 'directory':
         if not start_mod:
-            start_mod = askdirectory(title=f'{PROGRAM_NAME}: select the game directory to define the mod',
-                                     initialdir=MAIN_DIRECTORY)
+            raise InternalError('start_mod not provided')
         new_files_dict = hash_directory(mod_directory, path_to_omit=mod_directory, skip_first_level_files=True)
         if start_mod and new_files_dict:
             active = False
@@ -235,25 +217,18 @@ def initiate_comparison(mod_directory, start_mod='', changes_source='directory')
             current_files = hash_directory(start_mod, path_to_omit=MAIN_DIRECTORY)
             for new_file in current_files:
                 changes[new_file] = [Change.ADDED, current_files[new_file]]
-        files_to_remove = askopenfilenames(title=f'{PROGRAM_NAME}: select files to remove',
-                                           initialdir=MAIN_DIRECTORY)
-        for file_path in files_to_remove:
-            changes[file_path] = [Change.REMOVED, hash_file(file_path)]
+        if files_to_remove:
+            for file_path in files_to_remove:
+                changes[file_path] = [Change.REMOVED, hash_file(file_path)]
         new_snapshot = snapshot_take(game_paths=[mod_directory])
         snapshot_save(new_snapshot, name=mod_directory.split('/')[-1])
     elif changes_source == 'comparison':
-        selected_comparison = askopenfilename(
-            title=f'{PROGRAM_NAME}: select the snapshot comparison to define the mod',
-            initialdir=f'./{SNAPSHOT_COMPARISON_DIRECTORY}')
-        if os.path.isfile(selected_comparison):
+        if selected_comparison and os.path.isfile(selected_comparison):
             active, changes = evaluate_changes(selected_comparison)
         else:
             raise InternalError('comparison not selected')
     elif changes_source == 'snapshot':
-        selected_snapshot = askopenfilename(
-            title=f'{PROGRAM_NAME}: select the snapshot taken before the changes',
-            initialdir=f'./{SNAPSHOT_DIRECTORY}')
-        if os.path.isfile(selected_snapshot):
+        if selected_snapshot and os.path.isfile(selected_snapshot):
             with open(selected_snapshot) as snapshot_buffer:
                 snapshot_dict = json.load(snapshot_buffer)
             game_paths = []
@@ -369,23 +344,70 @@ def make_transfer(src, dst='', transfer_type: Transfer = Transfer.COPY, error_se
                 error_message = err.args[0]
             else:
                 error_message = ' - '
-            do_proceed = s.invoke_choice(
-                title='file transfer error',
-                text=f'Error with {src}\n{error_message}\n'
-                     ' Do you wish to continue displaying each error,\n'
-                     ' continue skipping errors or revert the mod transfer?',
-                buttons=(
-                    {s.KEY_LABEL: 'continue', s.KEY_RETURN: True, s.KEY_INFO: ''},
-                    {s.KEY_LABEL: 'skip', s.KEY_RETURN: False, s.KEY_INFO: ''},
-                    {s.KEY_LABEL: 'revert', s.KEY_RETURN: None, s.KEY_INFO: ''})
-            )
-            if do_proceed is True:
-                pass
-            elif do_proceed is False:
-                error_sensitivity = False
-            elif do_proceed is None:
-                raise InternalError(err.strerror)
+            raise InternalError(error_message)
 
 
 TEST = False
 # TEST = True
+
+
+# ==========================================
+#               UI LAYER WRAPPERS
+# ==========================================
+
+def get_available_name_ui(snapshot_directory, prefix=SNAPSHOT_NAME):
+    try:
+        return get_available_name(snapshot_directory, prefix)
+    except InternalError:
+        counter = askstring(title=f'{PROGRAM_NAME}', prompt='Please give a name to the new file')
+        if counter:
+            return f'{snapshot_directory}/{prefix}{counter}.json'
+        raise InternalError('snapshot prefix index error')
+
+
+def snapshot_take_ui(game_paths=None, add_paths=False):
+    if not game_paths:
+        add_paths = True
+        game_paths = []
+    while add_paths:
+        game_full_path = askdirectory(initialdir=f'{core.state.install_path}',
+                                      title=f'{PROGRAM_NAME}: select game directory to take a snapshot of')
+        if game_full_path:
+            game_paths.append(game_full_path)
+        elif not game_full_path:
+            add_paths = False
+        elif len(game_paths) == 0:
+            raise InternalError('directory not selected')
+    return snapshot_take(game_paths)
+
+
+def snapshot_compare_ui(snap_anterior=None, snap_posterior=None, return_type: Literal['path', 'dict'] = 'path'):
+    if snap_anterior is None:
+        snap_anterior = askopenfilename(title=f'{PROGRAM_NAME}: choose the base snapshot to compare with',
+                                        initialdir=SNAPSHOT_DIRECTORY)
+    if snap_posterior is None:
+        snap_posterior = askopenfilename(title=f'{PROGRAM_NAME}: choose the second snapshot to compare',
+                                         initialdir=SNAPSHOT_DIRECTORY)
+    return snapshot_compare(snap_anterior, snap_posterior, return_type)
+
+
+def initiate_comparison_ui(mod_directory, start_mod='', changes_source='directory'):
+    files_to_remove = None
+    selected_comparison = None
+    selected_snapshot = None
+    if changes_source == 'directory':
+        if not start_mod:
+            start_mod = askdirectory(title=f'{PROGRAM_NAME}: select the game directory to define the mod',
+                                     initialdir=MAIN_DIRECTORY)
+        if start_mod:
+            files_to_remove = askopenfilenames(title=f'{PROGRAM_NAME}: select files to remove',
+                                               initialdir=MAIN_DIRECTORY)
+    elif changes_source == 'comparison':
+        selected_comparison = askopenfilename(
+            title=f'{PROGRAM_NAME}: select the snapshot comparison to define the mod',
+            initialdir=f'./{SNAPSHOT_COMPARISON_DIRECTORY}')
+    elif changes_source == 'snapshot':
+        selected_snapshot = askopenfilename(
+            title=f'{PROGRAM_NAME}: select the snapshot taken before the changes',
+            initialdir=f'./{SNAPSHOT_DIRECTORY}')
+    return initiate_comparison(mod_directory, start_mod, changes_source, files_to_remove, selected_comparison, selected_snapshot)
