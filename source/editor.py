@@ -5,7 +5,7 @@ import re
 from collections import defaultdict
 
 from source.messaging import log, InternalError, InternalWarning, internal_message, get_custom_logger
-from source.constants import INI_COMMENTS, INI_DELIMITERS, STR_DELIMITERS
+from source.constants import INI_COMMENTS
 import source.constructor as c
 
 # FUTURE: automated proposition of #include creation or child adopting
@@ -419,25 +419,25 @@ def spot_duplicates_in_file(file_path: str) -> str:
     return ""
 
 
-def extract_titles(source_file: str) -> set:
+def extract_titles(source_file: str) -> dict:
     """
     Extracts the root block titles efficiently using the standalone recognize_structure,
     completely bypassing the slow ConstructFile parsing.
     """
     try:
         delimiters, start_level = c.recognize_structure(source_file)
-    except Exception:
-        return set()  # Safely skip if functional file or unsupported
+    except InternalError:
+        return dict()  # Safely skip if functional file or unsupported
 
     if not delimiters:
-        return set()
+        return dict()
 
     valid_starters = delimiters[start_level]
     space = ':' if source_file.endswith('.str') else ' '
-    titles = set()
+    titles = dict()
 
     with open(source_file, 'r') as file_stream:
-        for raw_line in file_stream:
+        for line_number, raw_line in enumerate(file_stream):
             # 1. Fast comment trimming
             comment_idx = min([raw_line.find(com) for com in INI_COMMENTS if com in raw_line] + [len(raw_line)])
             line = raw_line[:comment_idx].strip()
@@ -451,18 +451,24 @@ def extract_titles(source_file: str) -> set:
             # 3. If it is a valid starter, format the title and add to set
             if words and words[0] in valid_starters:
                 if source_file.endswith('.str') and len(words) >= 2:
-                    titles.add(f"{words[0]}{space}{words[1]}")
+                    titles[f"{words[0]}{space}{words[1]}"] = line_number + 1
                 else:
-                    titles.add(f"{words[0]}{space}{words[1]}" if len(words) >= 2 else words[0])
+                    titles[f"{words[0]}{space}{words[1]}" if len(words) >= 2 else words[0]] = line_number + 1
 
     return titles
 
 
-def spot_duplicates_from_file_in_file(source_titles: set, target_file: str, is_same_file: bool) -> str:
+def spot_duplicates_from_file_in_file(source_file: str, target_file: str) -> str:
     """ Scans a target file using the standalone recognize_structure for lightning-fast matching. """
+    if source_file == target_file:
+        return spot_duplicates_in_file(source_file)
+    output = ""
+    source_titles = extract_titles(source_file)
+    if not source_titles:
+        return output + "No valid root objects found in source file.\n"
     try:
         delimiters, start_level = c.recognize_structure(target_file)
-    except Exception:
+    except InternalError:
         return ""  # Skip if functional file
 
     if not delimiters:
@@ -492,13 +498,10 @@ def spot_duplicates_from_file_in_file(source_titles: set, target_file: str, is_s
                 # If the title matches one we are looking for, log the line!
                 if title in source_titles:
                     tracker[title].append(str(line_index + 1))
-
-    output = ""
     for title, line_numbers in tracker.items():
-        if is_same_file and len(line_numbers) > 1:
+        if len(line_numbers) > 0:
             output += f"\tline {', '.join(line_numbers)} {title}\n"
-        elif not is_same_file and len(line_numbers) > 0:
-            output += f"\tline {', '.join(line_numbers)} {title}\n"
+            output += f"\tand in source, line {source_titles[title]};\n"
 
     if output:
         return f"in {target_file}:\n{output}"
@@ -509,22 +512,17 @@ def spot_duplicates_in_directory(source_file: str, target_directory: str) -> str
     """ The master function that loops the directory and feeds files to the scanner. """
     output = f"{datetime.now()} command: find duplicates from {source_file} in {target_directory}:\n"
 
-    # Extract once!
-    source_titles = extract_titles(source_file)
-
-    if not source_titles:
-        return output + "No valid root objects found in source file.\n"
-
     found_duplicates = ""
 
     for root, dirs, files in os.walk(target_directory):
         for file in files:
             if file.endswith(('.ini', '.inc', '.str')):
                 target_path = os.path.join(root, file).replace('\\', '/')
-                is_same_file = (os.path.abspath(source_file) == os.path.abspath(target_path))
+                if os.path.abspath(source_file) == os.path.abspath(target_path):
+                    continue
 
                 # Scan fast!
-                file_result = spot_duplicates_from_file_in_file(source_titles, target_path, is_same_file)
+                file_result = spot_duplicates_from_file_in_file(source_file, target_path)
                 if file_result:
                     found_duplicates += file_result
 
