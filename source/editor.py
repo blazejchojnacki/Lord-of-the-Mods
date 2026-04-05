@@ -2,9 +2,10 @@ from datetime import datetime
 import os
 import shutil
 import re
+from collections import defaultdict
 
 from source.messaging import log, InternalError, InternalWarning, internal_message, get_custom_logger
-from source.constants import INI_COMMENTS
+from source.constants import INI_COMMENTS, INI_DELIMITERS, STR_DELIMITERS
 import source.constructor as c
 
 # FUTURE: automated proposition of #include creation or child adopting
@@ -362,6 +363,58 @@ def duplicates_find(of_object_or_file, in_file_or_directory=None):
             if len(line_numbers) > 1 and output_line not in output:
                 output += output_line
     return output
+
+
+def spot_duplicates_in_file(file_path: str) -> str:
+    # 1. Flatten delimiters into an O(1) lookup set.
+    # This grabs all valid block starters (like 'Object', 'Weapon', 'StringKey')
+    valid_starters = {word for group in s.INI_DELIMITERS for level in group for word in level}
+    if hasattr(s, 'STR_DELIMITERS'):
+        valid_starters.update({word for group in s.STR_DELIMITERS for level in group for word in level})
+
+    # 2. defaultdict automatically creates a list for new keys.
+    # We will map: "Object FakeUnit" -> ["10", "45"]
+    tracker = defaultdict(list)
+
+    with open(file_path, 'r') as file_stream:
+        # Iterating directly over the stream is faster and saves memory
+        for line_index, raw_line in enumerate(file_stream):
+
+            # Efficiently find the earliest comment sign and slice the string
+            comment_idx = min([raw_line.find(c) for c in INI_COMMENTS if c in raw_line] + [len(raw_line)])
+            clean_line = raw_line[:comment_idx].strip()
+
+            if not clean_line:
+                continue
+
+            # Treat '=' and ':' as spaces to match how constructor.py isolates words
+            words = clean_line.replace('=', ' ').replace(':', ' ').split()
+            if not words:
+                continue
+
+            first_word = words[0]
+
+            # 3. Only track lines that declare a recognized block!
+            if first_word in valid_starters:
+                # Reconstruct a perfectly clean title (fixes weird spacing issues)
+                if file_path.endswith('.str') and len(words) >= 2:
+                    normalized_title = f"{words[0]}:{words[1]}"
+                else:
+                    normalized_title = ' '.join(words[:2])
+
+                    # Append the 1-based line number to this title's list
+                tracker[normalized_title].append(str(line_index + 1))
+
+    # 4. Build the final output string only for duplicates
+    output = ""
+    for title, line_numbers in tracker.items():
+        if len(line_numbers) > 1:
+            output += f"\tline {', '.join(line_numbers)} {title}\n"
+
+    if output:
+        return f"{datetime.now()} command: find duplicates in {file_path}:\n{output}"
+
+    return ""
 
 
 no_reference_params = ['KindOf']
