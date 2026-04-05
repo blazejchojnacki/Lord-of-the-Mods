@@ -75,26 +75,23 @@ def search_reg(master_key_name, game_name):
 
 
 def get_game_directory():
-    """ Returns a list of game paths. """
+    """ Pure UI: Gathers absolute game paths using Registry OR File Dialogs. """
     game_directories = []
     for game_key in game_list:
-        try:
-            game_directories.append(search_reg(game_key['Registry'], game_key['Name']))
-        except FileNotFoundError:
-            provided_directory = askdirectory(
+        # Step 1: Try Registry (Logic call)
+        path = search_reg(game_key['Registry'], game_key['Name'])
+
+        # Step 2: If not found, prompt the User (UI call)
+        if not path:
+            path = askdirectory(
                 title=f"{PROGRAM_NAME}: please select {game_key['Name']} directory (or create one)",
-                initialdir='../')
-            if provided_directory:
-                game_directories.append(provided_directory)
-            else:
+                initialdir='../'
+            )
+            if not path:
                 cancel_initiation()
-    for game_index in range(len(game_directories)):
-        if os.path.isdir(game_directories[game_index]):
-            # FUTURE: handling of cases where the game is not directly in the install_path
-            new_install_path = Path(game_directories[game_index]).parent.resolve()
-            core.state.install_path = str(new_install_path).replace('\\', '/').strip('/')
-            game_directories[game_index] = game_directories[game_index].replace(
-                str(core.state.install_path).replace('\\', '/'), '').strip('/')
+
+        game_directories.append(path.replace('\\', '/'))
+
     return game_directories
 
 
@@ -137,22 +134,46 @@ def set_directories(directories_dict, game_paths_list):
             Setting.GAMES: game_paths_list,
         }
     )
+
+
+def execute_initiation(absolute_game_paths: list, absolute_directories_dict: dict):
+    """
+    Pure Logic: The core function that calculates relative paths,
+    saves settings, builds standard folders, and creates base mods.
+    """
+    # 1. Determine the install_path dynamically from the first absolute game path
+    new_install_path = Path(absolute_game_paths[0]).parent.resolve()
+    core.state.install_path = str(new_install_path).replace('\\', '/').strip('/')
+
+    # 2. Make game paths relative to the install_path
+    relative_game_paths = []
+    for game_path in absolute_game_paths:
+        rel_path = game_path.replace(core.state.install_path, '').strip('/')
+        relative_game_paths.append(rel_path)
+
+    set_directories(absolute_directories_dict, relative_game_paths)
+
+    # 5. Create core directories
     if not os.path.isdir(SNAPSHOT_DIRECTORY):
         os.mkdir(SNAPSHOT_DIRECTORY)
     if not os.path.isdir(SNAPSHOT_COMPARISON_DIRECTORY):
         os.mkdir(SNAPSHOT_COMPARISON_DIRECTORY)
-    for game_path in game_paths_list:
+
+    # 6. Create initial mod definitions
+    for game_path in relative_game_paths:
         try:
             mod_name = game_path.split('/')[-1]
-            definition_object = Mod.create(
+            Mod.create(
                 name=mod_name, changes_source=game_path,
-                description=f"Initial {game_path.split('/')[-1]} - created automatically")
-            definition_object.save()
+                description=f"Initial {mod_name} - created automatically"
+            )
         except InternalError:
             pass
+    ensure_game_options()
 
 
 def get_directories():
+    """ Prompts the user for Library and Archive locations. """
     use_default_paths = invoke_choice(
         title=f'{PROGRAM_NAME} initiator:',
         text='Use default functional folder names?',
@@ -164,8 +185,7 @@ def get_directories():
         cancel_initiation()
     directories_dict = {}
     if use_default_paths is True:
-        for key in default_folders_dict:
-            directories_dict[key] = default_folders_dict[key]
+        directories_dict = default_folders_dict.copy()
     elif use_default_paths is False:
         for key in default_folders_dict:
             evaluated_string = askdirectory(
@@ -185,7 +205,7 @@ def get_directories():
 
 
 def initiate():
-    """ Initiates the application settings by asking for directories needed by the application. """
+    """ The Main Orchestrator. Handles the Tkinter window and calls the core logic. """
     initiator = tkinter.Tk()
     initiator.iconbitmap(ICON_PATH)
     initiator.title(f'{PROGRAM_NAME} initiator')
@@ -197,20 +217,18 @@ def initiate():
     initiator_label.pack()
     initiator.update()
     if not os.path.isfile(SETTINGS_FILE_PATH):
-        try:
-            game_paths_list = get_game_directory()
-        except NameError:
-            game_paths_list = []
+        game_paths_list = get_game_directory()
         initiator_label.configure(text='Initiating functional directories.')
         initiator.update()
         directories_dict = get_directories()
 
         initiator_label.configure(text='Creating initial mods. Please wait ...')
         initiator.update()
-        set_directories(directories_dict, game_paths_list)
+        execute_initiation(game_paths_list, directories_dict)
     else:
+        # Setup already complete, just load settings
         core.state.load()
-    ensure_game_options()
+        ensure_game_options()
     initiator.destroy()
 
 
