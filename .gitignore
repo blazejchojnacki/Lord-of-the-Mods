@@ -8,3 +8,6 @@ _settings.json
 /trials/arch
 /source/__pycache__
 /trials/__pycache__
+/trials/logging
+/logging
+/docs
