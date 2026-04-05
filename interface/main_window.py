@@ -10,6 +10,7 @@ from interface.views.file_browser import FileBrowserView
 from interface.views.file_editor import FileEditorView
 from interface.views.find_replace import FindReplaceView
 from interface.views.change_editor import ChangeEditorView
+from interface.views.move_file import MoveFileView
 
 
 class Application(tk.Tk):
@@ -28,6 +29,7 @@ class Application(tk.Tk):
         # This is the master container where screens will be loaded
         self.main_container = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
         self.main_container.pack(fill="both", expand=True, padx=10, pady=10)
+        self.last_view = ''
 
         # Dictionary to cache our views so we don't rebuild them every click
         self.frames = {}
@@ -135,6 +137,14 @@ class Application(tk.Tk):
         # Push the mod data!
         self.frames["ChangeEditorView"].load_mod_data(mod)
         self.show_frame("ChangeEditorView")
+
+    def open_move_file_view(self, filepath: str):
+        if "MoveFileView" not in self.frames:
+            self.frames["MoveFileView"] = MoveFileView(self.main_container, self)
+
+        self.frames["MoveFileView"].load_file_to_move(filepath)
+        self.last_view = "FileBrowserView"
+        self.show_frame("MoveFileView")
 
 
 if __name__ == "__main__":
