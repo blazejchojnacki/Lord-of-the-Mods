@@ -419,6 +419,75 @@ def spot_duplicates_in_file(file_path: str) -> str:
     return ""
 
 
+def spot_duplicates_from_file_in_file(src_file_path: str, dst_file_path: str) -> str:
+    # 1. Flatten delimiters into an O(1) lookup set.
+    # This grabs all valid block starters (like 'Object', 'Weapon', 'StringKey')
+    delimiters, start_level = c.recognize_structure(src_file_path)
+    if src_file_path.endswith('.ini') or src_file_path.endswith('.str') or src_file_path.endswith('.inc'):
+        valid_starters = {word for word in delimiters[start_level]}
+    else:
+        raise InternalError("invalid input")
+
+    # 2. defaultdict automatically creates a list for new keys.
+    # We will map: "Object FakeUnit" -> ["10", "45"]
+    tracker = defaultdict(list)
+
+    with open(src_file_path, 'r') as file_stream:
+        # Iterating directly over the stream is faster and saves memory
+        for line_index, raw_line in enumerate(file_stream):
+
+            # Efficiently find the earliest comment sign and slice the string
+            comment_idx = min([raw_line.find(com) for com in INI_COMMENTS if com in raw_line] + [len(raw_line)])
+            clean_line = raw_line[:comment_idx].strip()
+
+            if not clean_line:
+                continue
+
+            # Treat '=' and ':' as spaces to match how constructor.py isolates words
+            words = clean_line.replace('=', ' ').replace(':', ' ').split()
+            if not words:
+                continue
+
+            first_word = words[0]
+
+            # 3. Only track lines that declare a recognized block!
+            if first_word in valid_starters:
+                # Reconstruct a perfectly clean title (fixes weird spacing issues)
+                if src_file_path.endswith('.str') and len(words) >= 2:
+                    normalized_title = f"{words[0]}:{words[1]}"
+                else:
+                    normalized_title = ' '.join(words[:2])
+
+                    # Append the 1-based line number to this title's list
+                tracker[normalized_title].append(str(line_index + 1))
+
+    # 4. Build the final output string only for duplicates
+    output = ""
+    for title, line_numbers in tracker.items():
+        if len(line_numbers) > 1:
+            output += f"\t{title} -- line {', '.join(line_numbers)};\n"
+
+    if output:
+        return f"{datetime.now()} command: find duplicates from {src_file_path} in {dst_file_path}:\n{output}"
+
+    return ""
+
+
+def spot_duplicates_in_directory(file: str, directory: str) -> str:
+    if not os.path.isfile(file) or not os.path.isdir(directory):
+        raise InternalError("wrong input")
+    output = ''
+    for item in os.listdir(directory):
+        next_path = f"{directory}/{item}"
+        if os.path.isfile(next_path):
+            output += spot_duplicates_from_file_in_file(file, next_path)
+        elif os.path.isdir(next_path):
+            output += spot_duplicates_in_directory(file, next_path)
+    if output:
+        return f"{datetime.now()} command: find duplicates in {directory}:\n{output}"
+    return "nothing found"
+
+
 no_reference_params = ['KindOf']
 no_reference_values = ['Yes', 'No', 'None', 'NONE', 'ALL']
 reference_value_dict = {
