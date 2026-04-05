@@ -138,7 +138,7 @@ class Test_ConstructFile_Parser(unittest.TestCase):
         self.file.name = "test.ini"
 
         # Manually set up the parser state that construct() would normally set
-        self.file.delimiters = [["Object"], ["Armor"]]
+        self.file.delimiters = [["Object", "ChildObject"], ["Armor"]]
         self.file.current_level = 0
         self.file.last_comment = ""
 
@@ -175,7 +175,7 @@ class Test_ConstructFile_Parser(unittest.TestCase):
 
     def test_handle_block_start(self):
         """ Tests that recognized keywords open a new ConstructLevel. """
-        words = ["Object", "GondorArcher", "GondorArcher_Identifier"]
+        words = ["ChildObject", "GondorArcher_child", "GondorArcher"]
 
         # Execute
         result = self.file._handle_block_start(words)
@@ -184,9 +184,10 @@ class Test_ConstructFile_Parser(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(self.file.current_level, 1)  # Level went up!
         self.assertIsInstance(self.file.items[0], constructor.ConstructLevel)
-        self.assertEqual(self.file.items[0]._class, "Object")
+        self.assertEqual(self.file.items[0]._class, "ChildObject")
         # Ensure it extracted the name correctly for an INI file
-        self.assertEqual(self.file.items[0].items[1], {'name': 'GondorArcher'})
+        self.assertEqual(self.file.items[0].items[0],
+                         {'class': 'ChildObject', 'name': 'GondorArcher_child', 'identifier': 'GondorArcher'})
 
     def test_handle_block_end(self):
         """ Tests that 'End' keywords correctly close the active block. """
