@@ -151,7 +151,7 @@ def text_find_replace(find, replace_with=None, scope='', exceptions=None, mode='
                              file_content.rfind('#include', 0, file_content.casefold().find(find.casefold())):
                              file_content.find('\n', file_content.casefold().find(find.casefold()))]
                 elif replace_with is not None:
-                    new_file_content = ''
+                    # new_file_content = ''
                     output += f'\t{file_content.casefold().count(find.casefold())} replaced in {scope}\n'
                     index_line = 1
                     content_parts = file_content.casefold().split(find.casefold())
@@ -160,8 +160,9 @@ def text_find_replace(find, replace_with=None, scope='', exceptions=None, mode='
                         text_line = file_content.split('\n')[index_line - 1]
                         if content_part != content_parts[-1]:
                             output += f'\t\tin line {index_line} "{text_line}"\n'
-                        new_file_content += '\n'.join(file_content.split('\n')[:index_line - 1])
-                        new_file_content += text_line.replace(find, replace_with)
+                        # new_file_content += '\n'.join(file_content.split('\n')[:index_line - 1])
+                        # new_file_content += text_line.replace(find, replace_with)
+                    new_file_content = file_content.replace(find, replace_with)
                     with open(scope, 'w') as file:
                         file.write(new_file_content)
                 else:
