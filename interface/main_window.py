@@ -7,6 +7,7 @@ from interface.views.mod_manager import ModManagerView
 from interface.views.settings import SettingsView
 from interface.views.mod_editor import ModEditorView
 from interface.views.file_browser import FileBrowserView
+from interface.views.file_editor import FileEditorView
 
 
 class Application(tk.Tk):
@@ -86,6 +87,14 @@ class Application(tk.Tk):
         # Point the browser at the folder!
         self.frames["FileBrowserView"].load_path(target_path)
         self.show_frame("FileBrowserView")
+
+    def open_file_editor(self, filepath: str):
+        if "FileEditorView" not in self.frames:
+            self.frames["FileEditorView"] = FileEditorView(self.main_container, self)
+
+        # Push the path to the view!
+        self.frames["FileEditorView"].load_file_path(filepath)
+        self.show_frame("FileEditorView")
 
 
 if __name__ == "__main__":
