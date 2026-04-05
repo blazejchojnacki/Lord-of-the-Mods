@@ -36,77 +36,74 @@ current_info: tkinter.Toplevel
 
 
 class ReactiveButton(tkinter.Button):
-    """
-    tkinter Button but changing its image on hovering and with showing an info popup on its master Window
-    """
-    def __init__(self, info_content='', small=False, **kwargs):
-        super().__init__(**kwargs)
-        if small:
-            self.default_image = BUTTON_SMALL_IDLE
-            self.active_image = BUTTON_SMALL_HOVER
-        else:
-            self.default_image = BUTTON_LARGE_IDLE
-            self.active_image = BUTTON_LARGE_HOVER
-        self.bind('<Enter>', self.on_hover)
-        self.bind('<Leave>', self.out_hover)
+    """ A self-contained button that handles its own hover states and floating info. """
+
+    def __init__(self, master, small=False, info_content='', **kwargs):
+        # Base styling setup
+        super().__init__(master, **kwargs)
         self.info_content = info_content
-        self.info_id = ''
-        self.super_master = main_window
-        self.info = current_info
-        if self.default_image:
-            self.configure(image=self.default_image)
-        self.configure(compound='center', foreground=TEXT_COLORS[0], font=FONT_BUTTON,
-                       background=APP_BACKGROUND_COLOR, activebackground=APP_BACKGROUND_COLOR)
+        self.tooltip_window = None
 
-    def on_hover(self, event=None):
-        if event:
-            pass
-        self.configure(image=self.active_image, background=ENTRY_BACKGROUND_COLOR)
-        self.info_id = self.super_master.after(1000, self.display_info)
+        # Style configuration (adjust to your shared.py constants)
+        # self.configure(
+        #     bg=ENTRY_BACKGROUND_COLOR,
+        #     fg=TEXT_COLORS[0],
+        #     activebackground=APP_BACKGROUND_COLOR,
+        #     activeforeground=TEXT_COLORS[0]
+        # )
 
-    def out_hover(self, event=None):
-        if event:
-            pass
-        self.configure(image=self.default_image, background=APP_BACKGROUND_COLOR)
-        try:
-            self.super_master.after_cancel(self.info_id)
-            try:
-                self.info.destroy()
-            except NameError:
-                pass
-        except AttributeError:
-            pass
+        # Bind hover events
+        self.bind('<Enter>', self._on_enter)
+        self.bind('<Leave>', self._on_leave)
 
-    def display_info(self):
+    def _on_enter(self, event):
+        """ Triggered when the mouse hovers over the button. """
+        # 1. Handle visual hover effect (if any)
+        # self.configure(bg=APP_BACKGROUND_COLOR)
+
+        # 2. Show floating info if it exists
         if self.info_content:
-            info_box = tkinter.Toplevel(master=self.super_master)
-            try:
-                self.info.destroy()
-            except NameError:
-                pass
-            self.info = info_box
-            info_box.winfo_x()
-            info_box.overrideredirect(True)
-            info_box.attributes('-topmost', True)
-            info_box.configure(background=APP_BACKGROUND_COLOR, relief='ridge', borderwidth=5, padx=5, pady=5)
-            info_text = tkinter.Label(master=info_box, text=self.info_content)
-            info_text.pack()
-            info_text.configure(background=APP_BACKGROUND_COLOR, foreground=TEXT_COLORS[0])
-            cursor_x = self.super_master.winfo_pointerx()
-            cursor_y = self.super_master.winfo_pointery()
-            info_box.geometry(f'+{cursor_x}+{cursor_y - info_text.winfo_height() * UNIT_HEIGHT - 10}')
+            self._show_tooltip()
 
-    def set(self, settings):
-        for setting in settings:
-            if setting == 'text':
-                self.configure(**{setting: settings[setting].upper()})
-            elif setting == 'info_content':
-                self.info_content = settings[setting]
-            else:
-                try:
-                    self.configure(**{setting: settings[setting]})
-                except _tkinter.TclError:
-                    print(f'button.set: unrecognized key {setting}')
+    def _on_leave(self, event):
+        """ Triggered when the mouse leaves the button. """
+        # 1. Revert visual hover effect
+        # self.configure(bg=ENTRY_BACKGROUND_COLOR)
+
+        # 2. Destroy the tooltip
+        self._hide_tooltip()
+
+    def _show_tooltip(self):
+        """ Creates a borderless Toplevel window right next to the button. """
+        if self.tooltip_window or not self.info_content:
+            return
+
+        # Create a borderless window
+        self.tooltip_window = tkinter.Toplevel(self)
+        self.tooltip_window.overrideredirect(True)  # Removes the window frame/title bar
+
+        # Calculate screen position (right below the button)
+        x = self.winfo_rootx() + 20
+        y = self.winfo_rooty() + self.winfo_height() + 5
+        self.tooltip_window.geometry(f"+{x}+{y}")
+
+        # Add the text label
+        label = tkinter.Label(
+            self.tooltip_window,
+            text=self.info_content,
+            justify='left',
+            background="#ffffe0",  # Light yellow tooltip background
+            relief='solid',
+            borderwidth=1,
+            font=("Arial", 9)
+        )
+        label.pack(ipadx=3, ipady=1)
+
+    def _hide_tooltip(self):
+        """ Safely destroys the tooltip window. """
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+            self.tooltip_window = None
 
 
 def set_title_bar_color(window):
