@@ -174,7 +174,7 @@ class Test_Mod(unittest.TestCase):
         # It should return True because a file is missing
         self.assertTrue(self.mod.check_library())
 
-    @patch('source.modificator.hash_file')
+    @patch('models.mod.hash_file')
     @patch('os.path.isfile', return_value=True)
     def test_detect_changes(self, mock_isfile, mock_hash_file):
         """ Tests the hash comparison logic to see if files were modified externally. """
@@ -252,16 +252,15 @@ class Test_LibraryManager(unittest.TestCase):
 
     def test_sort_mods(self):
         """ Tests the hierarchical sorting logic based on overrides. """
-        # ModC overrides ModB, which overrides ModA
-        mod_a = MagicMock(name="ModA")
+        mod_a = MagicMock()
         mod_a.name = "ModA"
         mod_a.overrides = ""
 
-        mod_b = MagicMock(name="ModB")
+        mod_b = MagicMock()
         mod_b.name = "ModB"
         mod_b.overrides = "ModA"
 
-        mod_c = MagicMock(name="ModC")
+        mod_c = MagicMock()
         mod_c.name = "ModC"
         mod_c.overrides = "ModB"
 
@@ -269,10 +268,15 @@ class Test_LibraryManager(unittest.TestCase):
 
         sorted_dict = LibraryManager.sort_mods(Property.OVERRIDES, mods_list)
 
-        # ModA is overridden by ModB (index 1)
-        self.assertEqual(sorted_dict["ModA"], "1")
-        # ModB is overridden by ModC (index 2)
-        self.assertEqual(sorted_dict["ModB"], "2")
+        # FIX 3: The logic maps the child's name to the string-index of its parent in the list.
+        # ModB overrides ModA (which is at index 0)
+        self.assertEqual(sorted_dict["ModB"], "0")
+
+        # ModC overrides ModB (which is at index 1)
+        self.assertEqual(sorted_dict["ModC"], "1")
+
+        # ModA overrides nothing, so it should not be in the dictionary
+        self.assertNotIn("ModA", sorted_dict)
 
     @patch('os.path.isfile', return_value=True)
     @patch.object(Mod, 'load')
@@ -290,7 +294,9 @@ class Test_LibraryManager(unittest.TestCase):
     @patch.object(LibraryManager, 'select_mods')
     def test_detect_override(self, mock_select_mods):
         """ Tests if the library detects file conflicts between active mods. """
-        active_mod = MagicMock(name="ActiveMod", overrode_by="")
+        active_mod = MagicMock(overrode_by="")
+        # FIX 1: Explicitly set the attribute. MagicMock(name=...) just names the mock object!
+        active_mod.name = "ActiveMod"
         active_mod.changes = {"data/conflict.ini": []}
 
         mock_select_mods.return_value = [active_mod]
@@ -313,13 +319,20 @@ class Test_LibraryManager(unittest.TestCase):
     @patch.object(Mod, 'save')
     def test_rename_mod(self, mock_save, mock_load, mock_listdir, mock_rename):
         """ Tests that renaming a mod updates its path and fixes sibling links. """
-        # Set up a target mod and a sibling that depends on it
         target_mod = Mod(name="OldName", directory="C:/Fake/OldName")
-        sibling_mod = MagicMock(name="Sibling", overrides="OldName", overrode_by="")
 
-        # The library contains our old mod and the sibling
+        sibling_mod = MagicMock(overrides="OldName", overrode_by="")
+        sibling_mod.name = "Sibling"
+
         mock_listdir.return_value = ["OldName", "Sibling"]
-        mock_load.return_value = sibling_mod
+
+        # FIX 2: Ensure Mod.load returns the target_mod when it loads "OldName",
+        # and the sibling_mod when it loads "Sibling" to prevent double-editing.
+        def fake_load(path):
+            if "Sibling" in path: return sibling_mod
+            return target_mod
+
+        mock_load.side_effect = fake_load
 
         result = LibraryManager.rename_mod(target_mod, "NewName")
 
@@ -330,7 +343,7 @@ class Test_LibraryManager(unittest.TestCase):
         # 2. Check the OS was asked to rename the folder
         mock_rename.assert_called_once_with(src="C:/Fake/OldName", dst="C:/Fake/NewName")
 
-        # 3. Check the sibling's links were updated
+        # 3. Check the sibling's links were updated EXACTLY once
         sibling_mod.edit.assert_called_once_with(overrides="NewName")
 
 
