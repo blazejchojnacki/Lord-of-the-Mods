@@ -245,9 +245,9 @@ class ModManagerView(tk.Frame):
             self.controller.open_browser_for_mod(self.loaded_mod)
 
     def _on_edit(self):
-        if hasattr(self.controller, 'show_frame'):
-            # In a full app, you would pass self.loaded_mod to the editor view first
-            self.controller.show_frame("ModEditorView")
+        if hasattr(self.controller, 'open_mod_editor'):
+            # Tell the main app to open the editor FOR this specific mod!
+            self.controller.open_mod_editor(self.loaded_mod)
 
     def _on_launch(self):
         # The logic implementation from interface.py

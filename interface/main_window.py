@@ -1,8 +1,11 @@
 import tkinter as tk
 import source.shared as s
 
+from models.mod import Mod
+
 from interface.views.mod_manager import ModManagerView
 from interface.views.settings import SettingsView
+from interface.views.mod_editor import ModEditorView
 
 
 class Application(tk.Tk):
@@ -59,6 +62,17 @@ class Application(tk.Tk):
         # Tell the view it just became active so it can refresh its data
         if hasattr(frame, "on_show"):
             frame.on_show()
+
+    def open_mod_editor(self, mod: Mod):
+        # 1. Ensure the view exists
+        if "ModEditorView" not in self.frames:
+            self.frames["ModEditorView"] = ModEditorView(self.main_container, self)
+
+        # 2. Inject the data!
+        self.frames["ModEditorView"].load_mod_data(mod)
+
+        # 3. Swap the screen
+        self.show_frame("ModEditorView")
 
 
 if __name__ == "__main__":
