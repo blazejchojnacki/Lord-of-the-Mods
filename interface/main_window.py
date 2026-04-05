@@ -8,6 +8,7 @@ from interface.views.settings import SettingsView
 from interface.views.mod_editor import ModEditorView
 from interface.views.file_browser import FileBrowserView
 from interface.views.file_editor import FileEditorView
+from interface.views.find_replace import FindReplaceView
 
 
 class Application(tk.Tk):
@@ -95,6 +96,35 @@ class Application(tk.Tk):
         # Push the path to the view!
         self.frames["FileEditorView"].load_file_path(filepath)
         self.show_frame("FileEditorView")
+
+    def open_find_tool(self, selection: str, filepath: str):
+        """ Routes from File Editor to Find tool. """
+        if "FindReplaceView" not in self.frames:
+            self.frames["FindReplaceView"] = FindReplaceView(self.main_container, self)
+
+        self.frames["FindReplaceView"].load_context(selection, filepath)
+
+        # Save history so we know where to go back to!
+        self.last_view = "FileEditorView"
+        self.show_frame("FindReplaceView")
+
+    def open_replace_tool(self, selection: str, filepath: str):
+        """ Routes from File Editor to Replace tool (they now share a view!). """
+        self.open_find_tool(selection, filepath)
+
+    def reload_file_editor(self, scope: str):
+        """ Called by FindReplace when a file is modified externally. """
+        if "FileEditorView" in self.frames:
+            # We check if the editor is currently looking at the file we just changed
+            if self.frames["FileEditorView"].current_path.replace('/', '\\') == scope.replace('/', '\\'):
+                self.frames["FileEditorView"].load_file_path(scope)
+
+    def navigate_back(self):
+        """ Returns to the previous screen. """
+        if hasattr(self, 'last_view') and self.last_view:
+            self.show_frame(self.last_view)
+        else:
+            self.show_frame("ModManagerView")  # Safe fallback
 
 
 if __name__ == "__main__":
