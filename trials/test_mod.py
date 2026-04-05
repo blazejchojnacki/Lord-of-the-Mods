@@ -1,7 +1,5 @@
 import unittest
-from unittest.mock import patch, mock_open, MagicMock, call
-import os
-import json
+from unittest.mock import patch, mock_open
 
 from source.messaging import InternalError
 from models.mod import Mod, LibraryManager

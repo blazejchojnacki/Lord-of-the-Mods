@@ -1,6 +1,5 @@
 import unittest
-from unittest.mock import patch, mock_open, MagicMock, call
-import json
+from unittest.mock import patch, mock_open, MagicMock
 
 import source.core as core
 import source.modificator as modificator

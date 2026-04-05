@@ -1,10 +1,7 @@
 import unittest
-from unittest.mock import patch, mock_open  # , call
-# import os
+from unittest.mock import patch, mock_open
 
 import source.editor as editor
-# import source.shared as s
-# import source.constructor as c
 
 
 class Test_Editor(unittest.TestCase):
@@ -89,7 +86,8 @@ class Test_Editor(unittest.TestCase):
 
     # --- 4. Test Duplicates Finder ---
 
-    ### missing tests for spot_duplicates
+    # # # missing tests for spot_duplicates
+
 
 if __name__ == '__main__':
     unittest.main()

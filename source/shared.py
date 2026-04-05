@@ -4,7 +4,7 @@ import tkinter
 import _tkinter
 from ctypes import windll, byref, sizeof, c_int, create_unicode_buffer
 
-from source.constants import MAIN_DIRECTORY
+from source.constants import MAIN_DIRECTORY, PROGRAM_NAME
 
 UNIT_WIDTH = 80
 UNIT_HEIGHT = 40

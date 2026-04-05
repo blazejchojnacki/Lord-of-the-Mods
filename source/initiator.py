@@ -14,7 +14,7 @@ from source.modificator import SNAPSHOT_DIRECTORY, SNAPSHOT_COMPARISON_DIRECTORY
 default_folders_dict = {
     'library': f'{MAIN_DIRECTORY}/_LIBRARY',
     'archive': f'{MAIN_DIRECTORY}/_ARCHIVE',
-}  # TODO: don't ask if those already exist
+}
 
 if os.path.isfile(f'{MAIN_DIRECTORY}/initial/_games.json'):
     with open(f'{MAIN_DIRECTORY}/initial/_games.json') as games_buffer:

@@ -1,6 +1,5 @@
 import unittest
-from unittest.mock import patch, mock_open, MagicMock
-import json
+from unittest.mock import patch, mock_open
 
 import source.shared as shared
 
