@@ -1,6 +1,7 @@
 import tkinter as tk
 import source.shared as s
 
+from interface.views.mod_manager import ModManagerView
 from interface.views.settings import SettingsView
 
 
