@@ -6,7 +6,7 @@ from typing import Dict, Any, List, Optional
 from source.messaging import InternalError, log
 import source.core as core
 from source.constants import Property, DEFINITION_CLASSES, Transfer, Change, MOD_DEF_FILE_NAME, MAIN_DIRECTORY
-from source.modificator import initiate_comparison, hash_file, transfer_switch, TEST
+from source.modificator import initiate_comparison, hash_file, transfer_switch
 
 
 @dataclass
@@ -236,61 +236,92 @@ class Mod:
         log.info(f'{self.name} attached successfully')
         return True
 
-    def detach(self, transfer: Transfer = Transfer.COPY, check_type: str = 'hash, heir') -> bool:
-        """ Formally mod_reverse(). Detaches the mod, routing files back to the library/archive. """
-        error_sensitive = True
+    def _resolve_detach_dependencies(self, transfer: Transfer, check_type: str) -> Transfer:
+        """ Step 1: Resolves the actual transfer method and handles heir dependencies. """
         if not os.path.isdir(self.directory):
             os.makedirs(self.directory, exist_ok=True)
 
+        resolved_transfer = transfer
+
+        # Resolve "REMOVE" into either MOVE or DELETE based on the mod's class and state
         if transfer == Transfer.REMOVE:
             if not self.active and check_type != 'pass':
                 raise InternalError('deactivation of inactive mod aborted')
+
             if self.transfer_type == DEFINITION_CLASSES[0]:
-                transfer = Transfer.MOVE
+                resolved_transfer = Transfer.MOVE
             elif self.transfer_type == DEFINITION_CLASSES[1] and self.check_library():
-                transfer = Transfer.MOVE
+                resolved_transfer = Transfer.MOVE
             elif self.transfer_type == DEFINITION_CLASSES[1]:
-                transfer = Transfer.DELETE
+                resolved_transfer = Transfer.DELETE
 
         if not self.changes:
             raise InternalError('comparison missing')
 
+        # If this mod is overridden by a child (heir), the heir must be detached first
         if Property.OVERRODE_BY in check_type:
             heir_mod = LibraryManager.check_relative(self, Property.OVERRODE_BY)
             if heir_mod:
                 if not heir_mod.detach(transfer=Transfer.REMOVE):
                     raise InternalError('heir mod not retrieved')
-        elif check_type == 'pass':
-            error_sensitive = False
 
+        return resolved_transfer
+
+    def generate_detach_plan(self, transfer: Transfer) -> list:
+        """ Step 2: Generates a manifest of files to route back to the library/archive. """
+        plan = []
+
+        for path_key, change_data in self.changes.items():
+            file_path_source = f"{core.state.install_path}/{path_key}"
+            file_path_game = f"{core.state.install_path}/{'/'.join(path_key.split('/')[:-1])}"
+            file_path_mod = f"{self.directory}/{'/'.join(path_key.split('/')[:-1])}"
+            file_path_archive = f"{core.state.archive}/{self.name}/{path_key}"
+
+            status = change_data[0]
+            if status == Change.UNCHANGED:
+                continue
+
+            elif status == Change.CHANGED:
+                # Equivalent to the original: if transfer in Transfer:
+                plan.append({'src': file_path_source, 'dst': file_path_mod, 'type': transfer})
+
+                if transfer in (Transfer.MOVE, Transfer.DELETE):
+                    plan.append({'src': file_path_archive, 'dst': file_path_game, 'type': Transfer.MOVE})
+
+            elif status == Change.ADDED:
+                plan.append({'src': file_path_source, 'dst': file_path_mod, 'type': transfer})
+
+            elif status == Change.REMOVED:
+                if transfer in (Transfer.MOVE, Transfer.DELETE):
+                    plan.append({'src': file_path_archive, 'dst': file_path_game, 'type': Transfer.MOVE})
+
+        return plan
+
+    def detach(self, transfer: Transfer = Transfer.COPY, check_type: str = 'hash, heir', dry_run: bool = False) -> bool:
+        """ Formally mod_reverse(). Detaches the mod, routing files back to the library/archive. """
+        error_sensitive = (check_type != 'pass')
+
+        # 1. Resolve dependencies and figure out the exact transfer method
+        resolved_transfer = self._resolve_detach_dependencies(transfer, check_type)
+
+        # 2. Generate the Transfer Plan
+        plan = self.generate_detach_plan(resolved_transfer)
+
+        # If the UI just wants a preview, hand the plan back instantly!
+        if dry_run:
+            return plan
+
+        # 3. Execute the Plan (reusing the exact same method from attach!)
         try:
-            for path_key, change_data in self.changes.items():
-                file_path_source = f"{core.state.install_path}/{path_key}"
-                file_path_game = f"{core.state.install_path}/{'/'.join(path_key.split('/')[:-1])}"
-                file_path_mod = f"{self.directory}/{'/'.join(path_key.split('/')[:-1])}"
-                file_path_archive = f"{core.state.archive}/{self.name}/{path_key}"
-
-                status = change_data[0]
-                if status == Change.UNCHANGED:
-                    continue
-                elif status == Change.CHANGED:
-                    if transfer in Transfer:
-                        transfer_switch(file_path_source, file_path_mod, transfer, error_sensitive)
-                    if transfer in (Transfer.MOVE, Transfer.DELETE):
-                        transfer_switch(file_path_archive, file_path_game, Transfer.MOVE, error_sensitive)
-                elif status == Change.ADDED:
-                    transfer_switch(file_path_source, file_path_mod, transfer, error_sensitive)
-                elif status == Change.REMOVED:
-                    if transfer in (Transfer.MOVE, Transfer.DELETE):
-                        transfer_switch(file_path_archive, file_path_game, Transfer.MOVE, error_sensitive)
+            self._execute_transfer_plan(plan, error_sensitive)
         except InternalError:
             log.warning(f'{self.name} CANCELLED\n')
+
+            # Rollback: If detachment fails, attempt to forcibly re-attach
             self.attach(check_type='pass')
             return False
 
-        if TEST:
-            raise InternalError('under TEST phase: mod_reverse not applied')
-
+        # 4. Finalize State
         self.edit(active=False)
         log.info(f'{self.name} detach successfully')
         return True
