@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch, mock_open
 
+from source.messaging import InternalError
 import source.editor as editor
 
 
@@ -89,25 +90,16 @@ class Test_Editor_Duplicates(unittest.TestCase):
 
     # --- 1. Testing spot_duplicates_in_file ---
 
-    @patch('source.editor.constructor.recognize_structure')
-    def test_spot_duplicates_in_file_success(self, mock_recognize):
-        """ Tests that it accurately finds duplicates within the same file and groups line numbers. """
-        # Setup: Tell the parser that 'Object' is a valid root block
-        mock_recognize.return_value = ([["Object"]], 0)
+    @patch('source.editor.extract_titles')
+    def test_spot_duplicates_in_file_success(self, mock_extract):
+        """ Tests that it accurately formats the string for local duplicates. """
+        # We don't need mock_open anymore! We just mock the helper's output.
+        mock_extract.return_value = {
+            "Object UniqueUnit": ["1"],
+            "Object DuplicatedUnit": ["4", "6"]
+        }
 
-        # A fake file with one unique object and one duplicated object
-        fake_content = (
-            "Object UniqueUnit\n"  # Line 1
-            "  Health = 100\n"  # Line 2
-            "End\n"  # Line 3
-            "Object DuplicatedUnit\n"  # Line 4
-            "End\n"  # Line 5
-            "Object DuplicatedUnit\n"  # Line 6
-            "End\n"  # Line 7
-        )
-
-        with patch('builtins.open', mock_open(read_data=fake_content)):
-            result = editor.spot_duplicates_in_file("test.ini")
+        result = editor.spot_duplicates_in_file("test.ini")
 
         # It should completely ignore UniqueUnit, but flag DuplicatedUnit on lines 4 and 6
         self.assertIn("Object DuplicatedUnit -- line 4, 6;", result)
@@ -122,7 +114,7 @@ class Test_Editor_Duplicates(unittest.TestCase):
 
     @patch('source.editor.constructor.recognize_structure')
     def test_extract_titles(self, mock_recognize):
-        """ Tests that it successfully maps structural titles to their exact line numbers. """
+        """ Tests that it successfully maps structural titles to lists of their line numbers. """
         mock_recognize.return_value = ([["Object", "Armor"]], 0)
 
         fake_content = (
@@ -136,10 +128,10 @@ class Test_Editor_Duplicates(unittest.TestCase):
         with patch('builtins.open', mock_open(read_data=fake_content)):
             titles_dict = editor.extract_titles("test.ini")
 
-        # It should correctly identify the blocks and map them to their 1-based line numbers
+        # It should correctly identify the blocks and map them to LISTS of strings
         self.assertEqual(len(titles_dict), 2)
-        self.assertEqual(titles_dict["Object GondorArcher"], 2)
-        self.assertEqual(titles_dict["Armor ArcherArmor"], 5)
+        self.assertEqual(titles_dict["Object GondorArcher"], ["2"])
+        self.assertEqual(titles_dict["Armor ArcherArmor"], ["5"])
 
     @patch('source.editor.constructor.recognize_structure')
     def test_extract_titles_functional_file(self, mock_recognize):
@@ -151,26 +143,26 @@ class Test_Editor_Duplicates(unittest.TestCase):
     # --- 3. Testing spot_duplicates_from_file_in_file ---
 
     @patch('source.editor.extract_titles')
-    @patch('source.editor.constructor.recognize_structure')
-    def test_spot_duplicates_from_file_in_file(self, mock_recognize, mock_extract):
-        """ Tests that cross-file scanning correctly formats the source and target line numbers. """
-        # Setup: Pretend the source file had "Object CrossUnit" on line 15
-        mock_extract.return_value = {"Object CrossUnit": 15}
-        mock_recognize.return_value = ([["Object"]], 0)
+    def test_spot_duplicates_from_file_in_file(self, mock_extract):
+        """ Tests that cross-file scanning correctly compares the two dictionaries. """
+        def fake_extract(file_path):
+            if file_path == "source.ini":
+                return {"Object CrossUnit": ["15"], "Object SourceOnly": ["20"]}
+            elif file_path == "target.ini":
+                return {"Object CrossUnit": ["2"], "Object TargetOnly": ["5"]}
+            return {}
 
-        # The target file also has "Object CrossUnit"
-        fake_target_content = (
-            "; Target file\n"  # Line 1
-            "Object CrossUnit\n"  # Line 2
-            "End\n"  # Line 3
-        )
+        mock_extract.side_effect = fake_extract
 
-        with patch('builtins.open', mock_open(read_data=fake_target_content)):
-            result = editor.spot_duplicates_from_file_in_file("source.ini", "target.ini")
+        result = editor.spot_duplicates_from_file_in_file("source.ini", "target.ini")
 
         # The output should state where it was found in the target AND where it came from in the source
         self.assertIn("line 2 Object CrossUnit", result)
         self.assertIn("and in source, line 15;", result)
+
+        # It should ignore items that don't overlap
+        self.assertNotIn("SourceOnly", result)
+        self.assertNotIn("TargetOnly", result)
 
     @patch('source.editor.spot_duplicates_in_file')
     def test_spot_duplicates_from_file_in_file_same_path(self, mock_spot_in_file):
