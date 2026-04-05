@@ -148,12 +148,8 @@ class Mod:
                 changes_dict[mod_file] = [Change.REMOVED, '0']
         return changes_dict
 
-    def attach(self, check_type: str = 'ancestor') -> bool:
-        """ Attaches the mod to the game directory, routing files and managing archives. """
-        error_sensitive = True
-        transfer = Transfer.MOVE
-
-        # 1. Check for overrides
+    def _resolve_attach_dependencies(self, check_type: str) -> None:
+        """ Step 1: Handles override detection and ancestor attachment logic. """
         ancestor_mod = LibraryManager.detect_override(self)
         if ancestor_mod:
             self.edit(overrides=ancestor_mod.name)
@@ -165,56 +161,77 @@ class Mod:
             if self.active and check_type != 'pass':
                 raise InternalError('activation of active mod aborted')
 
-            if self.transfer_type == DEFINITION_CLASSES[0]:
-                transfer = Transfer.MOVE
-            elif self.transfer_type == DEFINITION_CLASSES[1]:
-                transfer = Transfer.COPY
-
             ancestor_mod_object = LibraryManager.check_relative(self, Property.OVERRIDES)
             if ancestor_mod_object:
                 if not ancestor_mod_object.attach():
                     raise InternalError('ancestor mod not attached')
-        elif check_type == 'pass':
-            error_sensitive = False
+
+    def generate_attach_plan(self) -> list:
+        """ Step 2: Generates a manifest of file transfers without touching the disk. """
+        plan = []
+        transfer_type = Transfer.MOVE if self.transfer_type == DEFINITION_CLASSES[0] else Transfer.COPY
+
+        comparison_dict = self.changes.copy()
+        if not comparison_dict and os.path.isfile(f"{self.directory}/comparison_{self.name}.json"):
+            with open(f"{self.directory}/comparison_{self.name}.json") as comp_buffer:
+                comparison_dict = json.load(comp_buffer)
+
+        if not comparison_dict:
+            raise InternalError('comparison missing')
+
+        # Build the exact list of moves needed
+        for path_key, change_data in comparison_dict.items():
+            file_path_source = f"{core.state.install_path}/{path_key}"
+            file_path_game = f"{core.state.install_path}/{'/'.join(path_key.split('/')[:-1])}"
+            file_path_archive = f"{core.state.archive}/{self.name}/{'/'.join(path_key.split('/')[:-1])}"
+            file_path_mod = f"{self.directory}/{path_key}"
+
+            status = change_data[0]
+            if status == Change.UNCHANGED:
+                continue
+            elif status == Change.CHANGED:
+                plan.append({'src': file_path_source, 'dst': file_path_archive, 'type': transfer_type})
+                plan.append({'src': file_path_mod, 'dst': file_path_game, 'type': transfer_type})
+            elif status == Change.ADDED:
+                plan.append({'src': file_path_mod, 'dst': file_path_game, 'type': transfer_type})
+            elif status == Change.REMOVED:
+                plan.append({'src': file_path_source, 'dst': file_path_archive, 'type': transfer_type})
+
+        return plan
+
+    def _execute_transfer_plan(self, plan: list, error_sensitive: bool = True) -> None:
+        """ Step 3: Loops through any provided plan and strictly executes it. """
+        for step in plan:
+            transfer_switch(step['src'], step['dst'], step['type'], error_sensitive)
+
+    def attach(self, check_type: str = 'ancestor', dry_run: bool = False):
+        """ Attaches the mod to the game directory, routing files and managing archives. """
+        error_sensitive = (check_type != 'pass')
+
+        # 1. Resolve relational links and ancestor dependencies
+        self._resolve_attach_dependencies(check_type)
 
         # 2. Archive Setup
         archive_dir = f"{core.state.archive}/{self.name}"
         if not os.path.isdir(archive_dir):
             os.makedirs(archive_dir, exist_ok=True)
 
-        comparison_dict = self.changes.copy()
-        if not comparison_dict and os.path.isfile(f"{self.directory}/comparison_{self.name}.json"):
-            with open(f"{self.directory}/comparison_{self.name}.json") as comp_buffer:
-                comparison_dict = json.load(comp_buffer)
-        if not comparison_dict:
-            raise InternalError('comparison missing')
+        # 3. Generate the Transfer Plan
+        plan = self.generate_attach_plan()
 
-        # 3. Transfer Routing
+        # If the UI just wants a report, we hand the plan back instantly and stop here!
+        if dry_run:
+            return plan
+
+        # 4. Execute the Plan
         try:
-            for path_key, change_data in comparison_dict.items():
-                file_path_source = f"{core.state.install_path}/{path_key}"
-                file_path_game = f"{core.state.install_path}/{'/'.join(path_key.split('/')[:-1])}"
-                file_path_archive = f"{core.state.archive}/{self.name}/{'/'.join(path_key.split('/')[:-1])}"
-                file_path_mod = f"{self.directory}/{path_key}"
-
-                status = change_data[0]
-                if status == Change.UNCHANGED:
-                    continue
-                elif status == Change.CHANGED:
-                    transfer_switch(file_path_source, file_path_archive, transfer, error_sensitive)
-                    transfer_switch(file_path_mod, file_path_game, transfer, error_sensitive)
-                elif status == Change.ADDED:
-                    transfer_switch(file_path_mod, file_path_game, transfer, error_sensitive)
-                elif status == Change.REMOVED:
-                    transfer_switch(file_path_source, file_path_archive, transfer, error_sensitive)
+            self._execute_transfer_plan(plan, error_sensitive)
         except InternalError:
             log.warning(f'{self.name} CANCELLED\n')
             self.detach(transfer=Transfer.REMOVE, check_type='pass')
             return False
 
-        if TEST:
-            raise InternalError('Test phase: mod_attach not applied')
-
+        # 5. Finalize State
         self.edit(active=True)
         log.info(f'{self.name} attached successfully')
         return True
