@@ -84,9 +84,139 @@ class Test_Editor(unittest.TestCase):
         # Verify it triggered the specific .ini link updater
         mock_update_ini.assert_called_once()
 
-    # --- 4. Test Duplicates Finder ---
 
-    # # # missing tests for spot_duplicates
+class Test_Editor_Duplicates(unittest.TestCase):
+
+    # --- 1. Testing spot_duplicates_in_file ---
+
+    @patch('source.editor.constructor.recognize_structure')
+    def test_spot_duplicates_in_file_success(self, mock_recognize):
+        """ Tests that it accurately finds duplicates within the same file and groups line numbers. """
+        # Setup: Tell the parser that 'Object' is a valid root block
+        mock_recognize.return_value = ([["Object"]], 0)
+
+        # A fake file with one unique object and one duplicated object
+        fake_content = (
+            "Object UniqueUnit\n"  # Line 1
+            "  Health = 100\n"  # Line 2
+            "End\n"  # Line 3
+            "Object DuplicatedUnit\n"  # Line 4
+            "End\n"  # Line 5
+            "Object DuplicatedUnit\n"  # Line 6
+            "End\n"  # Line 7
+        )
+
+        with patch('builtins.open', mock_open(read_data=fake_content)):
+            result = editor.spot_duplicates_in_file("test.ini")
+
+        # It should completely ignore UniqueUnit, but flag DuplicatedUnit on lines 4 and 6
+        self.assertIn("Object DuplicatedUnit -- line 4, 6;", result)
+        self.assertNotIn("UniqueUnit", result)
+
+    def test_spot_duplicates_in_file_invalid_extension(self):
+        """ Tests that it safely rejects non-structured files. """
+        with self.assertRaises(InternalError):
+            editor.spot_duplicates_in_file("readme.txt")
+
+    # --- 2. Testing extract_titles ---
+
+    @patch('source.editor.constructor.recognize_structure')
+    def test_extract_titles(self, mock_recognize):
+        """ Tests that it successfully maps structural titles to their exact line numbers. """
+        mock_recognize.return_value = ([["Object", "Armor"]], 0)
+
+        fake_content = (
+            "; A comment line\n"  # Line 1
+            "Object GondorArcher\n"  # Line 2
+            "  Health = 100\n"  # Line 3
+            "End\n"  # Line 4
+            "Armor ArcherArmor\n"  # Line 5
+        )
+
+        with patch('builtins.open', mock_open(read_data=fake_content)):
+            titles_dict = editor.extract_titles("test.ini")
+
+        # It should correctly identify the blocks and map them to their 1-based line numbers
+        self.assertEqual(len(titles_dict), 2)
+        self.assertEqual(titles_dict["Object GondorArcher"], 2)
+        self.assertEqual(titles_dict["Armor ArcherArmor"], 5)
+
+    @patch('source.editor.constructor.recognize_structure')
+    def test_extract_titles_functional_file(self, mock_recognize):
+        """ Tests that it safely returns an empty dict if the file isn't supported. """
+        mock_recognize.side_effect = InternalError("functional file")
+        result = editor.extract_titles("mod_def.json")
+        self.assertEqual(result, {})
+
+    # --- 3. Testing spot_duplicates_from_file_in_file ---
+
+    @patch('source.editor.extract_titles')
+    @patch('source.editor.constructor.recognize_structure')
+    def test_spot_duplicates_from_file_in_file(self, mock_recognize, mock_extract):
+        """ Tests that cross-file scanning correctly formats the source and target line numbers. """
+        # Setup: Pretend the source file had "Object CrossUnit" on line 15
+        mock_extract.return_value = {"Object CrossUnit": 15}
+        mock_recognize.return_value = ([["Object"]], 0)
+
+        # The target file also has "Object CrossUnit"
+        fake_target_content = (
+            "; Target file\n"  # Line 1
+            "Object CrossUnit\n"  # Line 2
+            "End\n"  # Line 3
+        )
+
+        with patch('builtins.open', mock_open(read_data=fake_target_content)):
+            result = editor.spot_duplicates_from_file_in_file("source.ini", "target.ini")
+
+        # The output should state where it was found in the target AND where it came from in the source
+        self.assertIn("line 2 Object CrossUnit", result)
+        self.assertIn("and in source, line 15;", result)
+
+    @patch('source.editor.spot_duplicates_in_file')
+    def test_spot_duplicates_from_file_in_file_same_path(self, mock_spot_in_file):
+        """ Tests that if you cross-scan a file against itself, it delegates to the single-file scanner. """
+        mock_spot_in_file.return_value = "Delegated Result"
+
+        result = editor.spot_duplicates_from_file_in_file("C:/same.ini", "C:/same.ini")
+
+        self.assertEqual(result, "Delegated Result")
+        mock_spot_in_file.assert_called_once_with("C:/same.ini")
+
+    # --- 4. Testing spot_duplicates_in_directory ---
+
+    @patch('os.walk')
+    @patch('os.path.abspath')
+    @patch('source.editor.spot_duplicates_from_file_in_file')
+    def test_spot_duplicates_in_directory(self, mock_spot_from_file, mock_abspath, mock_walk):
+        """ Tests the master directory looper. """
+
+        # Simulate a directory tree with 3 files
+        mock_walk.return_value = [
+            ("C:/Fake/Dir", [], ["source.ini", "target1.ini", "target2.ini"])
+        ]
+
+        # Mock abspath to just return the path it was given (simplifies path matching logic for the test)
+        mock_abspath.side_effect = lambda x: x
+
+        # Pretend it finds a duplicate in target1, but not in target2
+        def fake_scanner(source, target):
+            if "target1.ini" in target:
+                return "\tline 10 Object Found\n"
+            return ""
+
+        mock_spot_from_file.side_effect = fake_scanner
+
+        # Execute
+        result = editor.spot_duplicates_in_directory("C:/Fake/Dir/source.ini", "C:/Fake/Dir")
+
+        # 1. It should NOT have scanned source.ini against itself because the loop skips abspath matches
+        # 2. It SHOULD report the duplicate found in target1.ini
+        self.assertIn("\tline 10 Object Found\n", result)
+
+        # Verify it was only called exactly twice (for target1 and target2)
+        self.assertEqual(mock_spot_from_file.call_count, 2)
+        mock_spot_from_file.assert_any_call("C:/Fake/Dir/source.ini", "C:/Fake/Dir/target1.ini")
+        mock_spot_from_file.assert_any_call("C:/Fake/Dir/source.ini", "C:/Fake/Dir/target2.ini")
 
 
 if __name__ == '__main__':
