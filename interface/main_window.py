@@ -11,6 +11,7 @@ from interface.views.file_editor import FileEditorView
 from interface.views.find_replace import FindReplaceView
 from interface.views.change_editor import ChangeEditorView
 from interface.views.move_file import MoveFileView
+from interface.views.new_mod import NewModView
 
 
 class Application(tk.Tk):
@@ -150,6 +151,18 @@ class Application(tk.Tk):
         if "FileBrowserView" in self.frames:
             self.frames["FileBrowserView"].load_path(folderpath)
             self.show_frame("FileBrowserView")
+
+    def open_new_mod_view(self, preset_name: str = ""):
+        """ Routes the user to the New Mod creation screen. """
+        # 1. Instantiate it if it doesn't exist yet
+        if "NewModView" not in self.frames:
+            self.frames["NewModView"] = NewModView(self.main_container, self)
+
+        # 2. Inject the preset name (if any)
+        self.frames["NewModView"].load_preset_name(preset_name)
+
+        # 3. Swap the screen!
+        self.show_frame("NewModView")
 
 
 if __name__ == "__main__":

@@ -120,6 +120,29 @@ class ModManagerView(tk.Frame):
                 if not os.path.isfile(f'{core.state.library}/{folder}/{MOD_DEF_FILE_NAME}'):
                     if hasattr(self.controller, 'set_log_update'):
                         self.controller.set_log_update(f'Detected a definition-less folder: {folder}')
+
+                    # Restored popup logic!
+                    do_initiate = s.invoke_choice(
+                        title='Unregistered Folder',
+                        text=f'The folder {core.state.library}/{folder}\nseems to have no properties.\n'
+                             'Do you wish it to become a mod?\n',
+                        buttons=({s.KEY_LABEL: 'yes', s.KEY_RETURN: True, s.KEY_INFO: ''},
+                                 {s.KEY_LABEL: 'no', s.KEY_RETURN: False, s.KEY_INFO: ''})
+                    )
+
+                    if do_initiate:
+                        # Route directly to the New Mod view and pass the folder name
+                        if hasattr(self.controller, 'open_new_mod_view'):
+                            self.controller.open_new_mod_view(preset_name=folder)
+                        return  # Stop refreshing and jump to the new screen
+
+                    elif do_initiate is False:
+                        # Add to exceptions so we don't ask again
+                        from source.constants import Setting
+                        exceptions = core.state.raw_settings.get(Setting.EXCEPTIONS, []).copy()
+                        exceptions.append(f'{core.state.library}/{folder}')
+                        core.state.raw_settings.save({Setting.EXCEPTIONS: exceptions})
+
         except InternalError:
             pass
 
@@ -204,8 +227,8 @@ class ModManagerView(tk.Frame):
     # --- Routing Methods to Controller or Logic ---
 
     def _on_new_mod(self):
-        if hasattr(self.controller, 'show_frame'):
-            self.controller.show_frame("ModEditorView")  # Assuming this view name
+        if hasattr(self.controller, 'open_new_mod_view'):
+            self.controller.open_new_mod_view()
 
     def _on_attach(self):
         if not self.loaded_mod: return
