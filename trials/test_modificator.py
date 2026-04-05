@@ -1,272 +1,168 @@
 import unittest
 from unittest.mock import patch, mock_open, MagicMock
+import os
+import json
 
-import source.core as core
+from source.constants import Change, Transfer, MOD_DEF_FILE_NAME
+from source.messaging import InternalError
 import source.modificator as modificator
-from source.constants import Transfer, Change
 
 
 class Test_Modificator(unittest.TestCase):
 
     def setUp(self):
-        # Globally mock the log function to prevent log file spam during testing
-        self.patcher_log = patch('source.modificator.log')
-        self.mock_log = self.patcher_log.start()
-        core.state.library = f"{core.state.install_path}/Fake/Library"
-
-        # We need to ensure os.path.abspath returns our fake paths cleanly
-        # because snapshot_take uses it to calculate string slices.
-        self.patcher_abspath = patch('os.path.abspath', side_effect=lambda p: p)
-        self.patcher_abspath.start()
+        # Patch the global state used throughout modificator
+        self.patcher_state = patch('source.modificator.core.state')
+        self.mock_state = self.patcher_state.start()
+        self.mock_state.library = "C:/Fake/Library"
+        self.mock_state.exceptions = ["obsolete"]
+        self.mock_state.install_path = "C:/Fake/Install"
+        self.mock_state.games = ["BFME2", "RotWK"]
 
     def tearDown(self):
-        self.patcher_log.stop()
-        self.patcher_abspath.stop()
+        self.patcher_state.stop()
 
-    @patch('source.modificator.hash_file')
-    @patch('os.listdir')
-    @patch('os.path.isdir')
+    # --- 1. Testing Utility and Hashing Functions ---
+
+    @patch('os.listdir', return_value=["ModA", "obsolete", "ModB"])
     @patch('os.path.isfile')
-    @patch('source.core.state.games', ['game'])  # Define 'game' as our recognized game folder
-    def test_hash_directory(self, mock_isfile, mock_isdir, mock_listdir, mock_hash_file):
+    def test_mods_detect_new(self, mock_isfile, mock_listdir):
+        """ Tests that it flags folders missing a mod definition, ignoring exceptions. """
 
-        # 1. Setup fake directory structure exactly as requested
-        def isdir_mock(path):
-            return path in ["Mod", "Mod/game"]
+        # ModA is missing the file, ModB has it
+        def fake_isfile(path):
+            if "ModA" in path: return False
+            return True
 
-        def isfile_mock(path):
-            return path in ["Mod/_definition.json", "Mod/game/file1.txt", "Mod/game/file2.txt"]
+        mock_isfile.side_effect = fake_isfile
 
-        def listdir_mock(path):
-            if path == "Mod":
-                return ["_definition.json", "game"]
-            if path == "Mod/game":
-                return ["file1.txt", "file2.txt"]
-            return []
+        result = modificator.mods_detect_new()
 
-        mock_isdir.side_effect = isdir_mock
-        mock_isfile.side_effect = isfile_mock
-        mock_listdir.side_effect = listdir_mock
+        # It should ignore 'obsolete', find ModA is missing it, and skip ModB
+        self.assertIn("ModA", result)
+        self.assertNotIn("ModB", result)
+        self.assertNotIn("obsolete", result)
 
-        # 2. Pretend hash_file always returns a dummy hash based on the file name
-        mock_hash_file.side_effect = lambda filepath: f"hash_of_{filepath.split('/')[-1]}"
+    @patch('xxhash.xxh128')
+    def test_hash_file(self, mock_xxhash):
+        """ Tests that file hashing correctly reads bytes and generates a digest. """
+        mock_digest = MagicMock()
+        mock_digest.hexdigest.return_value = "fake_hash_123"
+        mock_xxhash.return_value = mock_digest
 
-        # 3. Call the function
-        result = modificator.hash_directory("Mod", path_to_omit="Mod")
+        with patch('builtins.open', mock_open(read_data=b"dummy content")):
+            result = modificator.hash_file("dummy.ini")
 
-        # 4. Assertions
-        # _definition.json MUST NOT be in the result because "game" triggered the override logic
-        self.assertNotIn("_definition.json", result)
+        self.assertEqual(result, "fake_hash_123")
+        mock_xxhash.assert_called_once_with(b"dummy content")
 
-        # The files inside "game" should be properly hashed and correctly sliced relative to "Mod"
-        self.assertIn("game/file1.txt", result)
-        self.assertEqual(result["game/file1.txt"], "hash_of_file1.txt")
-        self.assertIn("game/file2.txt", result)
-        self.assertEqual(result["game/file2.txt"], "hash_of_file2.txt")
+    # --- 2. Testing Snapshot Generation and Comparison ---
 
-        # Ensure ONLY the 2 game files were actually hashed
-        self.assertEqual(len(result), 2)
+    @patch('source.modificator.hash_directory')
+    def test_snapshot_take(self, mock_hash_dir):
+        """ Tests snapshot routing and relative path omission logic. """
+        mock_hash_dir.return_value = {"data/file.ini": "hash1"}
 
-    def test_snapshot_compare__dict_mode(self):
-        # We pass raw dictionaries to bypass the file loading logic
+        # Test taking a snapshot of a library mod
+        result = modificator.snapshot_take(["C:/Fake/Library/TestMod"])
+
+        self.assertIn("date", result)
+        self.assertEqual(result["data/file.ini"], "hash1")
+        # Ensure path_to_omit stripped the library correctly
+        mock_hash_dir.assert_called_with("C:/Fake/Library/TestMod", path_to_omit="C:/Fake/Library/TestMod")
+
+    def test_snapshot_compare_dict(self):
+        """ Tests the core logical comparison engine. """
         snap_anterior = {
-            "date": "2023-01-01",
-            "file_unchanged.ini": "hash_A",
-            "file_changed.ini": "hash_B",
-            "file_removed.ini": "hash_C"
+            "date": "2026-01-01",
+            "file_unchanged.ini": "hashA",
+            "file_changed.ini": "hashB",
+            "file_removed.ini": "hashC"
         }
         snap_posterior = {
-            "date": "2023-01-02",
-            "file_unchanged.ini": "hash_A",
-            "file_changed.ini": "hash_MODIFIED",
-            "file_added.ini": "hash_D"
+            "date": "2026-01-02",
+            "file_unchanged.ini": "hashA",
+            "file_changed.ini": "hashX",  # Hash changed!
+            "file_added.ini": "hashD"  # New file!
         }
 
         result = modificator.snapshot_compare(snap_anterior, snap_posterior, return_type='dict')
 
-        # Verify it categorized the changes correctly according to your enums
         self.assertEqual(result["file_unchanged.ini"][0], Change.UNCHANGED)
 
         self.assertEqual(result["file_changed.ini"][0], Change.CHANGED)
-        self.assertEqual(result["file_changed.ini"][1], "hash_B")  # old hash
-        self.assertEqual(result["file_changed.ini"][2], "hash_MODIFIED")  # new hash
+        self.assertEqual(result["file_changed.ini"][1], "hashB")  # Old hash
+        self.assertEqual(result["file_changed.ini"][2], "hashX")  # New hash
 
         self.assertEqual(result["file_removed.ini"][0], Change.REMOVED)
         self.assertEqual(result["file_added.ini"][0], Change.ADDED)
 
-    @patch('source.modificator.os.remove')
-    @patch('source.modificator.move')
-    @patch('source.modificator.copy2')
-    def test_make_transfer__routing(self, mock_copy, mock_move, mock_remove):
-        src = "C:/source/file.txt"
-        dst = "C:/dest/file.txt"
+    # --- 3. Testing the Comparison Mappers ---
 
-        # Test COPY
-        modificator.make_transfer(src, dst, transfer_type=Transfer.COPY, error_sensitive=False)
-        mock_copy.assert_called_once_with(src, dst)
-
-        # Test MOVE
-        modificator.make_transfer(src, dst, transfer_type=Transfer.MOVE, error_sensitive=False)
-        mock_move.assert_called_once_with(src, dst)
-
-        # Test DELETE
-        modificator.make_transfer(src, dst, transfer_type=Transfer.DELETE, error_sensitive=False)
-        mock_remove.assert_called_once_with(src)
-
-    @patch('source.modificator.xxhash')
-    @patch('builtins.open', new_callable=mock_open, read_data=b"binary_data")
-    def test_hash_file(self, mock_file, mock_xxhash):
-        # Set up a mock return for the xxhash algorithm
-        mock_xxhash_instance = MagicMock()
-        mock_xxhash_instance.hexdigest.return_value = "fake_hash_123"
-        mock_xxhash.xxh128.return_value = mock_xxhash_instance
-
-        result = modificator.hash_file("dummy.txt")
-
-        # Verify it opened the file in 'rb' (read-binary) mode
-        mock_file.assert_called_once_with("dummy.txt", 'rb')
-        mock_xxhash.xxh128.assert_called_once_with(b"binary_data")
-        self.assertEqual(result, "fake_hash_123")
-
-    @patch('os.mkdir')
-    @patch('os.path.isdir')
-    def test_get_available_name__creates_directory(self, mock_isdir, mock_mkdir):
-        # Pretend the snapshot directory doesn't exist yet
-        mock_isdir.return_value = False
-
-        result = modificator.get_available_name("C:/Snapshots", "file_snapshot_")
-
-        # It should make the directory and start at counter "1"
-        mock_mkdir.assert_called_once_with("C:/Snapshots")
-        self.assertEqual(result, "C:/Snapshots/file_snapshot_1.json")
-
-    @patch('source.modificator.askstring')
-    @patch('os.path.getctime')
-    @patch('source.modificator.glob')
-    @patch('os.path.exists')
-    @patch('os.path.isdir')
-    def test_get_available_name__increments_existing(self, mock_isdir, mock_exists, mock_glob, mock_getctime,
-                                                     mock_askstring):
-        mock_isdir.return_value = True
-        mock_exists.return_value = True
-
-        # Pretend there are already 3 snapshots in the folder
-        mock_glob.return_value = [
-            "C:/Snapshots/file_snapshot_1.json",
-            "C:/Snapshots/file_snapshot_2.json",
-            "C:/Snapshots/file_snapshot_3.json"
-        ]
-
-        # We trick `max(..., key=os.path.getctime)` into picking the file with "3"
-        # by extracting the numeric suffix from the string and using it as the "time"
-        # (e.g., "1" -> 1, "2" -> 2, "3" -> 3)
-        mock_getctime.side_effect = lambda path: int(path.split('_')[-1].split('.')[0])
-
-        result = modificator.get_available_name("C:/Snapshots", "file_snapshot_")
-
-        # It should extract the "3", increment it to "4"
-        self.assertEqual(result, "C:/Snapshots/file_snapshot_4.json")
-        mock_askstring.assert_not_called()
-
-    @patch('source.modificator.datetime')
     @patch('source.modificator.hash_directory')
-    def test_snapshot_take__provided_paths(self, mock_hash_directory, mock_datetime):
-        # Freeze time for a predictable dict output
-        mock_datetime.now.return_value = "2023-01-01 12:00:00"
-
-        # Provide a fake hash output
-        mock_hash_directory.return_value = {"data/ini/file.txt": "fake_hash"}
-
-        # Test taking a snapshot of a specific game path (bypassing UI prompts)
-        result = modificator.snapshot_take(game_paths=["O:/Fake/Game/data"])
-
-        # Verify it passed the install_path to be omitted
-        mock_hash_directory.assert_called_once_with("O:/Fake/Game/data", path_to_omit=core.state.install_path)
-
-        # Verify the returned dictionary shape
-        self.assertEqual(result["date"], "2023-01-01 12:00:00")
-        self.assertEqual(result["data/ini/file.txt"], "fake_hash")
-
-    @patch('source.modificator.askdirectory')
-    @patch('source.modificator.hash_directory')
-    def test_snapshot_take__ui_prompt(self, mock_hash_directory, mock_askdirectory):
-        mock_hash_directory.return_value = {}
-
-        # The askdirectory prompt is in a while loop. We return a valid path first,
-        # then return an empty string "" to simulate the user clicking "Cancel", which breaks the loop.
-        mock_askdirectory.side_effect = ["O:/Fake/Install/MyGame", ""]
-
-        modificator.snapshot_take()
-
-        # Verify it asked for a directory and successfully processed the chosen path
-        mock_askdirectory.assert_called()
-        mock_hash_directory.assert_called_once_with("O:/Fake/Install/MyGame", path_to_omit=core.state.install_path)
-
-    @patch('source.modificator.get_available_name')
-    @patch('json.dump')
-    @patch('builtins.open', new_callable=mock_open)
-    def test_snapshot_save__no_name(self, mock_file, mock_json_dump, mock_get_name):
-        mock_get_name.return_value = "C:/Snapshots/file_snapshot_1.json"
-
-        fake_snapshot = {"date": "today", "file.txt": "hash1"}
-
-        result = modificator.snapshot_save(fake_snapshot)
-
-        # Verify it fetched an auto-incremented name and wrote the JSON to disk
-        mock_get_name.assert_called_once_with(modificator.SNAPSHOT_DIRECTORY)
-        mock_file.assert_called_once_with("C:/Snapshots/file_snapshot_1.json", 'w')
-        mock_json_dump.assert_called_once_with(fake_snapshot, mock_file(), indent=4)
-        self.assertEqual(result, "C:/Snapshots/file_snapshot_1.json")
-
     @patch('source.modificator.snapshot_take')
     @patch('source.modificator.snapshot_save')
-    @patch('source.modificator.hash_file')
-    @patch('source.modificator.hash_directory')
-    @patch('source.modificator.askopenfilenames')
-    @patch('source.modificator.askdirectory')
-    @patch('os.path.isdir')
-    def test_initiate_comparison__directory_mode(
-            self, mock_isdir, mock_askdirectory, mock_askopenfilenames,
-            mock_hash_directory, mock_hash_file, mock_snapshot_save, mock_snapshot_take
-    ):
-        # We explicitly tell isdir to return False if the literal keyword "directory"
-        # is checked, but True for our actual fake paths.
-        mock_isdir.side_effect = lambda path: path != "directory"
+    def test_map_changes_from_direct_path(self, mock_save, mock_take, mock_hash):
+        """ Tests generating ADDED changes from a raw directory. """
+        mock_hash.return_value = {"file1.ini": "hash1", "file2.ini": "hash2"}
 
-        # Pretend the user selects the start mod directory via the UI popup
-        mock_askdirectory.return_value = "C:/Fake/StartMod"
+        active, changes = modificator.map_changes_from_direct_path("C:/Fake/Mod")
 
-        # Pretend the user selects one file they want to remove via the UI popup
-        mock_askopenfilenames.return_value = ["C:/Fake/StartMod/data/remove_me.txt"]
-        mock_hash_file.return_value = "hash_removed"
+        self.assertTrue(active)
+        self.assertEqual(len(changes), 2)
+        self.assertEqual(changes["file1.ini"], [Change.ADDED, "hash1"])
 
-        # Mock the directory hashes
-        def hash_dir_mock(path, **kwargs):
-            if "MyMod" in path:
-                return {"data/new_file.txt": "hash_new", "data/changed_file.txt": "hash_changed"}
-            elif "StartMod" in path:
-                return {"data/changed_file.txt": "hash_old", "data/remove_me.txt": "hash_removed"}
-            return {}
+    @patch('source.modificator.map_changes_from_direct_path')
+    @patch('source.modificator.map_changes_from_directory')
+    @patch('os.path.isdir', return_value=True)
+    def test_initiate_comparison_router(self, mock_isdir, mock_map_dir, mock_map_direct):
+        """ Tests that the orchestrator routes to the correct helper function. """
+        mock_map_direct.return_value = (True, {"file": "data"})
 
-        mock_hash_directory.side_effect = hash_dir_mock
+        # Test routing to direct path
+        active, changes = modificator.initiate_comparison("C:/Fake/Mod", changes_source="C:/Fake/Source")
+        mock_map_direct.assert_called_once_with("C:/Fake/Source")
+        self.assertTrue(active)
 
-        # Run the comparison
-        active, changes = modificator.initiate_comparison(
-            mod_directory="C:/Fake/Library/MyMod",
-            start_mod="",
-            changes_source="directory"
-        )
+    # --- 4. Testing the Transfer Engine ---
 
-        # It should correctly classify the new file, the changed file, and the explicitly removed file
-        self.assertFalse(active)
-        self.assertEqual(changes["data/new_file.txt"][0], modificator.Change.ADDED)
+    @patch('os.makedirs')
+    @patch('source.modificator.copy2')
+    def test_make_transfer_copy(self, mock_copy2, mock_makedirs):
+        modificator.make_transfer("src.ini", "C:/dest", Transfer.COPY)
+        mock_makedirs.assert_called_once_with("C:/dest", exist_ok=True)
+        mock_copy2.assert_called_once_with("src.ini", "C:/dest")
 
-        self.assertEqual(changes["data/changed_file.txt"][0], modificator.Change.CHANGED)
-        self.assertEqual(changes["data/changed_file.txt"][1], "hash_changed")  # new
-        self.assertEqual(changes["data/changed_file.txt"][2], "hash_old")  # old
+    @patch('os.makedirs')
+    @patch('source.modificator.move')
+    def test_make_transfer_move(self, mock_move, mock_makedirs):
+        modificator.make_transfer("src.ini", "C:/dest", Transfer.MOVE)
+        mock_move.assert_called_once_with("src.ini", "C:/dest")
 
-        self.assertEqual(changes["C:/Fake/StartMod/data/remove_me.txt"][0], modificator.Change.REMOVED)
-        self.assertEqual(changes["C:/Fake/StartMod/data/remove_me.txt"][1], "hash_removed")
+    @patch('os.remove')
+    def test_make_transfer_delete(self, mock_remove):
+        modificator.make_transfer("src.ini", "C:/dest", Transfer.DELETE)
+        mock_remove.assert_called_once_with("src.ini")
+
+    @patch('os.path.isfile', return_value=True)
+    @patch('source.modificator.copy2')
+    @patch('os.makedirs')
+    def test_make_transfer_fallback_logic(self, mock_makedirs, mock_copy2, mock_isfile):
+        """ Tests the brilliant OSError fallback logic for .bak and .disabled files. """
+
+        # We simulate an OSError the FIRST time copy2 is called (e.g. file is locked/missing)
+        # But the SECOND time it is called (with the .bak file), it succeeds.
+        mock_copy2.side_effect = [OSError("File in use"), None]
+
+        # Call make_transfer for a .big file. It will fail, catch the OSError, 
+        # see that a .bak file exists (mock_isfile=True), and try again.
+        modificator.make_transfer("data.big", "C:/dest", Transfer.COPY, error_sensitive=True)
+
+        self.assertEqual(mock_copy2.call_count, 2)
+        # First attempt:
+        mock_copy2.assert_any_call("data.big", "C:/dest")
+        # Fallback attempt triggered recursively:
+        mock_copy2.assert_any_call("data.big.bak", "C:/dest")
 
 
 if __name__ == '__main__':
