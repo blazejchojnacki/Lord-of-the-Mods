@@ -6,6 +6,7 @@ from models.mod import Mod
 from interface.views.mod_manager import ModManagerView
 from interface.views.settings import SettingsView
 from interface.views.mod_editor import ModEditorView
+from interface.views.file_browser import FileBrowserView
 
 
 class Application(tk.Tk):
@@ -73,6 +74,18 @@ class Application(tk.Tk):
 
         # 3. Swap the screen
         self.show_frame("ModEditorView")
+
+    def open_browser_for_mod(self, mod: Mod):
+        # Determine the correct starting path based on the logic from old interface.py
+        # You can port over the `command_mod_browse` path calculation logic here
+        target_path = mod.directory  # Simplified example
+
+        if "FileBrowserView" not in self.frames:
+            self.frames["FileBrowserView"] = FileBrowserView(self.main_container, self)
+
+        # Point the browser at the folder!
+        self.frames["FileBrowserView"].load_path(target_path)
+        self.show_frame("FileBrowserView")
 
 
 if __name__ == "__main__":
