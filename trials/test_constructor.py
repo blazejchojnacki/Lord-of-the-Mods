@@ -61,7 +61,7 @@ class Test_Constructor(unittest.TestCase):
         file_obj = constructor.ConstructFile("")  # Initialize empty to avoid auto-construction
         file_obj.name = "test.ini"
 
-        file_obj.recognize_structure()
+        file_obj.delimiters, file_obj.start_level = constructor.recognize_structure(file_obj.name)
 
         # It should have found the matching delimiter list and set start level to 0
         self.assertEqual(file_obj.start_level, 0)
@@ -73,7 +73,7 @@ class Test_Constructor(unittest.TestCase):
 
         # Mock the shared STR_DELIMITERS
         with patch('source.constants.STR_DELIMITERS', [["StringKey"]]):
-            file_obj.recognize_structure()
+            file_obj.delimiters, file_obj.start_level = constructor.recognize_structure(file_obj.name)
 
             # .str files hardcode start_level to 0 and append an empty list to delimiters
             self.assertEqual(file_obj.start_level, 0)
@@ -84,7 +84,7 @@ class Test_Constructor(unittest.TestCase):
         file_obj.name = MOD_DEF_FILE_NAME
 
         # It should raise an InternalError if trying to parse the mod definition file
-        self.assertRaisesRegex(InternalError, "functional file", file_obj.recognize_structure)
+        self.assertRaisesRegex(InternalError, "functional file", constructor.recognize_structure, file_obj.name)
 
     # --- 3. Test load_file Helper ---
 

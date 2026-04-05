@@ -1,9 +1,30 @@
 import os
 from dataclasses import dataclass, field
-from typing import List, Any, Dict
+from typing import List, Any
 
 from source.messaging import InternalError
 from source.constants import LEVEL_INDENT, MOD_DEF_FILE_NAME, INI_DELIMITERS, STR_DELIMITERS, INI_ENDS
+
+
+def recognize_structure(file_path) -> (List, int):
+    if MOD_DEF_FILE_NAME in file_path:
+        raise InternalError('functional file')
+    if file_path.endswith('.str'):
+        delimiters = STR_DELIMITERS.copy()
+        delimiters.append([])
+        return delimiters, 0
+    elif file_path.endswith('.ini') or file_path.endswith('.inc'):
+        with open(file_path) as loaded_file:
+            for file_line in loaded_file.readlines():
+                words = file_line.split()
+                if len(words) > 0:
+                    for items_levels in INI_DELIMITERS:
+                        for item_level in items_levels:
+                            if file_path.endswith('.ini') and items_levels.index(item_level) > 0:
+                                break
+                            elif words[0] in item_level:
+                                items_levels.append([])
+                                return items_levels, items_levels.index(item_level)
 
 
 @dataclass
@@ -118,30 +139,8 @@ class ConstructFile(ConstructShared):
         if self.name:
             self.construct()
 
-    def recognize_structure(self) -> None:
-        if MOD_DEF_FILE_NAME in self.name:
-            raise InternalError('functional file')
-        if self.name.endswith('.str'):
-            delimiters = STR_DELIMITERS.copy()
-            delimiters.append([])
-            self.delimiters, self.start_level = delimiters, 0
-            return
-        elif self.name.endswith('.ini') or self.name.endswith('.inc'):
-            with open(self.name) as loaded_file:
-                for file_line in loaded_file.readlines():
-                    words = file_line.split()
-                    if len(words) > 0:
-                        for items_levels in INI_DELIMITERS:
-                            for item_level in items_levels:
-                                if self.name.endswith('.ini') and items_levels.index(item_level) > 0:
-                                    break
-                                elif words[0] in item_level:
-                                    items_levels.append([])
-                                    self.delimiters, self.start_level = items_levels, items_levels.index(item_level)
-                                    return
-
     def construct(self):
-        self.recognize_structure()
+        self.delimiters, self.start_level = recognize_structure(self.name)
         current_level = self.start_level
         if (os.path.isfile(self.name) and
                 (self.name.endswith('.ini') or self.name.endswith('.inc') or self.name.endswith('.str'))):
