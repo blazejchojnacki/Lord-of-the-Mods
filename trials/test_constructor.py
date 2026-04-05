@@ -88,32 +88,6 @@ class Test_Constructor(unittest.TestCase):
 
     # --- 3. Test load_file Helper ---
 
-    @patch('os.path.isfile')
-    def test_load_file__invalid_paths(self, mock_isfile):
-        # Path does not exist
-        mock_isfile.return_value = False
-        self.assertRaisesRegex(InternalError, "wrong path", constructor.load_file, "fake.txt")
-
-        # Empty path
-        mock_isfile.return_value = True
-        self.assertRaisesRegex(InternalError, "empty path", constructor.load_file, "")
-
-        # Unsupported extension
-        self.assertRaisesRegex(InternalError, "unsupported file type", constructor.load_file, "file.png")
-
-    @patch('os.path.isfile')
-    @patch('builtins.open', new_callable=mock_open, read_data="Just some text")
-    def test_load_file__txt(self, mock_file, mock_isfile):
-        mock_isfile.return_value = True
-
-        content, levels = constructor.load_file("test.txt")
-
-        # .txt files should just return raw content and empty levels
-        self.assertEqual(content, "Just some text")
-        self.assertEqual(levels, [])
-
-    # --- 4. Test load_directories Helper ---
-
     @patch('os.listdir')
     @patch('os.path.isdir')
     @patch('os.path.isfile')
@@ -155,98 +129,145 @@ class Test_Constructor(unittest.TestCase):
         self.assertEqual(files, ["Root/SubFolder/sub_file.ini", "Root/root_file.txt"])
 
 
-class Test_ConstructFile_Construct(unittest.TestCase):
+class Test_ConstructFile_Parser(unittest.TestCase):
+    """ Tests the isolated syntax rules of the new ConstructFile delegation pattern. """
 
-    # --- 1. Test Invalid Files ---
+    def setUp(self):
+        # We create a blank ConstructFile without a name so it doesn't auto-run construct()
+        self.file = constructor.ConstructFile()
+        self.file.name = "test.ini"
 
-    @patch('source.constructor.os.path.isfile')
-    @patch.object(constructor.ConstructFile, 'recognize_structure')
-    def test_construct__invalid_file(self, mock_recognize, mock_isfile):
-        # Pretend the file doesn't exist
-        mock_isfile.return_value = False
+        # Manually set up the parser state that construct() would normally set
+        self.file.delimiters = [["Object"], ["Armor"]]
+        self.file.current_level = 0
+        self.file.last_comment = ""
 
-        # Initialize with an empty string to bypass the auto-construct in __init__
-        file_obj = constructor.ConstructFile("")
-        file_obj.name = "test.ini"
+        # We patch INI_ENDS so we don't depend on external constants
+        self.patcher_ends = patch('source.constructor.INI_ENDS', ['End'])
+        self.patcher_ends.start()
 
-        # It should raise an InternalError because the file either doesn't exist
-        # or doesn't have a valid extension
-        self.assertRaisesRegex(InternalError, "invalid", file_obj.construct)
+    def tearDown(self):
+        self.patcher_ends.stop()
 
-    # --- 2. Test Macros and Includes ---
+    # --- 1. Testing Syntax Helpers ---
 
-    @patch('source.constructor.os.path.isfile')
-    @patch.object(constructor.ConstructFile, 'recognize_structure')
-    @patch('builtins.open', new_callable=mock_open, read_data="#define MY_MACRO 100\n#include \"file.inc\"\n")
-    def test_construct__defines_and_includes(self, mock_file, mock_recognize, mock_isfile):
-        mock_isfile.return_value = True
+    def test_extract_comments(self):
+        """ Tests that code and comments are safely separated. """
+        # Test semicolon comment
+        words, signs = self.file._extract_comments("Health = 100 ; This is a comment")
+        self.assertEqual(words, ["Health", "100"])
+        self.assertEqual(signs, ["Health", "=", "100"])
+        self.assertEqual(self.file.last_comment, "; This is a comment")
 
-        file_obj = constructor.ConstructFile("")
-        file_obj.name = "test.ini"
-        file_obj.start_level = 0
-        file_obj.delimiters = [[]]
+        # Test double slash comment with existing buffer
+        words, signs = self.file._extract_comments("Armor // Another comment")
+        self.assertEqual(words, ["Armor"])
+        self.assertEqual(self.file.last_comment, "; This is a comment\n// Another comment")
 
-        file_obj.construct()
+    def test_handle_empty_line(self):
+        """ Tests that empty lines bind floating comments to the tree. """
+        self.file.last_comment = "; Floating note"
+        self.file._handle_empty_line("   \n")
 
-        # It should extract the #define into the dedicated defines list
-        self.assertEqual(file_obj.defines, ["#define MY_MACRO 100"])
+        # The comment should be added to the items list and the buffer cleared
+        self.assertEqual(self.file.items[0], {'comment': '; Floating note'})
+        self.assertEqual(self.file.last_comment, "")
 
-        # It should extract the #include as an assigned dictionary on the root object
-        self.assertEqual(file_obj[0], {"include": "#include \"file.inc\""})
+    def test_handle_block_start(self):
+        """ Tests that recognized keywords open a new ConstructLevel. """
+        words = ["Object", "GondorArcher", "GondorArcher_Identifier"]
 
-    # --- 3. Test Blocks and Statements ---
+        # Execute
+        result = self.file._handle_block_start(words)
 
-    @patch('source.constructor.os.path.isfile')
-    @patch.object(constructor.ConstructFile, 'recognize_structure')
-    @patch('builtins.open', new_callable=mock_open, read_data="Object FakeUnit\n  Health = 100\nEnd\n")
-    def test_construct__blocks_and_statements(self, mock_file, mock_recognize, mock_isfile):
-        mock_isfile.return_value = True
+        # Assertions
+        self.assertTrue(result)
+        self.assertEqual(self.file.current_level, 1)  # Level went up!
+        self.assertIsInstance(self.file.items[0], constructor.ConstructLevel)
+        self.assertEqual(self.file.items[0]._class, "Object")
+        # Ensure it extracted the name correctly for an INI file
+        self.assertEqual(self.file.items[0].items[1], {'name': 'GondorArcher'})
 
-        file_obj = constructor.ConstructFile("")
-        file_obj.name = "test.ini"
-        file_obj.start_level = 0
-        # Tell the parser to treat "Object" as a block delimiter
-        file_obj.delimiters = [["Object"], []]
+    def test_handle_block_end(self):
+        """ Tests that 'End' keywords correctly close the active block. """
+        # Setup an active block first
+        active_level = self.file.add(constructor.ConstructLevel(_class="Object"))
+        self.file.current_level = 1
 
-        file_obj.construct()
+        # Add a trailing comment before closing
+        self.file.last_comment = "; Ending soon"
 
-        # The parser should have created exactly 1 ConstructLevel inside the main file
-        self.assertEqual(len(file_obj), 1)
-        level = file_obj[0]
-        self.assertIsInstance(level, constructor.ConstructLevel)
+        result = self.file._handle_block_end(["End"])
 
-        # Index 0 holds the block declaration (updated by level.assign)
-        self.assertEqual(level[0], {"class": "Object", "name": "FakeUnit"})
+        self.assertTrue(result)
+        self.assertEqual(self.file.current_level, 0)  # Level went down!
+        self.assertFalse(active_level.is_open)  # The block is officially closed
+        self.assertEqual(active_level.items[-2], {'comment': '; Ending soon'})
+        self.assertEqual(active_level.items[-1], {'end': 'End'})
 
-        # Index 1 holds the parsed statement
-        self.assertEqual(level[1], {"statement": "Health = 100"})
+    def test_handle_directives(self):
+        """ Tests #define and #include statements. """
+        # Test #define
+        result = self.file._handle_directives(["#define", "MACRO", "100"], ["#define", "MACRO", "100"])
+        self.assertTrue(result)
+        self.assertIn("#define MACRO 100", self.file.defines)
 
-        # Index 2 holds the end of the block
-        self.assertEqual(level[2], {"end": "End"})
+        # Test #include
+        self.file.add(constructor.ConstructLevel(_class="Object"))  # We need an active level to attach the include to
+        result = self.file._handle_directives(["#include", '"file.inc"'], ["#include", '"file.inc"'])
+        self.assertTrue(result)
+        self.assertEqual(self.file.last().items[1], {'include': '#include "file.inc"'})
 
-    # --- 4. Test Comments (The tricky part!) ---
+    def test_handle_statement(self):
+        """ Tests standard property assignment. """
+        self.file.add(constructor.ConstructLevel(_class="Object"))
+        self.file._handle_statement(["Health", "=", "100"])
+        self.assertEqual(self.file.last().items[1], {'statement': 'Health = 100'})
 
-    @patch('source.constructor.os.path.isfile')
-    @patch.object(constructor.ConstructFile, 'recognize_structure')
-    @patch('builtins.open', new_callable=mock_open,
-           read_data="; Main Comment\n\nObject FakeUnit // inline comment\nEnd\n")
-    def test_construct__comments(self, mock_file, mock_recognize, mock_isfile):
-        mock_isfile.return_value = True
+    # --- 2. Testing the Main Router ---
 
-        file_obj = constructor.ConstructFile("")
-        file_obj.name = "test.ini"
-        file_obj.start_level = 0
-        file_obj.delimiters = [["Object"], []]
+    @patch('os.path.isfile', return_value=True)
+    @patch('source.constructor.recognize_structure', return_value=([["Object"]], 0))
+    @patch.object(constructor.ConstructFile, '_parse_line')
+    def test_construct_router(self, mock_parse_line, mock_recognize, mock_isfile):
+        """ Tests that the main loop successfully opens the file and routes every line. """
+        fake_file_content = "Object GondorArcher\nHealth = 100\nEnd\n"
 
-        file_obj.construct()
+        with patch('builtins.open', mock_open(read_data=fake_file_content)):
+            self.file.construct()
 
-        # 1. The first comment precedes an empty line, so it should be appended to the root file object
-        self.assertEqual(file_obj[0], {"comment": "; Main Comment"})
+        # It should have called _parse_line exactly 3 times (once per line)
+        self.assertEqual(mock_parse_line.call_count, 3)
+        mock_parse_line.assert_any_call("Object GondorArcher\n")
+        mock_parse_line.assert_any_call("Health = 100\n")
+        mock_parse_line.assert_any_call("End\n")
 
-        # 2. The block should have been created with the inline comment attached to its declaration
-        level = file_obj[1]
-        self.assertIsInstance(level, constructor.ConstructLevel)
-        self.assertEqual(level[0], {"class": "Object", "name": "FakeUnit", "comment": "// inline comment"})
+
+class Test_LoadFile(unittest.TestCase):
+    """ Tests the decoupled loading logic. """
+
+    @patch('os.path.isfile', return_value=False)
+    def test_load_file_invalid_path(self, mock_isfile):
+        self.assertRaises(InternalError, constructor.load_file, "C:/fake.ini")
+
+    @patch('os.path.isfile', return_value=True)
+    @patch('source.constructor._load_structured_file')
+    def test_load_file_routing(self, mock_load_structured, mock_isfile):
+        # Should route .ini to the structured loader
+        constructor.load_file("mod.ini")
+        mock_load_structured.assert_called_once_with("mod.ini")
+
+    @patch('source.constructor._load_raw_text', return_value=("RAW TEXT", []))
+    @patch.object(constructor.ConstructFile, 'print', return_value="")
+    @patch.object(constructor.ConstructFile, 'construct')  # Bypass actual parsing
+    def test_load_structured_fallback(self, mock_construct, mock_print, mock_raw_text):
+        """ Tests that an empty or failed parse correctly falls back to raw text. """
+        # Because we patched print() to return "", the parser "failed" to generate output
+        content, delimiters = constructor._load_structured_file("test.ini")
+
+        # It should have fallen back to the raw loader
+        mock_raw_text.assert_called_once_with("test.ini")
+        self.assertEqual(content, "RAW TEXT")
 
 
 if __name__ == '__main__':
