@@ -9,6 +9,7 @@ from interface.views.mod_editor import ModEditorView
 from interface.views.file_browser import FileBrowserView
 from interface.views.file_editor import FileEditorView
 from interface.views.find_replace import FindReplaceView
+from interface.views.change_editor import ChangeEditorView
 
 
 class Application(tk.Tk):
@@ -125,6 +126,15 @@ class Application(tk.Tk):
             self.show_frame(self.last_view)
         else:
             self.show_frame("ModManagerView")  # Safe fallback
+
+    def show_changes_for_mod(self, mod: Mod):
+        """ Routes from Mod Editor to the Change Editor. """
+        if "ChangeEditorView" not in self.frames:
+            self.frames["ChangeEditorView"] = ChangeEditorView(self.main_container, self)
+
+        # Push the mod data!
+        self.frames["ChangeEditorView"].load_mod_data(mod)
+        self.show_frame("ChangeEditorView")
 
 
 if __name__ == "__main__":
