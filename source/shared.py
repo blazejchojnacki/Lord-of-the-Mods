@@ -30,10 +30,6 @@ KEY_RETURN = 'command'
 KEY_INFO = 'info'
 AESTHETIC_PATH = f'{MAIN_DIRECTORY}/aesthetic/'
 
-# # # global variable
-main_window: tkinter.Tk
-current_info: tkinter.Toplevel
-
 
 class ReactiveButton(tkinter.Button):
     """ A self-contained button that handles its own hover states and floating info. """
@@ -45,12 +41,12 @@ class ReactiveButton(tkinter.Button):
         self.tooltip_window = None
 
         # Style configuration (adjust to your shared.py constants)
-        # self.configure(
-        #     bg=ENTRY_BACKGROUND_COLOR,
-        #     fg=TEXT_COLORS[0],
-        #     activebackground=APP_BACKGROUND_COLOR,
-        #     activeforeground=TEXT_COLORS[0]
-        # )
+        self.configure(
+            bg=ENTRY_BACKGROUND_COLOR,
+            fg=TEXT_COLORS[0],
+            activebackground=APP_BACKGROUND_COLOR,
+            activeforeground=TEXT_COLORS[0]
+        )
 
         # Bind hover events
         self.bind('<Enter>', self._on_enter)

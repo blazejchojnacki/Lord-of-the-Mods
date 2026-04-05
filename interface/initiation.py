@@ -5,7 +5,6 @@ import os
 
 from source.constants import PROGRAM_NAME, MAIN_DIRECTORY, SETTINGS_FILE_PATH
 import source.core as core
-import source.shared
 from source.shared import ICON_PATH, KEY_LABEL, KEY_RETURN, KEY_INFO, invoke_choice
 from source.initiator import game_list, search_reg, default_folders_dict, execute_initiation, ensure_game_options
 
@@ -78,9 +77,6 @@ def initiate():
     initiator.iconbitmap(ICON_PATH)
     initiator.title(f'{PROGRAM_NAME} initiator')
     initiator.minsize(width=500, height=200)
-    source.shared.main_window = initiator
-    source.shared.current_info = tkinter.Toplevel(master=initiator)
-    source.shared.current_info.destroy()
     initiator_label = tkinter.Label(master=initiator, text='Looking for game paths. Please wait...')
     initiator_label.pack()
     initiator.update()
