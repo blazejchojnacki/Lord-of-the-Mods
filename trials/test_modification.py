@@ -17,7 +17,7 @@ class Test_Modification_UI(unittest.TestCase):
         result = modification.get_available_name_ui("snapshots")
 
         self.assertEqual(result, "snapshots/snap1.json")
-        mock_get_name.assert_called_once_with("snapshots", "snapshot")
+        mock_get_name.assert_called_once_with("snapshots", 'file_snapshot_')
 
     @patch('interface.modification.askstring')
     @patch('interface.modification.get_available_name')
@@ -28,7 +28,7 @@ class Test_Modification_UI(unittest.TestCase):
 
         result = modification.get_available_name_ui("snapshots")
 
-        self.assertEqual(result, "snapshots/snapshotcustom_name.json")
+        self.assertEqual("snapshots/file_snapshot_custom_name.json", result)
         mock_askstring.assert_called_once()
 
     @patch('interface.modification.askstring')
