@@ -146,6 +146,11 @@ class Application(tk.Tk):
         self.last_view = "FileBrowserView"
         self.show_frame("MoveFileView")
 
+    def open_browser_at_path(self, folderpath: str):
+        if "FileBrowserView" in self.frames:
+            self.frames["FileBrowserView"].load_path(folderpath)
+            self.show_frame("FileBrowserView")
+
 
 if __name__ == "__main__":
     app = Application()
