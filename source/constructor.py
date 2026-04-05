@@ -134,68 +134,118 @@ class ConstructFile(ConstructShared):
     delimiters: List[List[str]] = field(default_factory=list)
     start_level: int = 0
 
+    # Transient parser state variables
+    current_level: int = field(default=0, init=False)
+    last_comment: str = field(default='', init=False)
+
     def __post_init__(self):
-        """ Automatically constructs the tree if a filename is provided. """
         if self.name:
             self.construct()
 
     def construct(self):
+        """ The Main Loop: Now strictly a router, delegating all logic to helpers. """
         self.delimiters, self.start_level = recognize_structure(self.name)
-        current_level = self.start_level
-        if (os.path.isfile(self.name) and
-                (self.name.endswith('.ini') or self.name.endswith('.inc') or self.name.endswith('.str'))):
-            with open(self.name) as file_pointer:
-                raw_lines = file_pointer.readlines()
-        else:
-            raise InternalError(f'file {self.name} invalid.')
-        last_comment = ''
-        for raw_line in raw_lines:
-            words = words_signs = []
-            comment_index = -1
-            if ';' in raw_line and '//' in raw_line:
-                comment_index = min(raw_line.index(';'), raw_line.index('//'))
-            elif ';' in raw_line:
-                comment_index = raw_line.index(';')
-            elif '//' in raw_line:
-                comment_index = raw_line.index('//')
-            else:
-                words_signs = raw_line.split()
-                words = raw_line.replace('=', ' ').replace(':', ' ').split()
+        self.current_level = self.start_level
+        self.last_comment = ''
 
-            if comment_index >= 0:
-                words_signs = raw_line[:comment_index].split()
-                words = raw_line[:comment_index].replace('=', ' ').replace(':', ' ').split()
-                if last_comment:
-                    last_comment += '\n' + ' '.join(raw_line[comment_index:].split())
-                else:
-                    last_comment += ' '.join(raw_line[comment_index:].split())
-            if not words:
-                if last_comment and raw_line.strip() == '':
-                    self.last().append({'comment': last_comment})
-                    last_comment = ''
-                continue
-            if words[0] in self.delimiters[current_level]:
-                new_item = self.last().add(ConstructLevel(_class=words[0]))
-                if len(words) == 3 and self.name.endswith('.ini'):
-                    new_item.assign(index=0, name=words[1], identifier=words[2], comment=last_comment)
-                else:
-                    new_item.assign(index=0, name=' '.join(words[1:]), comment=last_comment)
-                last_comment = ''
-                current_level += 1
-            elif words[0] in INI_ENDS:
-                current_level -= 1
-                last = self.last()
-                if last_comment:
-                    last.append({'comment': last_comment})
-                    last_comment = ''
-                last.append({'end': ' '.join(words)})
-                last.is_open = False
-            elif '#define' == words[0]:
-                self.defines.append(' '.join(words_signs))
-            elif '#include' == words[0]:
-                self.last().assign(include=' '.join(words_signs))
+        if not (os.path.isfile(self.name) and self.name.endswith(('.ini', '.inc', '.str'))):
+            raise InternalError(f'file {self.name} invalid.')
+
+        with open(self.name, 'r') as file_pointer:
+            for raw_line in file_pointer:
+                self._parse_line(raw_line)
+
+    def _parse_line(self, raw_line: str):
+        """ Tokenizes the line and routes it to the correct handler. """
+        words, words_signs = self._extract_comments(raw_line)
+
+        if not words:
+            self._handle_empty_line(raw_line)
+            return
+
+        if self._handle_block_start(words):
+            return
+
+        if self._handle_block_end(words):
+            return
+
+        if self._handle_directives(words, words_signs):
+            return
+
+        self._handle_statement(words_signs)
+
+    # --- SYNTAX HANDLERS ---
+
+    def _extract_comments(self, raw_line: str) -> tuple[list, list]:
+        """ Separates the code from inline comments and updates the running comment buffer. """
+        comment_index = -1
+        if ';' in raw_line and '//' in raw_line:
+            comment_index = min(raw_line.index(';'), raw_line.index('//'))
+        elif ';' in raw_line:
+            comment_index = raw_line.index(';')
+        elif '//' in raw_line:
+            comment_index = raw_line.index('//')
+
+        if comment_index >= 0:
+            words_signs = raw_line[:comment_index].split()
+            words = raw_line[:comment_index].replace('=', ' ').replace(':', ' ').split()
+            comment_text = ' '.join(raw_line[comment_index:].split())
+            self.last_comment += ('\n' if self.last_comment else '') + comment_text
+        else:
+            words_signs = raw_line.split()
+            words = raw_line.replace('=', ' ').replace(':', ' ').split()
+
+        return words, words_signs
+
+    def _handle_empty_line(self, raw_line: str):
+        """ Appends floating comments when an empty line acts as a separator. """
+        if self.last_comment and raw_line.strip() == '':
+            self.last().append({'comment': self.last_comment})
+            self.last_comment = ''
+
+    def _handle_block_start(self, words: list) -> bool:
+        """ Detects and opens a new ConstructLevel if the word matches a delimiter. """
+        if words[0] in self.delimiters[self.current_level]:
+            new_item = self.last().add(ConstructLevel(_class=words[0]))
+
+            if len(words) == 3 and self.name.endswith('.ini'):
+                new_item.assign(index=0, name=words[1], identifier=words[2], comment=self.last_comment)
             else:
-                self.last().assign(statement=' '.join(words_signs))
+                new_item.assign(index=0, name=' '.join(words[1:]), comment=self.last_comment)
+
+            self.last_comment = ''
+            self.current_level += 1
+            return True
+        return False
+
+    def _handle_block_end(self, words: list) -> bool:
+        """ Detects closing keywords (e.g. 'End') and finalizes the active level. """
+        if words[0] in INI_ENDS:
+            self.current_level -= 1
+            last = self.last()
+
+            if self.last_comment:
+                last.append({'comment': self.last_comment})
+                self.last_comment = ''
+
+            last.append({'end': ' '.join(words)})
+            last.is_open = False
+            return True
+        return False
+
+    def _handle_directives(self, words: list, words_signs: list) -> bool:
+        """ Handles Preprocessor directives like #define and #include. """
+        if words[0] == '#define':
+            self.defines.append(' '.join(words_signs))
+            return True
+        if words[0] == '#include':
+            self.last().assign(include=' '.join(words_signs))
+            return True
+        return False
+
+    def _handle_statement(self, words_signs: list):
+        """ If it's not a block, end, or directive, it's a standard property assignment. """
+        self.last().assign(statement=' '.join(words_signs))
 
     def print(self) -> str:
         output = ''
@@ -218,44 +268,40 @@ class ConstructFile(ConstructShared):
 
 
 def load_file(full_path):
-    """
-
-    :param full_path: absolute path of the file to load into the text editor
-    :return: the file content
-    """
+    """ Loads a file for the text editor, parsing it structurally if supported. """
+    if not full_path:
+        raise InternalError('empty path.')
     if not os.path.isfile(full_path):
         raise InternalError(f'wrong path: {full_path}')
-    elif full_path.endswith('.ini') or full_path.endswith('.str') or full_path.endswith('.inc'):
-        try:
-            file_object = ConstructFile(name=full_path)
-            file_content = file_object.print()
-            try:
-                file_levels = file_object.delimiters
-            except InternalError as error:
-                return error.message, []
-        except IndexError:
-            file_content = ''
-            file_levels = []
-        if not file_content:
-            with open(full_path) as loaded_file:
-                file_content = loaded_file.read()
-                return file_content, []
-        else:
-            return file_content, file_levels
+
+    if full_path.endswith(('.ini', '.str', '.inc')):
+        return _load_structured_file(full_path)
     elif full_path.endswith('.txt'):
-        with open(full_path) as loaded_file:
-            file_content = loaded_file.read()
-            return file_content, []
-    # OPTIMIZE: Enable reading and extracting .BIGs
-    # elif full_path.endswith('.big'):
-    #     file_content = ''
-    #     with open(full_path) as loaded_file:
-    #         for line in loaded_file:
-    #             file_content += loaded_file.readline()
-    elif not full_path:
-        raise InternalError(f'empty path.')
+        return _load_raw_text(full_path)
     else:
         raise InternalError(f'wrong path or unsupported file type: {full_path}')
+
+
+def _load_structured_file(full_path) -> tuple:
+    """ Helper: Attempts to construct the file tree, falling back to raw text on syntax errors. """
+    try:
+        file_object = ConstructFile(name=full_path)
+        file_content = file_object.print()
+
+        if not file_content:  # If parsing yielded nothing, fallback to raw
+            return _load_raw_text(full_path)
+
+        return file_content, file_object.delimiters
+
+    except (InternalError, IndexError):
+        # Fallback to plain text if structure recognition or parsing fails
+        return _load_raw_text(full_path)
+
+
+def _load_raw_text(full_path) -> tuple:
+    """ Helper: Simply reads the raw text from the file without parsing. """
+    with open(full_path, 'r') as loaded_file:
+        return loaded_file.read(), []
 
 
 def load_directories(full_path, mode=0):
