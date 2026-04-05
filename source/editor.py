@@ -308,6 +308,7 @@ def move_file(full_path, to_folder, mode=0):
     return output
 
 
+# # # to be decommissioned and replaced by spot_duplicates_...
 def duplicates_find(of_object_or_file, in_file_or_directory=None):
     """
     Finds the duplicates in a given file or directory. Is recurrent.

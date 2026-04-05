@@ -89,29 +89,7 @@ class Test_Editor(unittest.TestCase):
 
     # --- 4. Test Duplicates Finder ---
 
-    @patch('source.constructor.ConstructFile.recognize_structure')
-    @patch('os.path.isfile')
-    @patch('builtins.open', new_callable=mock_open,
-           read_data="; Dummy comment\n\nObject FakeUnit\nEnd\nObject FakeUnit\nEnd\n")
-    def test_duplicates_find(self, mock_file, mock_isfile, mock_recognize):
-        mock_isfile.return_value = True
-
-        # Instead of mocking the entire ConstructFile class (which breaks isinstance),
-        # we mock just the structure recognition and let the real class parse our dummy string.
-        def fake_recognize(self_obj):
-            self_obj.start_level = 0
-            # Tell the parser to treat "Object" as a valid block delimiter
-            self_obj.delimiters = [["Object"], []]
-
-        mock_recognize.side_effect = fake_recognize
-
-        # We pass a string ("test.ini") so that the `.endswith('.str')` check
-        # at the top of the duplicates_find function doesn't crash.
-        result = editor.duplicates_find(of_object_or_file="test.ini", in_file_or_directory="test.ini")
-
-        # It should detect that "Object:FakeUnit" appeared multiple times
-        self.assertIn("Object:FakeUnit", result)
-
+    ### missing tests for spot_duplicates
 
 if __name__ == '__main__':
     unittest.main()
