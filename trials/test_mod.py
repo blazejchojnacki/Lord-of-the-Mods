@@ -252,30 +252,17 @@ class Test_LibraryManager(unittest.TestCase):
 
     def test_sort_mods(self):
         """ Tests the hierarchical sorting logic based on overrides. """
-        mod_a = MagicMock()
-        mod_a.name = "ModA"
-        mod_a.overrides = ""
-
-        mod_b = MagicMock()
-        mod_b.name = "ModB"
-        mod_b.overrides = "ModA"
-
-        mod_c = MagicMock()
-        mod_c.name = "ModC"
-        mod_c.overrides = "ModB"
+        # We use REAL Mod instances to test our new dynamic attribute magic!
+        mod_a = Mod(name="ModA", overrides="")
+        mod_b = Mod(name="ModB", overrides="ModA")
+        mod_c = Mod(name="ModC", overrides="ModB")
 
         mods_list = [mod_a, mod_b, mod_c]
 
         sorted_dict = LibraryManager.sort_mods(Property.OVERRIDES, mods_list)
 
-        # FIX 3: The logic maps the child's name to the string-index of its parent in the list.
-        # ModB overrides ModA (which is at index 0)
         self.assertEqual(sorted_dict["ModB"], "0")
-
-        # ModC overrides ModB (which is at index 1)
         self.assertEqual(sorted_dict["ModC"], "1")
-
-        # ModA overrides nothing, so it should not be in the dictionary
         self.assertNotIn("ModA", sorted_dict)
 
     @patch('os.path.isfile', return_value=True)

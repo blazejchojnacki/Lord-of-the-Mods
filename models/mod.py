@@ -1,12 +1,12 @@
 import os
 import json
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, ClassVar
 
 from source.messaging import InternalError, log
 import source.core as core
 from source.constants import Property, DEFINITION_CLASSES, Transfer, Change, MOD_DEF_FILE_NAME, MAIN_DIRECTORY
-from source.modificator import initiate_comparison, hash_file, transfer_switch
+from source.modificator import initiate_comparison, hash_file, transfer_switch, TEST
 
 
 @dataclass
@@ -24,35 +24,46 @@ class Mod:
     changes: Dict[str, Any] = field(default_factory=dict)
     directory: str = ""
 
+    # --- THE BRIDGE ---
+    # Maps the dynamic Property string (e.g., 'ancestor') to the hardcoded Python attribute ('overrides')
+    _PROPERTY_MAP: ClassVar[dict] = {
+        Property.TRANSFER_TYPE: 'transfer_type',
+        Property.NAME: 'name',
+        Property.GAME: 'game',
+        Property.LAUNCH: 'launch',
+        Property.ACTIVE: 'active',
+        Property.OVERRIDES: 'overrides',
+        Property.OVERRODE_BY: 'overrode_by',
+        Property.DESCRIPTION: 'description',
+        Property.CHANGES: 'changes'
+    }
+
+    def __getattr__(self, item):
+        """ Intercepts dynamic lookups like `getattr(mod, Property.OVERRIDES)` """
+        if item in self.__class__._PROPERTY_MAP:
+            # If item is 'ancestor', it maps to 'overrides' and returns self.overrides safely!
+            return getattr(self, self.__class__._PROPERTY_MAP[item])
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{item}'")
+
+    def __setattr__(self, key, value):
+        """ Intercepts dynamic sets like `setattr(mod, Property.OVERRIDES, value)` """
+        if hasattr(self.__class__, '_PROPERTY_MAP') and key in self.__class__._PROPERTY_MAP:
+            super().__setattr__(self.__class__._PROPERTY_MAP[key], value)
+        else:
+            super().__setattr__(key, value)
+
     @classmethod
     def from_dict(cls, data: dict, directory: str = "") -> 'Mod':
-        """ Creates a Mod instance from a loaded JSON dictionary. """
-        return cls(
-            transfer_type=data.get(Property.TRANSFER_TYPE, ""),
-            name=data.get(Property.NAME, ""),
-            game=data.get(Property.GAME, ""),
-            launch=data.get(Property.LAUNCH, ""),
-            active=data.get(Property.ACTIVE, False),
-            overrides=data.get(Property.OVERRIDES, ""),
-            overrode_by=data.get(Property.OVERRODE_BY, ""),
-            description=data.get(Property.DESCRIPTION, ""),
-            changes=data.get(Property.CHANGES, {}),
-            directory=directory
-        )
+        """ Automatically maps all JSON keys to the correct class attributes! """
+        kwargs = {attr_name: data[prop_key]
+                  for prop_key, attr_name in cls._PROPERTY_MAP.items()
+                  if prop_key in data}
+        return cls(directory=directory, **kwargs)
 
     def to_dict(self) -> dict:
-        """ Converts the Mod instance back into a dictionary for JSON saving. """
-        return ({
-            Property.TRANSFER_TYPE: self.transfer_type,
-            Property.NAME: self.name,
-            Property.GAME: self.game,
-            Property.LAUNCH: self.launch,
-            Property.ACTIVE: self.active,
-            Property.OVERRIDES: self.overrides,
-            Property.OVERRODE_BY: self.overrode_by,
-            Property.DESCRIPTION: self.description,
-            Property.CHANGES: self.changes
-        })
+        """ Automatically builds the JSON dict using the Property constants! """
+        return {prop_key: getattr(self, attr_name)
+                for prop_key, attr_name in self._PROPERTY_MAP.items()}
 
     @classmethod
     def create(cls, name: str, changes_source: str = '', **kwargs) -> 'Mod':
@@ -297,7 +308,7 @@ class Mod:
 
         return plan
 
-    def detach(self, transfer: Transfer = Transfer.COPY, check_type: str = 'hash, heir', dry_run: bool = False) -> bool:
+    def detach(self, transfer: Transfer = Transfer.COPY, check_type: str = 'hash, heir', dry_run: bool = False):
         """ Formally mod_reverse(). Detaches the mod, routing files back to the library/archive. """
         error_sensitive = (check_type != 'pass')
 
