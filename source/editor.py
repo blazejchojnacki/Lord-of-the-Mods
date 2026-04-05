@@ -368,9 +368,11 @@ def duplicates_find(of_object_or_file, in_file_or_directory=None):
 def spot_duplicates_in_file(file_path: str) -> str:
     # 1. Flatten delimiters into an O(1) lookup set.
     # This grabs all valid block starters (like 'Object', 'Weapon', 'StringKey')
-    valid_starters = {word for group in s.INI_DELIMITERS for level in group for word in level}
-    if hasattr(s, 'STR_DELIMITERS'):
-        valid_starters.update({word for group in s.STR_DELIMITERS for level in group for word in level})
+    delimiters, start_level = c.recognize_structure(file_path)
+    if file_path.endswith('.ini') or file_path.endswith('.str') or file_path.endswith('.inc'):
+        valid_starters = {word for word in delimiters[start_level]}
+    else:
+        raise InternalError("invalid input")
 
     # 2. defaultdict automatically creates a list for new keys.
     # We will map: "Object FakeUnit" -> ["10", "45"]
@@ -381,7 +383,7 @@ def spot_duplicates_in_file(file_path: str) -> str:
         for line_index, raw_line in enumerate(file_stream):
 
             # Efficiently find the earliest comment sign and slice the string
-            comment_idx = min([raw_line.find(c) for c in INI_COMMENTS if c in raw_line] + [len(raw_line)])
+            comment_idx = min([raw_line.find(com) for com in INI_COMMENTS if com in raw_line] + [len(raw_line)])
             clean_line = raw_line[:comment_idx].strip()
 
             if not clean_line:
@@ -409,7 +411,7 @@ def spot_duplicates_in_file(file_path: str) -> str:
     output = ""
     for title, line_numbers in tracker.items():
         if len(line_numbers) > 1:
-            output += f"\tline {', '.join(line_numbers)} {title}\n"
+            output += f"\t{title} -- line {', '.join(line_numbers)};\n"
 
     if output:
         return f"{datetime.now()} command: find duplicates in {file_path}:\n{output}"
