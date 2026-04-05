@@ -6,7 +6,7 @@ from collections import defaultdict
 
 from source.messaging import log, InternalError, InternalWarning, internal_message, get_custom_logger
 from source.constants import INI_COMMENTS
-import source.constructor as c
+import source.constructor as constructor
 
 # FUTURE: automated proposition of #include creation or child adopting
 
@@ -98,7 +98,7 @@ def text_find_multiple(find_list: list, scope='', exceptions=None, not_used=None
 def find_objects_in_str_file(file, scope, exceptions, used_file='reference_RotWK_lotr_str.txt',
                              unused_file='reference_RotWK_lotr_str_unused.txt'):
     output_log = get_custom_logger("find_objects_in_str_file", unused_file)
-    items = c.ConstructFile(file)
+    items = constructor.ConstructFile(file)
     if file.endswith('.str'):
         titles_list = []
         for item in items:
@@ -143,7 +143,7 @@ def text_find_replace(find, replace_with=None, scope='', exceptions=None, mode='
                 return output
     if os.path.isfile(scope):
         try:
-            # file_content = c.load_file(scope)  # faster to read without reformatting
+            # file_content = constructor.load_file(scope)  # faster to read without reformatting
             with open(scope) as file_buffer:
                 file_content = file_buffer.read()
             if file_content.casefold().count(find.casefold()) > 0:
@@ -327,12 +327,12 @@ def duplicates_find(of_object_or_file, in_file_or_directory=None):
     elif os.path.isdir(in_file_or_directory):
         for file_or_directory in os.listdir(in_file_or_directory):
             output += duplicates_find(of_object_or_file, file_or_directory)
-    if isinstance(of_object_or_file, c.ConstructLevel):
+    if isinstance(of_object_or_file, constructor.ConstructLevel):
         items_to_look_for = of_object_or_file
-    elif isinstance(of_object_or_file, c.ConstructFile):
+    elif isinstance(of_object_or_file, constructor.ConstructFile):
         items_to_look_for = of_object_or_file
     elif os.path.isfile(of_object_or_file):
-        items_to_look_for = c.ConstructFile(of_object_or_file)
+        items_to_look_for = constructor.ConstructFile(of_object_or_file)
         if of_object_or_file.endswith('.str'):
             space = ':'
     else:
@@ -369,7 +369,7 @@ def duplicates_find(of_object_or_file, in_file_or_directory=None):
 def spot_duplicates_in_file(file_path: str) -> str:
     # 1. Flatten delimiters into an O(1) lookup set.
     # This grabs all valid block starters (like 'Object', 'Weapon', 'StringKey')
-    delimiters, start_level = c.recognize_structure(file_path)
+    delimiters, start_level = constructor.recognize_structure(file_path)
     if file_path.endswith('.ini') or file_path.endswith('.str') or file_path.endswith('.inc'):
         valid_starters = {word for word in delimiters[start_level]}
     else:
@@ -426,7 +426,7 @@ def extract_titles(source_file: str) -> dict:
     completely bypassing the slow ConstructFile parsing.
     """
     try:
-        delimiters, start_level = c.recognize_structure(source_file)
+        delimiters, start_level = constructor.recognize_structure(source_file)
     except InternalError:
         return dict()  # Safely skip if functional file or unsupported
 
@@ -468,7 +468,7 @@ def spot_duplicates_from_file_in_file(source_file: str, target_file: str) -> str
     if not source_titles:
         return output + "No valid root objects found in source file.\n"
     try:
-        delimiters, start_level = c.recognize_structure(target_file)
+        delimiters, start_level = constructor.recognize_structure(target_file)
     except InternalError:
         return ""  # Skip if functional file
 
@@ -542,12 +542,12 @@ reference_value_dict = {
 def link_check(construct):
     if isinstance(construct, str):
         if os.path.isfile(construct):
-            construct = c.ConstructFile(construct)
+            construct = constructor.ConstructFile(construct)
             link_check(construct)
         else:
             raise InternalError(f"invalid path {construct}")
     for element in construct:
-        if isinstance(element, c.ConstructLevel):
+        if isinstance(element, constructor.ConstructLevel):
             link_check(element)
         elif isinstance(element, dict):
             if 'statement' in element:
