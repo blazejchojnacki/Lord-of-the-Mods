@@ -173,6 +173,72 @@ def snapshot_compare(snap_anterior, snap_posterior, return_type: Literal['path',
         return comparison_path
 
 
+def map_changes_from_direct_path(changes_source):
+    """ Maps changes when the source is explicitly a directory path. """
+    changes = {}
+    new_snapshot = snapshot_take(game_paths=[changes_source.split('/')[-1]])
+    snapshot_save(game_snapshot=new_snapshot, name=changes_source.split('/')[-1])
+    current_files = hash_directory(changes_source)
+    for new_file in current_files:
+        if len(new_file) > 0:
+            changes[new_file] = [Change.ADDED, current_files[new_file]]
+    return True, changes
+
+
+def map_changes_from_directory(mod_directory, start_mod, files_to_remove):
+    """ Maps changes by comparing a mod directory against a start mod directory. """
+    if not start_mod:
+        raise InternalError('start_mod not provided')
+    changes = {}
+    active = False
+    new_files_dict = hash_directory(mod_directory, path_to_omit=mod_directory, skip_first_level_files=True)
+    if start_mod and new_files_dict:
+        active = False
+        current_files = hash_directory(
+            start_mod, path_to_omit=f'{start_mod[:start_mod.rfind("/")]}')
+        for new_file in new_files_dict:
+            if new_file in current_files:
+                changes[new_file] = [Change.CHANGED, new_files_dict[new_file], current_files[new_file]]
+            else:
+                changes[new_file] = [Change.ADDED, new_files_dict[new_file]]
+    elif start_mod and not new_files_dict:
+        active = True
+        current_files = hash_directory(start_mod, path_to_omit=MAIN_DIRECTORY)
+        for new_file in current_files:
+            changes[new_file] = [Change.ADDED, current_files[new_file]]
+    if files_to_remove:
+        for file_path in files_to_remove:
+            changes[file_path] = [Change.REMOVED, hash_file(file_path)]
+    new_snapshot = snapshot_take(game_paths=[mod_directory])
+    snapshot_save(new_snapshot, name=mod_directory.split('/')[-1])
+    return active, changes
+
+
+def map_changes_from_comparison(selected_comparison):
+    """ Maps changes using a previously generated comparison file. """
+    if selected_comparison and os.path.isfile(selected_comparison):
+        return evaluate_changes(selected_comparison)
+    raise InternalError('comparison not selected')
+
+
+def map_changes_from_snapshot(mod_directory, selected_snapshot):
+    """ Maps changes by taking a new snapshot and comparing it against an old one. """
+    if selected_snapshot and os.path.isfile(selected_snapshot):
+        with open(selected_snapshot) as snapshot_buffer:
+            snapshot_dict = json.load(snapshot_buffer)
+        game_paths = []
+        for path_key in snapshot_dict:
+            if 'date' == path_key:
+                continue
+            elif path_key.replace('\\', '/').split('/')[1] not in game_paths:
+                game_paths.append(path_key.replace('\\', '/').split('/')[1])
+        new_snapshot = snapshot_take(game_paths=game_paths)
+        snapshot_save(new_snapshot, name=mod_directory.split('/')[-1])
+        comparison_dict = snapshot_compare(selected_snapshot, new_snapshot, return_type='dict')
+        return evaluate_changes(comparison_dict)
+    raise InternalError('snapshot not selected')
+
+
 def initiate_comparison(mod_directory, start_mod='', changes_source='directory', files_to_remove=None,
                         selected_comparison=None, selected_snapshot=None):
     """
@@ -190,60 +256,18 @@ def initiate_comparison(mod_directory, start_mod='', changes_source='directory',
     """
     if not os.path.isdir(mod_directory):
         raise InternalError('provided directory is not correct')
-    changes = {}
-    active = False
+
     if os.path.isdir(changes_source):
-        active = True
-        new_snapshot = snapshot_take(game_paths=[changes_source.split('/')[-1]])
-        snapshot_save(game_snapshot=new_snapshot, name=changes_source.split('/')[-1])
-        current_files = hash_directory(changes_source)
-        for new_file in current_files:
-            if len(new_file) > 0:
-                changes[new_file] = [Change.ADDED, current_files[new_file]]
+        active, changes = map_changes_from_direct_path(changes_source)
     elif changes_source == 'directory':
-        if not start_mod:
-            raise InternalError('start_mod not provided')
-        new_files_dict = hash_directory(mod_directory, path_to_omit=mod_directory, skip_first_level_files=True)
-        if start_mod and new_files_dict:
-            active = False
-            current_files = hash_directory(
-                start_mod, path_to_omit=f'{start_mod[:start_mod.rfind("/")]}')
-            for new_file in new_files_dict:
-                if new_file in current_files:
-                    changes[new_file] = [Change.CHANGED, new_files_dict[new_file], current_files[new_file]]
-                else:
-                    changes[new_file] = [Change.ADDED, new_files_dict[new_file]]
-        elif start_mod and not new_files_dict:
-            active = True
-            current_files = hash_directory(start_mod, path_to_omit=MAIN_DIRECTORY)
-            for new_file in current_files:
-                changes[new_file] = [Change.ADDED, current_files[new_file]]
-        if files_to_remove:
-            for file_path in files_to_remove:
-                changes[file_path] = [Change.REMOVED, hash_file(file_path)]
-        new_snapshot = snapshot_take(game_paths=[mod_directory])
-        snapshot_save(new_snapshot, name=mod_directory.split('/')[-1])
+        active, changes = map_changes_from_directory(mod_directory, start_mod, files_to_remove)
     elif changes_source == 'comparison':
-        if selected_comparison and os.path.isfile(selected_comparison):
-            active, changes = evaluate_changes(selected_comparison)
-        else:
-            raise InternalError('comparison not selected')
+        active, changes = map_changes_from_comparison(selected_comparison)
     elif changes_source == 'snapshot':
-        if selected_snapshot and os.path.isfile(selected_snapshot):
-            with open(selected_snapshot) as snapshot_buffer:
-                snapshot_dict = json.load(snapshot_buffer)
-            game_paths = []
-            for path_key in snapshot_dict:
-                if 'date' == path_key:
-                    continue
-                elif path_key.replace('\\', '/').split('/')[1] not in game_paths:
-                    game_paths.append(path_key.replace('\\', '/').split('/')[1])
-            new_snapshot = snapshot_take(game_paths=game_paths)
-            snapshot_save(new_snapshot, name=mod_directory.split('/')[-1])
-            comparison_dict = snapshot_compare(selected_snapshot, new_snapshot, return_type='dict')
-            active, changes = evaluate_changes(comparison_dict)
-        else:
-            raise InternalError('snapshot not selected')
+        active, changes = map_changes_from_snapshot(mod_directory, selected_snapshot)
+    else:
+        raise InternalError(f'unknown changes_source: {changes_source}')
+
     log.info(f'comparison generated for {mod_directory}')
     return active, changes
 
