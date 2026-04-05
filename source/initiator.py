@@ -26,8 +26,8 @@ else:
             "Registry": "SOFTWARE\\WOW6432Node\\Electronic Arts",
             "Roaming": "/AppData/Roaming/My Battle for Middle-earth(tm) II Files",
             "RoamingFiles": [
-                "/Options.ini",
-                "/Worldbuilder.ini"
+                "Options.ini",
+                "Worldbuilder.ini"
             ],
             "EXE": "lotrbfme2.exe"
         },
@@ -36,8 +36,8 @@ else:
             "Registry": "SOFTWARE\\WOW6432Node\\Electronic Arts",
             "Roaming": "/AppData/Roaming/My The Lord of the Rings, The Rise of the Witch-king Files",
             "RoamingFiles": [
-                "/Options.ini",
-                "/Worldbuilder.ini"
+                "Options.ini",
+                "Worldbuilder.ini"
             ],
             "EXE": "lotrbfme2ep1.exe"
         }

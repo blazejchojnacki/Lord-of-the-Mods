@@ -21,7 +21,7 @@ class Test_Initiator(unittest.TestCase):
                 "Name": "Test Game",
                 "Registry": "SOFTWARE\\Fake\\Registry",
                 "Roaming": "/AppData/Roaming/Test Game",
-                "RoamingFiles": ["/Options.ini"],
+                "RoamingFiles": ["Options.ini"],
                 "EXE": "testgame.exe"
             }
         ]
