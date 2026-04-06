@@ -18,6 +18,10 @@ class FileBrowserView(tk.Frame):
 
         self._build_ui()
 
+    def on_show(self):
+        if hasattr(self.controller, 'set_log_update'):
+            self.controller.set_log_update("File browser loaded")
+
     def _build_ui(self):
         """ Constructs the browser layout. """
         # --- Top Section: Navigation Bar ---

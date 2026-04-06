@@ -22,6 +22,10 @@ class FileEditorView(tk.Frame):
         self._build_ui()
         self._setup_bindings()
 
+    def on_show(self):
+        if hasattr(self.controller, 'set_log_update'):
+            self.controller.set_log_update("File editor loaded")
+
     def _build_ui(self):
         """ Constructs the editor layout. """
         # --- Top Section: Navigation & Save ---

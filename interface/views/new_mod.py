@@ -17,6 +17,10 @@ class NewModView(tk.Frame):
         self.source_var = tk.StringVar(value="nothing")
         self._build_ui()
 
+    def on_show(self):
+        if hasattr(self.controller, 'set_log_update'):
+            self.controller.set_log_update("Mod creator loaded")
+
     def _build_ui(self):
         # --- Navigation ---
         frame_top = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
@@ -97,7 +101,6 @@ class NewModView(tk.Frame):
         try:
             if hasattr(self.controller, 'set_log_update'):
                 self.controller.set_log_update(f"Creating mod {mod_name}. Please wait...")
-                self.update()  # Force UI to update before heavy processing
 
             # Create the Mod using your core logic!
             new_mod = Mod.create(name=mod_name, changes_source=source_type)

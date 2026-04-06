@@ -24,6 +24,10 @@ class ChangeEditorView(tk.Frame):
         self._build_ui()
         self._build_context_menu()
 
+    def on_show(self):
+        if hasattr(self.controller, 'set_log_update'):
+            self.controller.set_log_update("Change editor loaded")
+
     def _build_ui(self):
         """ Constructs the dual-list layout for current and staged changes. """
         # --- Top Section: Navigation ---

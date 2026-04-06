@@ -35,6 +35,10 @@ class ModEditorView(tk.Frame):
 
         self._build_ui()
 
+    def on_show(self):
+        if hasattr(self.controller, 'set_log_update'):
+            self.controller.set_log_update("Mod editor loaded")
+
     def _build_ui(self):
         """ Constructs the form layout. """
         # --- Top Section: Title & Actions ---

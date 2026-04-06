@@ -19,6 +19,10 @@ class FindReplaceView(tk.Frame):
 
         self._build_ui()
 
+    def on_show(self):
+        if hasattr(self.controller, 'set_log_update'):
+            self.controller.set_log_update("Find/replace loaded")
+
     def _build_ui(self):
         """ Constructs the unified Find & Replace layout. """
         # --- Top Section: Navigation ---

@@ -48,6 +48,8 @@ class SettingsView(tk.Frame):
     def on_show(self):
         """ Called by the Main Window automatically when this view is displayed. """
         self._populate_fields()
+        if hasattr(self.controller, 'set_log_update'):
+            self.controller.set_log_update("Settings loaded")
 
     def _populate_fields(self):
         """ Reads from core logic and fills the UI. """
@@ -68,6 +70,8 @@ class SettingsView(tk.Frame):
             formatted_path = core.state.make_path_relative(path)
             self.entries[key].delete(0, tk.END)
             self.entries[key].insert(0, formatted_path)
+            if hasattr(self.controller, 'set_log_update'):
+                self.controller.set_log_update("path replaced")
 
     def _browse_path_add(self, key):
         """ Pure UI Interaction """
@@ -75,6 +79,8 @@ class SettingsView(tk.Frame):
         if path:
             formatted_path = core.state.make_path_relative(path)
             self.entries[key].insert(tk.END, f", {formatted_path}")
+            if hasattr(self.controller, 'set_log_update'):
+                self.controller.set_log_update("path added")
 
     def _save_settings(self):
         """ Collects UI data and hands it to the core logic. """
@@ -88,7 +94,8 @@ class SettingsView(tk.Frame):
 
         # Hand off to the core logic!
         core.state.save(new_settings)
-        print("Settings Saved Successfully")
+        if hasattr(self.controller, 'set_log_update'):
+            self.controller.set_log_update("Settings saved successfully")
 
     def _has_unsaved_changes(self) -> bool:
         """ Compares current UI values against the saved core state. """

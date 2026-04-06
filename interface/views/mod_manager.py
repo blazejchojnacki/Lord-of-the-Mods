@@ -72,6 +72,8 @@ class ModManagerView(tk.Frame):
         """ Called by the controller when this view is displayed to refresh data. """
         self._refresh_lists()
         self._hide_context_buttons()
+        if hasattr(self.controller, 'set_log_update'):
+            self.controller.set_log_update("Mod manager loaded")
 
     def _hide_context_buttons(self):
         """ Hides context-sensitive buttons until a mod is clicked. """

@@ -19,6 +19,10 @@ class MoveFileView(tk.Frame):
 
         self._build_ui()
 
+    def on_show(self):
+        if hasattr(self.controller, 'set_log_update'):
+            self.controller.set_log_update("File mover loaded")
+
     def _build_ui(self):
         # --- Navigation ---
         frame_top = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)

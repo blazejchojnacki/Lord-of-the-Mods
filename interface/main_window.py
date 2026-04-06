@@ -39,6 +39,13 @@ class Application(tk.Tk):
         self.main_container.pack(fill="both", expand=True, padx=10, pady=10)
         self.last_view = ''
 
+        self.log_panel = tk.Text(
+            self, height=2,
+            bg=shared.ENTRY_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[1],
+            font=shared.FONT_TEXT, state="disabled"
+        )
+        self.log_panel.pack(fill="x", padx=10, pady=(0, 10))
+
         # Dictionary to cache our views so we don't rebuild them every click
         self.frames = {}
 
@@ -129,6 +136,14 @@ class Application(tk.Tk):
         # Tell the view it just became active so it can refresh its data
         if hasattr(frame, "on_show"):
             frame.on_show()
+
+    def set_log_update(self, message: str):
+        """ Replaces the content of the global log field with a given message. """
+        self.log_panel.configure(state="normal")
+        self.log_panel.delete("1.0", tk.END)
+        self.log_panel.insert("end", str(message))
+        self.log_panel.configure(state="disabled")
+        self.update()
 
     def open_mod_editor(self, mod: Mod):
         # 1. Ensure the view exists
