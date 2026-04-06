@@ -1,53 +1,21 @@
 import os
 import tkinter as tk
-from tkinter import ttk
 from dataclasses import fields
 
 from source.messaging import log, InternalError
 import source.core as core
-import source.shared as s
+import source.shared as shared
 from source.constants import Property, MOD_DEF_FILE_NAME, Setting
-from models.mod import Mod, LibraryManager
+from models.mod import LibraryManager
 
 MOD_COLUMNS = {Property.NAME: 1, Property.TRANSFER_TYPE: 1, Property.DESCRIPTION: 5}
-
-
-class ColumnedListbox(ttk.Treeview):
-    """ A Tk/Tcl Treeview-based class with predefined columns. """
-
-    def __init__(self, master, width=s.LIST_WIDTH, height=s.UNIT_HEIGHT * 3, columns_dict=None, show='tree headings'):
-        super().__init__(master=master, height=height, show=show)
-        self.width = width * 6
-        if columns_dict:
-            self.set_columns(columns_dict)
-
-    def set_columns(self, columns_dict):
-        self.configure(columns=list(columns_dict.keys()))
-        total_quotient = sum(list(columns_dict.values()), 1)
-        column_unit_width = int(self.width / total_quotient)
-        self.column('#0', width=column_unit_width)
-        for column_name in columns_dict:
-            self.heading(column_name, text=column_name)
-            self.column(column_name, width=column_unit_width * columns_dict[column_name])
-
-    def open_children(self):
-        for search_index in range(10):
-            self.open_children_recursive(parent=str(search_index))
-
-    def open_children_recursive(self, parent):
-        try:
-            self.item(parent, open=True)
-            for child in self.get_children(parent):
-                self.open_children_recursive(child)
-        except tk.TclError:
-            pass
 
 
 class ModManagerView(tk.Frame):
     """ The View responsible for displaying and managing active and idle mods. """
 
     def __init__(self, parent, controller):
-        super().__init__(parent, bg=s.APP_BACKGROUND_COLOR)
+        super().__init__(parent, bg=shared.APP_BACKGROUND_COLOR)
         self.controller = controller
 
         self.global_mods = []
@@ -58,43 +26,44 @@ class ModManagerView(tk.Frame):
     def _build_ui(self):
         """ Constructs the layout using fluid packing. """
         # --- Top Section: Idle Mods ---
-        frame_idle = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_idle = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_idle.pack(fill="both", expand=True, pady=(0, 5))
 
-        lbl_idle = tk.Label(frame_idle, text="available mods:", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                            font=s.FONT_TEXT)
+        lbl_idle = tk.Label(frame_idle, text="available mods:", bg=shared.APP_BACKGROUND_COLOR,
+                            fg=shared.TEXT_COLORS[0], font=shared.FONT_TEXT)
         lbl_idle.pack(anchor="w")
 
-        self.tree_idle = ColumnedListbox(frame_idle, width=s.LIST_WIDTH, height=8, columns_dict=MOD_COLUMNS)
+        self.tree_idle = shared.ColumnedListbox(frame_idle, width=shared.LIST_WIDTH, height=8, columns_dict=MOD_COLUMNS)
         self.tree_idle.pack(fill="both", expand=True)
         self.tree_idle.bind('<<TreeviewSelect>>', self._on_select_idle)
         self.tree_idle.bind('<Double-1>', self._on_double_click)
 
         # --- Middle Section: Action Buttons ---
-        self.frame_buttons = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        self.frame_buttons = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         self.frame_buttons.pack(fill="x", pady=10)
 
         # We pre-create all buttons, but only pack the ones relevant to the selection
-        self.btn_new = s.ReactiveButton(self.frame_buttons, text='NEW MOD', command=self._on_new_mod)
-        self.btn_attach = s.ReactiveButton(self.frame_buttons, text='ATTACH MOD', command=self._on_attach)
-        self.btn_detach = s.ReactiveButton(self.frame_buttons, text='DETACH MOD', command=self._on_detach)
-        self.btn_reload = s.ReactiveButton(self.frame_buttons, text='RELOAD MOD', command=self._on_reload)
-        self.btn_browse = s.ReactiveButton(self.frame_buttons, text='OPEN MOD', command=self._on_browse)
-        self.btn_edit = s.ReactiveButton(self.frame_buttons, text='EDIT MOD DATA', command=self._on_edit)
-        self.btn_launch = s.ReactiveButton(self.frame_buttons, text='LAUNCH', command=self._on_launch)
+        self.btn_new = shared.ReactiveButton(self.frame_buttons, text='NEW MOD', command=self._on_new_mod)
+        self.btn_attach = shared.ReactiveButton(self.frame_buttons, text='ATTACH MOD', command=self._on_attach)
+        self.btn_detach = shared.ReactiveButton(self.frame_buttons, text='DETACH MOD', command=self._on_detach)
+        self.btn_reload = shared.ReactiveButton(self.frame_buttons, text='RELOAD MOD', command=self._on_reload)
+        self.btn_browse = shared.ReactiveButton(self.frame_buttons, text='OPEN MOD', command=self._on_browse)
+        self.btn_edit = shared.ReactiveButton(self.frame_buttons, text='EDIT MOD DATA', command=self._on_edit)
+        self.btn_launch = shared.ReactiveButton(self.frame_buttons, text='LAUNCH', command=self._on_launch)
 
         # New Mod is always visible
         self.btn_new.pack(side="left", padx=5)
 
         # --- Bottom Section: Active Mods ---
-        frame_active = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_active = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_active.pack(fill="both", expand=True, pady=(5, 0))
 
-        lbl_active = tk.Label(frame_active, text="active mods:", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                              font=s.FONT_TEXT)
+        lbl_active = tk.Label(frame_active, text="active mods:", bg=shared.APP_BACKGROUND_COLOR,
+                              fg=shared.TEXT_COLORS[0], font=shared.FONT_TEXT)
         lbl_active.pack(anchor="w")
 
-        self.tree_active = ColumnedListbox(frame_active, width=s.LIST_WIDTH, height=8, columns_dict=MOD_COLUMNS)
+        self.tree_active = shared.ColumnedListbox(
+            frame_active, width=shared.LIST_WIDTH, height=8, columns_dict=MOD_COLUMNS)
         self.tree_active.pack(fill="both", expand=True)
         self.tree_active.bind('<<TreeviewSelect>>', self._on_select_active)
         self.tree_active.bind('<Double-1>', self._on_double_click)
@@ -122,12 +91,12 @@ class ModManagerView(tk.Frame):
                         self.controller.set_log_update(f'Detected a definition-less folder: {folder}')
 
                     # Restored popup logic!
-                    do_initiate = s.invoke_choice(
+                    do_initiate = shared.invoke_choice(
                         title='Unregistered Folder',
                         text=f'The folder {core.state.library}/{folder}\nseems to have no properties.\n'
                              'Do you wish it to become a mod?\n',
-                        buttons=({s.KEY_LABEL: 'yes', s.KEY_RETURN: True, s.KEY_INFO: ''},
-                                 {s.KEY_LABEL: 'no', s.KEY_RETURN: False, s.KEY_INFO: ''})
+                        buttons=({shared.KEY_LABEL: 'yes', shared.KEY_RETURN: True, shared.KEY_INFO: ''},
+                                 {shared.KEY_LABEL: 'no', shared.KEY_RETURN: False, shared.KEY_INFO: ''})
                     )
 
                     if do_initiate:
@@ -181,7 +150,8 @@ class ModManagerView(tk.Frame):
     def _on_select_idle(self, event=None):
         """ Handles clicking a mod in the top list. """
         selection = self.tree_idle.selection()
-        if not selection: return
+        if not selection:
+            return
 
         mod_name = self.tree_idle.item(selection[0], 'values')[0]
         self.loaded_mod = LibraryManager.select_mods(**{Property.NAME: mod_name})[0]
@@ -198,7 +168,8 @@ class ModManagerView(tk.Frame):
     def _on_select_active(self, event=None):
         """ Handles clicking a mod in the bottom list. """
         selection = self.tree_active.selection()
-        if not selection: return
+        if not selection:
+            return
 
         mod_name = self.tree_active.item(selection[0], 'values')[0]
         self.loaded_mod = LibraryManager.select_mods(**{Property.NAME: mod_name})[0]
@@ -227,7 +198,8 @@ class ModManagerView(tk.Frame):
             self.controller.open_new_mod_view()
 
     def _on_attach(self):
-        if not self.loaded_mod: return
+        if not self.loaded_mod:
+            return
         try:
             # Here we just ask the logic layer to do it!
             if self.loaded_mod.attach():
@@ -239,7 +211,8 @@ class ModManagerView(tk.Frame):
                 self.controller.set_log_update(e.message)
 
     def _on_detach(self):
-        if not self.loaded_mod: return
+        if not self.loaded_mod:
+            return
         try:
             if self.loaded_mod.retrieve():
                 if hasattr(self.controller, 'set_log_update'):
@@ -250,7 +223,8 @@ class ModManagerView(tk.Frame):
                 self.controller.set_log_update(e.message)
 
     def _on_reload(self):
-        if not self.loaded_mod: return
+        if not self.loaded_mod:
+            return
         try:
             if self.loaded_mod.reload():
                 self._refresh_lists()

@@ -1,7 +1,7 @@
 import os.path
 import json
 import tkinter
-import _tkinter
+from tkinter import ttk
 from ctypes import windll, byref, sizeof, c_int, create_unicode_buffer
 
 from source.constants import MAIN_DIRECTORY, PROGRAM_NAME
@@ -29,6 +29,37 @@ KEY_LABEL = 'label'
 KEY_RETURN = 'command'
 KEY_INFO = 'info'
 AESTHETIC_PATH = f'{MAIN_DIRECTORY}/aesthetic/'
+
+
+class ColumnedListbox(ttk.Treeview):
+    """ A Tk/Tcl Treeview-based class with predefined columns. """
+
+    def __init__(self, master, width=LIST_WIDTH, height=UNIT_HEIGHT * 3, columns_dict=None, show='tree headings'):
+        super().__init__(master=master, height=height, show=show)
+        self.width = width * 6
+        if columns_dict:
+            self.set_columns(columns_dict)
+
+    def set_columns(self, columns_dict):
+        self.configure(columns=list(columns_dict.keys()))
+        total_quotient = sum(list(columns_dict.values()), 1)
+        column_unit_width = int(self.width / total_quotient)
+        self.column('#0', width=column_unit_width)
+        for column_name in columns_dict:
+            self.heading(column_name, text=column_name)
+            self.column(column_name, width=column_unit_width * columns_dict[column_name])
+
+    def open_children(self):
+        for search_index in range(10):
+            self.open_children_recursive(parent=str(search_index))
+
+    def open_children_recursive(self, parent):
+        try:
+            self.item(parent, open=True)
+            for child in self.get_children(parent):
+                self.open_children_recursive(child)
+        except tkinter.TclError:
+            pass
 
 
 class ReactiveButton(tkinter.Button):
