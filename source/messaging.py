@@ -1,8 +1,9 @@
 import inspect
 import logging
 import os
+from pathlib import Path
 
-LOG_PATH = './logging'
+LOG_PATH = f"{Path(__file__).parent.parent.resolve()}/logging"
 
 
 class ColorFormatter(logging.Formatter):
