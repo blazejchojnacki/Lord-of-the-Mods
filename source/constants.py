@@ -6,8 +6,8 @@ from pathlib import Path
 from source.messaging import InternalError
 
 PROGRAM_NAME = 'Lord of the Mods'
-THIS_PATH = Path(__file__).parent.resolve()
-MAIN_DIRECTORY = Path(__file__).parent.parent.resolve()
+# THIS_PATH = Path(__file__).parent.resolve()
+MAIN_DIRECTORY = str(Path(__file__).parent.parent.resolve()).replace('\\', '/').strip('/')
 MOD_DEF_FILE_NAME = '_definition.json'
 # LOG_PATH = f'{MAIN_DIRECTORY}/change_logs'
 LEVEL_INDENT = ' ' * 4

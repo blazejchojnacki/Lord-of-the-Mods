@@ -52,10 +52,10 @@ def initiate_comparison_ui(mod_directory, start_mod='', changes_source='director
     if changes_source == 'directory':
         if not start_mod:
             start_mod = askdirectory(title=f'{PROGRAM_NAME}: select the game directory to define the mod',
-                                     initialdir=MAIN_DIRECTORY)
+                                     initialdir=core.state.install_path)
         if start_mod:
             files_to_remove = askopenfilenames(title=f'{PROGRAM_NAME}: select files to remove',
-                                               initialdir=MAIN_DIRECTORY)
+                                               initialdir=core.state.install_path)
     elif changes_source == 'comparison':
         selected_comparison = askopenfilename(
             title=f'{PROGRAM_NAME}: select the snapshot comparison to define the mod',
