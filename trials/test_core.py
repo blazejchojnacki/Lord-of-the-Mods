@@ -184,6 +184,8 @@ class Test_AppConfig(unittest.TestCase):
         }
         self.assertRaises(InternalError, self.state.save, settings_to_save)
 
+    # # # missing tests for add_to_list
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -90,11 +90,25 @@ class AppConfig:
             if Setting.INSTALL not in settings_dict:
                 self.raw_settings[Setting.INSTALL] = self.install_path
             self.check_format()
+            # # # FIX: if an error is thrown, need to restore from backup
             with open(SETTINGS_FILE_PATH, 'w') as file_stream:
                 json.dump(self.raw_settings, file_stream, indent=4)
             self.propagate()
         else:
             raise InternalError("invalid path")
+
+    def add_to_list(self, setting: Setting, value: str):
+        if setting not in (Setting.GAMES, Setting.EXCEPTIONS):
+            raise InternalError("setting not a list")
+        present_values = self.raw_settings[setting]
+        if value.startswith(self.install_path):
+            formatted_value = value[len(present_values)]
+        elif os.path.isdir(f"{self.library}/{value}"):
+            formatted_value = f"{self.raw_settings[Setting.LIBRARY]}/{value}"
+        else:
+            raise InternalError("not implemented value handling")
+        present_values.append(formatted_value)
+        self.save({setting: present_values})
 
 
 # Initialize the state
