@@ -1,5 +1,6 @@
 import os
 import tkinter as tk
+from tkinter import ttk
 
 import source.shared as shared
 from source.shared import load_aesthetic, ReactiveButton
@@ -28,6 +29,7 @@ class Application(tk.Tk):
             self.iconbitmap(shared.ICON_PATH)
         self.geometry("1250x650")
         self.configure(bg=shared.APP_BACKGROUND_COLOR)
+        self._apply_ttk_styles()
 
         # Build the Navigation Header
         self._build_header()
@@ -42,6 +44,46 @@ class Application(tk.Tk):
 
         # Load the default view
         self.show_frame("ModManagerView")
+
+    def _apply_ttk_styles(self):
+        """ Restores the dark mode/custom Treeview styling. """
+        style = ttk.Style(self)
+
+        # 'clam' theme allows for deep color customization
+        style.theme_use('clam')
+
+        # Base ttk style
+        style.configure(
+            '.',
+            font=shared.FONT_TEXT,
+            foreground=shared.TEXT_COLORS[0],
+            background=shared.ENTRY_BACKGROUND_COLOR
+        )
+
+        # Treeview (Listbox body) style
+        style.configure(
+            'Treeview',
+            background=shared.ENTRY_BACKGROUND_COLOR,
+            fieldbackground=shared.ENTRY_BACKGROUND_COLOR,
+            fieldbw=0,
+            selectbackground=shared.TEXT_COLORS[0],
+            selectforeground=shared.TEXT_COLORS[-1]
+        )
+
+        # Treeview Headers style
+        style.configure(
+            'Treeview.Heading',
+            borderwidth=0,
+            background=shared.APP_BACKGROUND_COLOR,
+            foreground=shared.TEXT_COLORS[0]
+        )
+
+        # Hover effects for headers
+        style.map(
+            'Treeview.Heading',
+            background=[('active', shared.TEXT_COLORS[0])],
+            foreground=[('active', shared.TEXT_COLORS[-1])]
+        )
 
     def _build_header(self):
         """ Builds a permanent navigation bar at the top of the window. """
