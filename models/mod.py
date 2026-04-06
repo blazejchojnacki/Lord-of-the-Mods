@@ -72,7 +72,11 @@ class Mod:
         if not os.path.isdir(mod_directory):
             os.mkdir(mod_directory)
 
-        active, changes = initiate_comparison(mod_directory, changes_source=changes_source)
+        if 'active' not in kwargs and 'changes' not in kwargs:
+            active, changes = initiate_comparison(mod_directory, changes_source=changes_source)
+        else:
+            active = kwargs['active']
+            changes = kwargs['changes']
 
         new_mod = cls(
             name=name,

@@ -33,8 +33,8 @@ def hash_directory(file_or_folder, path_to_omit='', skip_first_level_files=False
     """ Composes a dict where every file of a given directory is the key to its hash value. """
     output = {}
     if os.path.isfile(file_or_folder) and not skip_first_level_files:
-        if path_to_omit:
-            path_to_register = file_or_folder[file_or_folder.index(path_to_omit) + len(path_to_omit) + 1:]
+        if file_or_folder.startswith(f"{path_to_omit}/"):
+            path_to_register = file_or_folder[file_or_folder.index(path_to_omit) + len(f"{path_to_omit}/"):]
         else:
             path_to_register = file_or_folder
         output[path_to_register] = hash_file(file_or_folder)
@@ -201,15 +201,18 @@ def map_changes_from_directory(mod_directory, start_mod, files_to_remove):
                 changes[new_file] = [Change.CHANGED, new_files_dict[new_file], current_files[new_file]]
             else:
                 changes[new_file] = [Change.ADDED, new_files_dict[new_file]]
+        new_snapshot = current_files.update(new_files_dict)
     elif start_mod and not new_files_dict:
         active = True
-        current_files = hash_directory(start_mod, path_to_omit=MAIN_DIRECTORY)
+        current_files = hash_directory(start_mod, path_to_omit=core.state.install_path)
         for new_file in current_files:
             changes[new_file] = [Change.ADDED, current_files[new_file]]
+        new_snapshot = current_files
+    else:
+        new_snapshot = snapshot_take(game_paths=[mod_directory])
     if files_to_remove:
         for file_path in files_to_remove:
             changes[file_path] = [Change.REMOVED, hash_file(file_path)]
-    new_snapshot = snapshot_take(game_paths=[mod_directory])
     snapshot_save(new_snapshot, name=mod_directory.split('/')[-1])
     return active, changes
 
@@ -254,7 +257,7 @@ def initiate_comparison(mod_directory, start_mod='', changes_source='directory',
     :param selected_snapshot:
     :return: tuple(active, changes)
     """
-    if not os.path.isdir(mod_directory):
+    if not os.path.isdir(mod_directory) and not os.path.isdir(start_mod):
         raise InternalError('provided directory is not correct')
 
     if os.path.isdir(changes_source):
@@ -265,6 +268,8 @@ def initiate_comparison(mod_directory, start_mod='', changes_source='directory',
         active, changes = map_changes_from_comparison(selected_comparison)
     elif changes_source == 'snapshot':
         active, changes = map_changes_from_snapshot(mod_directory, selected_snapshot)
+    elif changes_source == 'nothing':
+        return False, {}
     else:
         raise InternalError(f'unknown changes_source: {changes_source}')
 

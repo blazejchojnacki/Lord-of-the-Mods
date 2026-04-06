@@ -5,6 +5,7 @@ from source.messaging import InternalError
 import source.core as core
 import source.shared as shared
 from models.mod import Mod
+from interface.modification import initiate_comparison_ui
 
 
 class NewModView(tk.Frame):
@@ -102,8 +103,24 @@ class NewModView(tk.Frame):
             if hasattr(self.controller, 'set_log_update'):
                 self.controller.set_log_update(f"Creating mod {mod_name}. Please wait...")
 
-            # Create the Mod using your core logic!
-            new_mod = Mod.create(name=mod_name, changes_source=source_type)
+            mod_directory = f"{core.state.library}/{mod_name}"
+            active = False
+            changes = {}
+
+            # If the user selected a base, use the wrapper from modification.py!
+            if source_type != 'nothing':
+                # This automatically triggers your Tkinter popups AND calculates the changes
+                active, changes = initiate_comparison_ui(
+                    mod_directory=mod_directory,
+                    changes_source=source_type
+                )
+
+            # Create the Mod using the generated data!
+            new_mod = Mod.create(
+                name=mod_name,
+                active=active,
+                changes=changes
+            )
 
             # Send the user straight to the Mod Editor to finish filling out description/transfer type
             if hasattr(self.controller, 'open_mod_editor'):
