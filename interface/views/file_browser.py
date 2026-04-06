@@ -1,9 +1,8 @@
 import os
 import tkinter as tk
-from tkinter import ttk
 
 from source.messaging import InternalError
-import source.shared as s
+import source.shared as shared
 from source.constants import MOD_DEF_FILE_NAME
 from source.constructor import load_directories
 
@@ -12,7 +11,7 @@ class FileBrowserView(tk.Frame):
     """ The View responsible for navigating directories and selecting files to edit or move. """
 
     def __init__(self, parent, controller):
-        super().__init__(parent, bg=s.APP_BACKGROUND_COLOR)
+        super().__init__(parent, bg=shared.APP_BACKGROUND_COLOR)
         self.controller = controller
 
         self.current_path = ""
@@ -22,18 +21,18 @@ class FileBrowserView(tk.Frame):
     def _build_ui(self):
         """ Constructs the browser layout. """
         # --- Top Section: Navigation Bar ---
-        frame_nav = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_nav = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_nav.pack(fill="x", pady=(0, 5))
 
-        self.btn_back = s.ReactiveButton(frame_nav, text="🡄 BACK", small=True, command=self._on_back)
+        self.btn_back = shared.ReactiveButton(frame_nav, text="🡄 BACK", small=True, command=self._on_back)
         self.btn_back.pack(side="left", padx=(0, 10))
 
-        self.lbl_path = tk.Label(frame_nav, text="Path: ", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                                 font=s.FONT_TEXT)
+        self.lbl_path = tk.Label(frame_nav, text="Path: ", bg=shared.APP_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                                 font=shared.FONT_TEXT)
         self.lbl_path.pack(side="left", fill="x", expand=True, anchor="w")
 
         # --- Middle Section: The Directory List ---
-        frame_list = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_list = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_list.pack(fill="both", expand=True)
 
         # Add a scrollbar to the listbox (a massive usability upgrade!)
@@ -42,11 +41,11 @@ class FileBrowserView(tk.Frame):
 
         self.listbox = tk.Listbox(
             frame_list,
-            bg=s.ENTRY_BACKGROUND_COLOR,
-            fg=s.TEXT_COLORS[0],
-            font=s.FONT_TEXT,
-            selectbackground=s.TEXT_COLORS[0],
-            selectforeground=s.TEXT_COLORS[-1],
+            bg=shared.ENTRY_BACKGROUND_COLOR,
+            fg=shared.TEXT_COLORS[0],
+            font=shared.FONT_TEXT,
+            selectbackground=shared.TEXT_COLORS[0],
+            selectforeground=shared.TEXT_COLORS[-1],
             yscrollcommand=scrollbar.set
         )
         self.listbox.pack(side="left", fill="both", expand=True)
@@ -58,13 +57,13 @@ class FileBrowserView(tk.Frame):
         self.bind_all('<BackSpace>', self._on_back_key)  # Bind backspace to go up a folder
 
         # --- Bottom Section: Action Buttons ---
-        self.frame_buttons = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        self.frame_buttons = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         self.frame_buttons.pack(fill="x", pady=10)
 
-        self.btn_open = s.ReactiveButton(self.frame_buttons, text="OPEN", command=self._on_forward)
+        self.btn_open = shared.ReactiveButton(self.frame_buttons, text="OPEN", command=self._on_forward)
         self.btn_open.pack(side="left", padx=5)
 
-        self.btn_move = s.ReactiveButton(self.frame_buttons, text="MOVE FILE", command=self._on_move)
+        self.btn_move = shared.ReactiveButton(self.frame_buttons, text="MOVE FILE", command=self._on_move)
         # We start with the move button hidden until a file is selected
         self.btn_move.pack_forget()
 
@@ -96,13 +95,13 @@ class FileBrowserView(tk.Frame):
             # Insert Folders (Color 1)
             for folder in output_folders:
                 self.listbox.insert(item_index, folder)
-                self.listbox.itemconfig(item_index, foreground=s.INI_LEVEL_COLORS[1])
+                self.listbox.itemconfig(item_index, foreground=shared.INI_LEVEL_COLORS[1])
                 item_index += 1
 
             # Insert Files (Color 2 for text, Color 3 for INI)
             for file in output_files:
                 self.listbox.insert(item_index, file)
-                color = s.INI_LEVEL_COLORS[3] if file.endswith('.ini') else s.INI_LEVEL_COLORS[2]
+                color = shared.INI_LEVEL_COLORS[3] if file.endswith('.ini') else shared.INI_LEVEL_COLORS[2]
                 self.listbox.itemconfig(item_index, foreground=color)
                 item_index += 1
 
@@ -180,7 +179,8 @@ class FileBrowserView(tk.Frame):
     def _on_move(self):
         """ Routes the user to the Move File View. """
         selection = self.listbox.curselection()
-        if not selection: return
+        if not selection:
+            return
 
         item_name = self.listbox.get(selection[0])
         full_item_path = f"{self.current_path}/{item_name}"

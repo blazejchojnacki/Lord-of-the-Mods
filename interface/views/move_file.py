@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter.filedialog import askdirectory
 
 from source.messaging import InternalError
-import source.shared as s
+import source.shared as shared
 from source.constants import PROGRAM_NAME
 from source.editor import move_file
 
@@ -12,7 +12,7 @@ class MoveFileView(tk.Frame):
     """ The View responsible for safely moving a file and updating its references. """
 
     def __init__(self, parent, controller):
-        super().__init__(parent, bg=s.APP_BACKGROUND_COLOR)
+        super().__init__(parent, bg=shared.APP_BACKGROUND_COLOR)
         self.controller = controller
 
         self.source_file_path = ""
@@ -21,40 +21,39 @@ class MoveFileView(tk.Frame):
 
     def _build_ui(self):
         # --- Navigation ---
-        frame_top = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_top = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_top.pack(fill="x", pady=(0, 10))
 
-        btn_back = s.ReactiveButton(frame_top, text="🡄 BACK TO BROWSER", small=True, command=self._on_back)
+        btn_back = shared.ReactiveButton(frame_top, text="🡄 BACK TO BROWSER", small=True, command=self._on_back)
         btn_back.pack(side="left", padx=(0, 10))
 
-        tk.Label(frame_top, text="Move File Tool", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                 font=s.FONT_TEXT).pack(side="left")
+        tk.Label(frame_top, text="Move File Tool", bg=shared.APP_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                 font=shared.FONT_TEXT).pack(side="left")
 
         # --- The Form ---
-        frame_form = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_form = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_form.pack(fill="x", padx=10, pady=20)
         frame_form.columnconfigure(1, weight=1)
 
         # File to Move
-        tk.Label(frame_form, text="File to move:", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0], anchor="e").grid(
-            row=0, column=0, sticky="e", pady=5, padx=5)
-        self.lbl_source = tk.Label(frame_form, text="", bg=s.ENTRY_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0], anchor="w",
-                                   relief="sunken")
+        tk.Label(frame_form, text="File to move:", bg=shared.APP_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0], anchor="e"
+                 ).grid(row=0, column=0, sticky="e", pady=5, padx=5)
+        self.lbl_source = tk.Label(frame_form, text="", bg=shared.ENTRY_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                                   anchor="w", relief="sunken")
         self.lbl_source.grid(row=0, column=1, sticky="we", pady=5, padx=5)
 
         # Destination Folder
-        tk.Label(frame_form, text="To Folder:", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0], anchor="e").grid(row=1,
-                                                                                                                 column=0,
-                                                                                                                 sticky="e",
-                                                                                                                 pady=5,
-                                                                                                                 padx=5)
-        self.entry_dest = tk.Entry(frame_form, bg=s.ENTRY_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0], font=s.FONT_TEXT)
+        tk.Label(frame_form, text="To Folder:", bg=shared.APP_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0], anchor="e"
+                 ).grid(row=1, column=0, sticky="e", pady=5, padx=5)
+        self.entry_dest = tk.Entry(frame_form, bg=shared.ENTRY_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                                   font=shared.FONT_TEXT)
         self.entry_dest.grid(row=1, column=1, sticky="we", pady=5, padx=5)
 
-        s.ReactiveButton(frame_form, text="BROWSE", small=True, command=self._browse_dest).grid(row=1, column=2, padx=5)
+        shared.ReactiveButton(frame_form, text="BROWSE", small=True, command=self._browse_dest
+                              ).grid(row=1, column=2, padx=5)
 
         # --- Action ---
-        btn_move = s.ReactiveButton(self, text="MOVE FILE", command=self._on_move)
+        btn_move = shared.ReactiveButton(self, text="MOVE FILE", command=self._on_move)
         btn_move.pack(pady=10)
 
     def load_file_to_move(self, filepath: str):

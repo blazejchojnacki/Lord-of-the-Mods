@@ -3,7 +3,7 @@ import tkinter as tk
 
 from source.messaging import InternalError
 import source.core as core
-import source.shared as s
+import source.shared as shared
 from models.mod import Mod
 
 
@@ -11,7 +11,7 @@ class NewModView(tk.Frame):
     """ The View responsible for creating a brand new Mod definition. """
 
     def __init__(self, parent, controller):
-        super().__init__(parent, bg=s.APP_BACKGROUND_COLOR)
+        super().__init__(parent, bg=shared.APP_BACKGROUND_COLOR)
         self.controller = controller
 
         self.source_var = tk.StringVar(value="nothing")
@@ -19,29 +19,29 @@ class NewModView(tk.Frame):
 
     def _build_ui(self):
         # --- Navigation ---
-        frame_top = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_top = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_top.pack(fill="x", pady=(0, 10))
 
-        btn_back = s.ReactiveButton(frame_top, text="🡄 CANCEL", small=True, command=self._on_cancel)
+        btn_back = shared.ReactiveButton(frame_top, text="🡄 CANCEL", small=True, command=self._on_cancel)
         btn_back.pack(side="left", padx=(0, 10))
 
-        tk.Label(frame_top, text="Create New Mod", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                 font=s.FONT_TEXT).pack(side="left")
+        tk.Label(frame_top, text="Create New Mod", bg=shared.APP_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                 font=shared.FONT_TEXT).pack(side="left")
 
         # --- The Form ---
-        frame_form = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_form = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_form.pack(pady=30)
 
         # Mod Name
-        tk.Label(frame_form, text="New Mod Name:", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                 font=s.FONT_TEXT).pack(anchor="w")
-        self.entry_name = tk.Entry(frame_form, width=40, bg=s.ENTRY_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                                   font=s.FONT_TEXT)
+        tk.Label(frame_form, text="New Mod Name:", bg=shared.APP_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                 font=shared.FONT_TEXT).pack(anchor="w")
+        self.entry_name = tk.Entry(frame_form, width=40, bg=shared.ENTRY_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                                   font=shared.FONT_TEXT)
         self.entry_name.pack(pady=(0, 15))
 
         # Mod Source Options
-        tk.Label(frame_form, text="It will be based on:", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                 font=s.FONT_TEXT).pack(anchor="w")
+        tk.Label(frame_form, text="It will be based on:", bg=shared.APP_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                 font=shared.FONT_TEXT).pack(anchor="w")
 
         options = [
             ("Nothing (Empty Mod)", "nothing"),
@@ -56,16 +56,16 @@ class NewModView(tk.Frame):
                 text=text,
                 variable=self.source_var,
                 value=value,
-                bg=s.APP_BACKGROUND_COLOR,
-                fg=s.TEXT_COLORS[0],
-                selectcolor=s.ENTRY_BACKGROUND_COLOR,
-                activebackground=s.APP_BACKGROUND_COLOR,
-                activeforeground=s.TEXT_COLORS[0]
+                bg=shared.APP_BACKGROUND_COLOR,
+                fg=shared.TEXT_COLORS[0],
+                selectcolor=shared.ENTRY_BACKGROUND_COLOR,
+                activebackground=shared.APP_BACKGROUND_COLOR,
+                activeforeground=shared.TEXT_COLORS[0]
             )
             rb.pack(anchor="w", padx=10, pady=2)
 
         # --- Action ---
-        btn_create = s.ReactiveButton(self, text="CREATE MOD", command=self._on_create)
+        btn_create = shared.ReactiveButton(self, text="CREATE MOD", command=self._on_create)
         btn_create.pack(pady=20)
 
     def load_preset_name(self, name: str = ""):

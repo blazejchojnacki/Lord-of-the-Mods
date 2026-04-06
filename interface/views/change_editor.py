@@ -4,9 +4,8 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter.filedialog import askopenfilenames
 
-from source.messaging import InternalError
 import source.core as core
-import source.shared as s
+import source.shared as shared
 from source.constants import Change, PROGRAM_NAME
 from source.modificator import hash_file
 from models.mod import Mod
@@ -16,7 +15,7 @@ class ChangeEditorView(tk.Frame):
     """ The View responsible for staging, modifying, and applying file changes to a Mod. """
 
     def __init__(self, parent, controller):
-        super().__init__(parent, bg=s.APP_BACKGROUND_COLOR)
+        super().__init__(parent, bg=shared.APP_BACKGROUND_COLOR)
         self.controller = controller
 
         self.loaded_mod = None
@@ -28,53 +27,54 @@ class ChangeEditorView(tk.Frame):
     def _build_ui(self):
         """ Constructs the dual-list layout for current and staged changes. """
         # --- Top Section: Navigation ---
-        frame_top = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_top = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_top.pack(fill="x", pady=(0, 10))
 
-        btn_back = s.ReactiveButton(frame_top, text="🡄 BACK TO MOD EDITOR", small=True, command=self._on_back)
+        btn_back = shared.ReactiveButton(frame_top, text="🡄 BACK TO MOD EDITOR", small=True, command=self._on_back)
         btn_back.pack(side="left", padx=(0, 10))
 
-        self.lbl_title = tk.Label(frame_top, text="Changes Editor", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                                  font=s.FONT_TEXT)
+        self.lbl_title = tk.Label(frame_top, text="Changes Editor", bg=shared.APP_BACKGROUND_COLOR,
+                                  fg=shared.TEXT_COLORS[0], font=shared.FONT_TEXT)
         self.lbl_title.pack(side="left", fill="x", expand=True, anchor="w")
 
         # --- Middle Section: Current Changes ---
-        frame_current = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_current = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_current.pack(fill="both", expand=True, pady=5)
 
-        tk.Label(frame_current, text="Current Mod Changes:", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                 font=s.FONT_TEXT).pack(anchor="w")
+        tk.Label(frame_current, text="Current Mod Changes:", bg=shared.APP_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                 font=shared.FONT_TEXT).pack(anchor="w")
 
         self.tree_current = self._create_treeview(frame_current)
         self.tree_current.pack(fill="both", expand=True)
 
         # --- Lower Middle Section: Staged/New Changes ---
-        frame_staged = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_staged = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_staged.pack(fill="both", expand=True, pady=5)
 
-        tk.Label(frame_staged, text="Staged Changes (Unsaved):", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                 font=s.FONT_TEXT).pack(anchor="w")
+        tk.Label(frame_staged, text="Staged Changes (Unsaved):", bg=shared.APP_BACKGROUND_COLOR,
+                 fg=shared.TEXT_COLORS[0], font=shared.FONT_TEXT).pack(anchor="w")
 
         self.tree_staged = self._create_treeview(frame_staged)
         self.tree_staged.pack(fill="both", expand=True)
 
         # --- Bottom Section: Actions ---
-        frame_actions = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_actions = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_actions.pack(fill="x", pady=10)
 
         # Left side actions (Adding files)
-        s.ReactiveButton(frame_actions, text="ADD FILE(S)", command=self._on_add_files).pack(side="left", padx=5)
-        s.ReactiveButton(frame_actions, text="COPY FILE(S)", command=self._on_copy_files).pack(side="left", padx=5)
+        shared.ReactiveButton(frame_actions, text="ADD FILE(S)", command=self._on_add_files).pack(side="left", padx=5)
+        shared.ReactiveButton(frame_actions, text="COPY FILE(S)", command=self._on_copy_files).pack(side="left", padx=5)
 
         # Center actions (Modifying selection)
-        s.ReactiveButton(frame_actions, text="DELETE SELECTED", command=self._on_delete).pack(side="left", padx=20)
-        s.ReactiveButton(frame_actions, text="CHANGE TYPE", info_content="Change whether file is Added, Removed, etc.",
-                         command=self._on_change_type_btn).pack(side="left", padx=5)
+        shared.ReactiveButton(frame_actions, text="DELETE SELECTED", command=self._on_delete).pack(side="left", padx=20)
+        shared.ReactiveButton(frame_actions, text="CHANGE TYPE",
+                              info_content="Change whether file is Added, Removed, etc.",
+                              command=self._on_change_type_btn).pack(side="left", padx=5)
 
         # Right side actions (Applying)
-        s.ReactiveButton(frame_actions, text="APPLY STAGED CHANGES", command=self._on_apply_changes).pack(side="right",
-                                                                                                          padx=5)
-        s.ReactiveButton(frame_actions, text="OPEN FILE", command=self._on_open_file).pack(side="right", padx=5)
+        shared.ReactiveButton(frame_actions, text="APPLY STAGED CHANGES",
+                              command=self._on_apply_changes).pack(side="right", padx=5)
+        shared.ReactiveButton(frame_actions, text="OPEN FILE", command=self._on_open_file).pack(side="right", padx=5)
 
     def _create_treeview(self, parent_frame) -> ttk.Treeview:
         """ Helper to build a consistent Treeview with a scrollbar. """
@@ -98,7 +98,7 @@ class ChangeEditorView(tk.Frame):
 
     def _build_context_menu(self):
         """ Builds a native popup menu for selecting the Change Enum type. """
-        self.type_menu = tk.Menu(self, tearoff=0, bg=s.ENTRY_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0])
+        self.type_menu = tk.Menu(self, tearoff=0, bg=shared.ENTRY_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0])
 
         # Add a command for each Change enum
         for change_type in Change:
@@ -282,12 +282,12 @@ class ChangeEditorView(tk.Frame):
     def _on_back(self):
         """ Returns to the Mod Editor. """
         if self.new_changes:
-            answer = s.invoke_choice(
+            answer = shared.invoke_choice(
                 title='Unsaved Changes',
                 text='You have staged changes that are not applied.\nDo you want to apply them now?',
-                buttons=({s.KEY_LABEL: 'Yes', s.KEY_RETURN: True, s.KEY_INFO: ''},
-                         {s.KEY_LABEL: 'No', s.KEY_RETURN: False, s.KEY_INFO: ''},
-                         {s.KEY_LABEL: 'Cancel', s.KEY_RETURN: None, s.KEY_INFO: ''})
+                buttons=({shared.KEY_LABEL: 'Yes', shared.KEY_RETURN: True, shared.KEY_INFO: ''},
+                         {shared.KEY_LABEL: 'No', shared.KEY_RETURN: False, shared.KEY_INFO: ''},
+                         {shared.KEY_LABEL: 'Cancel', shared.KEY_RETURN: None, shared.KEY_INFO: ''})
             )
             if answer is True:
                 self._on_apply_changes()

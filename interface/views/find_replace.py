@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter.filedialog import askdirectory, askopenfilenames
 
 from source.messaging import InternalError
-import source.shared as s
+import source.shared as shared
 from source.constants import PROGRAM_NAME
 from source.editor import text_find_replace, reformat_string
 
@@ -12,7 +12,7 @@ class FindReplaceView(tk.Frame):
     """ The View responsible for searching and replacing text across files and folders. """
 
     def __init__(self, parent, controller):
-        super().__init__(parent, bg=s.APP_BACKGROUND_COLOR)
+        super().__init__(parent, bg=shared.APP_BACKGROUND_COLOR)
         self.controller = controller
 
         self.current_context_path = ""
@@ -22,84 +22,79 @@ class FindReplaceView(tk.Frame):
     def _build_ui(self):
         """ Constructs the unified Find & Replace layout. """
         # --- Top Section: Navigation ---
-        frame_top = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_top = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_top.pack(fill="x", pady=(0, 10))
 
-        btn_back = s.ReactiveButton(frame_top, text="🡄 BACK", small=True, command=self._on_back)
+        btn_back = shared.ReactiveButton(frame_top, text="🡄 BACK", small=True, command=self._on_back)
         btn_back.pack(side="left", padx=(0, 10))
 
-        lbl_title = tk.Label(frame_top, text="Find and Replace Tool", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                             font=s.FONT_TEXT)
+        lbl_title = tk.Label(frame_top, text="Find and Replace Tool", bg=shared.APP_BACKGROUND_COLOR,
+                             fg=shared.TEXT_COLORS[0], font=shared.FONT_TEXT)
         lbl_title.pack(side="left", fill="x", expand=True, anchor="w")
 
         # --- Middle Section: The Input Form ---
-        frame_form = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_form = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_form.pack(fill="x", padx=10)
         frame_form.columnconfigure(1, weight=1)  # Makes the text boxes expand
 
         # 1. Find Text
-        tk.Label(frame_form, text="Find Text:", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0], anchor="e").grid(row=0,
-                                                                                                                 column=0,
-                                                                                                                 sticky="e",
-                                                                                                                 pady=5,
-                                                                                                                 padx=5)
-        self.text_find = tk.Text(frame_form, height=3, bg=s.ENTRY_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                                 font=s.FONT_TEXT)
+        tk.Label(
+            frame_form, text="Find Text:", bg=shared.APP_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0], anchor="e"
+        ).grid(row=0, column=0, sticky="e", pady=5, padx=5)
+        self.text_find = tk.Text(frame_form, height=3, bg=shared.ENTRY_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                                 font=shared.FONT_TEXT)
         self.text_find.grid(row=0, column=1, sticky="we", pady=5, padx=5)
 
-        btn_copy_down = s.ReactiveButton(frame_form, text="🡇 COPY", small=True,
-                                         info_content="Copy text to replace field", command=self._on_copy_down)
+        btn_copy_down = shared.ReactiveButton(frame_form, text="🡇 COPY", small=True,
+                                              info_content="Copy text to replace field", command=self._on_copy_down)
         btn_copy_down.grid(row=0, column=2, padx=5)
 
         # 2. Replace Text
-        tk.Label(frame_form, text="Replace With:", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0], anchor="e").grid(
-            row=1, column=0, sticky="e", pady=5, padx=5)
-        self.text_replace = tk.Text(frame_form, height=3, bg=s.ENTRY_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                                    font=s.FONT_TEXT)
+        tk.Label(frame_form, text="Replace With:", bg=shared.APP_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0], anchor="e"
+                 ).grid(row=1, column=0, sticky="e", pady=5, padx=5)
+        self.text_replace = tk.Text(frame_form, height=3, bg=shared.ENTRY_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                                    font=shared.FONT_TEXT)
         self.text_replace.grid(row=1, column=1, sticky="we", pady=5, padx=5)
 
         # 3. Scope Select
-        tk.Label(frame_form, text="In File/Folder:", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0], anchor="e").grid(
-            row=2, column=0, sticky="e", pady=5, padx=5)
-        self.text_scope = tk.Text(frame_form, height=2, bg=s.ENTRY_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                                  font=s.FONT_TEXT)
+        tk.Label(frame_form, text="In File/Folder:", bg=shared.APP_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                 anchor="e").grid(row=2, column=0, sticky="e", pady=5, padx=5)
+        self.text_scope = tk.Text(frame_form, height=2, bg=shared.ENTRY_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                                  font=shared.FONT_TEXT)
         self.text_scope.grid(row=2, column=1, sticky="we", pady=5, padx=5)
 
-        frame_scope_btns = tk.Frame(frame_form, bg=s.APP_BACKGROUND_COLOR)
+        frame_scope_btns = tk.Frame(frame_form, bg=shared.APP_BACKGROUND_COLOR)
         frame_scope_btns.grid(row=2, column=2, sticky="w")
-        s.ReactiveButton(frame_scope_btns, text="FILE", small=True,
-                         command=lambda: self._browse_file(self.text_scope)).pack(side="left", padx=2)
-        s.ReactiveButton(frame_scope_btns, text="FOLDER", small=True,
-                         command=lambda: self._browse_folder(self.text_scope)).pack(side="left", padx=2)
+        shared.ReactiveButton(frame_scope_btns, text="FILE", small=True,
+                              command=lambda: self._browse_file(self.text_scope)).pack(side="left", padx=2)
+        shared.ReactiveButton(frame_scope_btns, text="FOLDER", small=True,
+                              command=lambda: self._browse_folder(self.text_scope)).pack(side="left", padx=2)
 
         # 4. Exceptions Select
-        tk.Label(frame_form, text="Except:", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0], anchor="e").grid(row=3,
-                                                                                                              column=0,
-                                                                                                              sticky="e",
-                                                                                                              pady=5,
-                                                                                                              padx=5)
-        self.text_except = tk.Text(frame_form, height=2, bg=s.ENTRY_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                                   font=s.FONT_TEXT)
+        tk.Label(frame_form, text="Except:", bg=shared.APP_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0], anchor="e"
+                 ).grid(row=3, column=0, sticky="e", pady=5, padx=5)
+        self.text_except = tk.Text(frame_form, height=2, bg=shared.ENTRY_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                                   font=shared.FONT_TEXT)
         self.text_except.grid(row=3, column=1, sticky="we", pady=5, padx=5)
 
-        frame_except_btns = tk.Frame(frame_form, bg=s.APP_BACKGROUND_COLOR)
+        frame_except_btns = tk.Frame(frame_form, bg=shared.APP_BACKGROUND_COLOR)
         frame_except_btns.grid(row=3, column=2, sticky="w")
-        s.ReactiveButton(frame_except_btns, text="FILE", small=True,
-                         command=lambda: self._browse_file(self.text_except)).pack(side="left", padx=2)
-        s.ReactiveButton(frame_except_btns, text="FOLDER", small=True,
-                         command=lambda: self._browse_folder(self.text_except)).pack(side="left", padx=2)
+        shared.ReactiveButton(frame_except_btns, text="FILE", small=True,
+                              command=lambda: self._browse_file(self.text_except)).pack(side="left", padx=2)
+        shared.ReactiveButton(frame_except_btns, text="FOLDER", small=True,
+                              command=lambda: self._browse_folder(self.text_except)).pack(side="left", padx=2)
 
         # --- Actions Section ---
-        frame_actions = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_actions = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_actions.pack(fill="x", pady=10)
 
-        s.ReactiveButton(frame_actions, text="FIND TEXT", command=self._on_find).pack(side="left", padx=5)
-        s.ReactiveButton(frame_actions, text="REPLACE TEXT", command=self._on_replace).pack(side="left", padx=5)
-        s.ReactiveButton(frame_actions, text="CLEAR LOGS", command=self._clear_logs).pack(side="right", padx=5)
+        shared.ReactiveButton(frame_actions, text="FIND TEXT", command=self._on_find).pack(side="left", padx=5)
+        shared.ReactiveButton(frame_actions, text="REPLACE TEXT", command=self._on_replace).pack(side="left", padx=5)
+        shared.ReactiveButton(frame_actions, text="CLEAR LOGS", command=self._clear_logs).pack(side="right", padx=5)
 
         # --- Bottom Section: Results Log ---
-        self.text_result = tk.Text(self, height=10, bg=s.ENTRY_BACKGROUND_COLOR, fg=s.TEXT_COLORS[1], font=s.FONT_TEXT,
-                                   state="disabled")
+        self.text_result = tk.Text(self, height=10, bg=shared.ENTRY_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[1],
+                                   font=shared.FONT_TEXT, state="disabled")
         self.text_result.pack(fill="both", expand=True, pady=5)
 
     def load_context(self, selection: str = "", scope_path: str = ""):

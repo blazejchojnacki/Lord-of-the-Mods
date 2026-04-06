@@ -1,12 +1,11 @@
 import os
 import tkinter as tk
-from tkinter import ttk
 
 from source.messaging import InternalError
 import source.core as core
-import source.shared as s
+import source.shared as shared
 from source.constants import Property, DEFINITION_TEMPLATE, DEFINITION_CLASSES, Change
-from models.mod import Mod, LibraryManager
+from models.mod import Mod
 
 
 def count_files_recursive(path: str) -> int:
@@ -27,7 +26,7 @@ class ModEditorView(tk.Frame):
     """ The View responsible for editing a Mod's definition properties. """
 
     def __init__(self, parent, controller):
-        super().__init__(parent, bg=s.APP_BACKGROUND_COLOR)
+        super().__init__(parent, bg=shared.APP_BACKGROUND_COLOR)
         self.controller = controller
         self.loaded_mod = None
 
@@ -39,19 +38,19 @@ class ModEditorView(tk.Frame):
     def _build_ui(self):
         """ Constructs the form layout. """
         # --- Top Section: Title & Actions ---
-        frame_top = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_top = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_top.pack(fill="x", pady=(0, 10))
 
-        self.lbl_title = tk.Label(frame_top, text="Mod Editor", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                                  font=s.FONT_TEXT)
+        self.lbl_title = tk.Label(frame_top, text="Mod Editor", bg=shared.APP_BACKGROUND_COLOR,
+                                  fg=shared.TEXT_COLORS[0], font=shared.FONT_TEXT)
         self.lbl_title.pack(side="left")
 
-        btn_back = s.ReactiveButton(frame_top, text="BACK TO MODS", command=self._on_back)
+        btn_back = shared.ReactiveButton(frame_top, text="BACK TO MODS", command=self._on_back)
         btn_back.pack(side="right", padx=5)
 
         # --- Middle Section: The Form ---
         # We use a container Frame with a grid layout for perfect label/entry alignment
-        self.frame_form = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        self.frame_form = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         self.frame_form.pack(fill="both", expand=True)
 
         # Configure the grid to expand the input column
@@ -60,36 +59,38 @@ class ModEditorView(tk.Frame):
         # Build the form dynamically based on DEFINITION_TEMPLATE
         for row_index, param_key in enumerate(DEFINITION_TEMPLATE):
             # Label
-            lbl = tk.Label(self.frame_form, text=param_key, bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0], anchor="e")
+            lbl = tk.Label(self.frame_form, text=param_key, bg=shared.APP_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                           anchor="e")
             lbl.grid(row=row_index, column=0, sticky="e", padx=(0, 10), pady=5)
 
             # Changes and Description need larger Text boxes; everything else is a single-line Entry
             if param_key == Property.CHANGES:
                 # Changes are read-only statistics in this view
-                widget = tk.Text(self.frame_form, height=3, bg=s.ENTRY_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                                 font=s.FONT_TEXT)
+                widget = tk.Text(self.frame_form, height=3, bg=shared.ENTRY_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                                 font=shared.FONT_TEXT)
                 widget.grid(row=row_index, column=1, sticky="we", pady=5)
                 self.inputs[param_key] = widget
 
             elif param_key == Property.DESCRIPTION:
-                widget = tk.Text(self.frame_form, height=4, bg=s.ENTRY_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                                 font=s.FONT_TEXT)
+                widget = tk.Text(self.frame_form, height=4, bg=shared.ENTRY_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                                 font=shared.FONT_TEXT)
                 widget.grid(row=row_index, column=1, sticky="we", pady=5)
                 self.inputs[param_key] = widget
 
             else:
-                widget = tk.Entry(self.frame_form, bg=s.ENTRY_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0], font=s.FONT_TEXT)
+                widget = tk.Entry(self.frame_form, bg=shared.ENTRY_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                                  font=shared.FONT_TEXT)
                 widget.grid(row=row_index, column=1, sticky="we", pady=5)
                 self.inputs[param_key] = widget
 
         # --- Bottom Section: Save & Advanced Actions ---
-        frame_bottom = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_bottom = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_bottom.pack(fill="x", pady=15)
 
-        btn_save = s.ReactiveButton(frame_bottom, text="SAVE PARAMETERS", command=self._on_save)
+        btn_save = shared.ReactiveButton(frame_bottom, text="SAVE PARAMETERS", command=self._on_save)
         btn_save.pack(side="left", padx=5)
 
-        btn_changes = s.ReactiveButton(frame_bottom, text="SEE CHANGED FILES", command=self._on_see_changes)
+        btn_changes = shared.ReactiveButton(frame_bottom, text="SEE CHANGED FILES", command=self._on_see_changes)
         btn_changes.pack(side="left", padx=5)
 
     def load_mod_data(self, mod: Mod):

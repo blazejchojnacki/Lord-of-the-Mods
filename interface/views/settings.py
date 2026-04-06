@@ -1,40 +1,41 @@
 import tkinter as tk
 from tkinter.filedialog import askdirectory
 import source.core as core
-import source.shared as s
+import source.shared as shared
 
 
 class SettingsView(tk.Frame):
     def __init__(self, parent, controller):
-        super().__init__(parent, bg=s.APP_BACKGROUND_COLOR)
+        super().__init__(parent, bg=shared.APP_BACKGROUND_COLOR)
         self.controller = controller  # Reference to main window to swap views if needed
 
         # We store references to our entry fields to extract text later
         self.entries = {}
 
-        title = tk.Label(self, text="Application Settings", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                         font=s.FONT_TEXT)
+        title = tk.Label(self, text="Application Settings", bg=shared.APP_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0],
+                         font=shared.FONT_TEXT)
         title.pack(anchor="w", pady=(0, 10))
 
         # We loop through the state to build the rows dynamically
         for setting_key in core.state.raw_settings:
-            row = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+            row = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
             row.pack(fill="x", pady=2)
 
-            lbl = tk.Label(row, text=setting_key, width=20, anchor="w", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0])
+            lbl = tk.Label(row, text=setting_key, width=20, anchor="w", bg=shared.APP_BACKGROUND_COLOR,
+                           fg=shared.TEXT_COLORS[0])
             lbl.pack(side="left")
 
-            entry = tk.Entry(row, bg=s.ENTRY_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0])
+            entry = tk.Entry(row, bg=shared.ENTRY_BACKGROUND_COLOR, fg=shared.TEXT_COLORS[0])
             entry.pack(side="left", fill="x", expand=True, padx=5)
             self.entries[setting_key] = entry
 
             # Add a "Browse" button for path settings
-            btn_browse = s.ReactiveButton(row, text="BROWSE", small=True,
-                                          command=lambda k=setting_key: self._browse_path(k))
+            btn_browse = shared.ReactiveButton(row, text="BROWSE", small=True,
+                                               command=lambda k=setting_key: self._browse_path(k))
             btn_browse.pack(side="left")
 
         # Save Button
-        btn_save = s.ReactiveButton(self, text="SAVE SETTINGS", command=self._save_settings)
+        btn_save = shared.ReactiveButton(self, text="SAVE SETTINGS", command=self._save_settings)
         btn_save.pack(pady=20)
 
     def on_show(self):

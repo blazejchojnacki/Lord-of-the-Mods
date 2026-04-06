@@ -1,10 +1,9 @@
 import os
 import tkinter as tk
-from tkinter import ttk
 from tklinenums import TkLineNumbers
 
 from source.messaging import InternalError
-import source.shared as s
+import source.shared as shared
 from source.constants import INI_COMMENTS, INI_ENDS, LEVEL_INDENT
 from source.constructor import load_file
 
@@ -13,7 +12,7 @@ class FileEditorView(tk.Frame):
     """ The View responsible for displaying, editing, and highlighting file content. """
 
     def __init__(self, parent, controller):
-        super().__init__(parent, bg=s.APP_BACKGROUND_COLOR)
+        super().__init__(parent, bg=shared.APP_BACKGROUND_COLOR)
         self.controller = controller
 
         self.current_path = ""
@@ -26,21 +25,21 @@ class FileEditorView(tk.Frame):
     def _build_ui(self):
         """ Constructs the editor layout. """
         # --- Top Section: Navigation & Save ---
-        frame_top = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_top = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_top.pack(fill="x", pady=(0, 5))
 
-        btn_back = s.ReactiveButton(frame_top, text="🡄 BACK", small=True, command=self._on_back)
+        btn_back = shared.ReactiveButton(frame_top, text="🡄 BACK", small=True, command=self._on_back)
         btn_back.pack(side="left", padx=(0, 10))
 
-        self.lbl_path = tk.Label(frame_top, text="No file loaded", bg=s.APP_BACKGROUND_COLOR, fg=s.TEXT_COLORS[0],
-                                 font=s.FONT_TEXT)
+        self.lbl_path = tk.Label(frame_top, text="No file loaded", bg=shared.APP_BACKGROUND_COLOR,
+                                 fg=shared.TEXT_COLORS[0], font=shared.FONT_TEXT)
         self.lbl_path.pack(side="left", fill="x", expand=True, anchor="w")
 
-        self.btn_save = s.ReactiveButton(frame_top, text="SAVE FILE", command=self._on_save)
+        self.btn_save = shared.ReactiveButton(frame_top, text="SAVE FILE", command=self._on_save)
         self.btn_save.pack(side="right")
 
         # --- Middle Section: The Text Editor ---
-        frame_editor = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_editor = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_editor.pack(fill="both", expand=True)
 
         # Scrollbar
@@ -50,11 +49,11 @@ class FileEditorView(tk.Frame):
         # Text Widget
         self.text_widget = tk.Text(
             frame_editor,
-            bg=s.ENTRY_BACKGROUND_COLOR,
-            fg=s.TEXT_COLORS[0],
-            font=s.FONT_TEXT,
-            selectbackground=s.TEXT_COLORS[0],
-            selectforeground=s.TEXT_COLORS[-1],
+            bg=shared.ENTRY_BACKGROUND_COLOR,
+            fg=shared.TEXT_COLORS[0],
+            font=shared.FONT_TEXT,
+            selectbackground=shared.TEXT_COLORS[0],
+            selectforeground=shared.TEXT_COLORS[-1],
             undo=True,
             yscrollcommand=scrollbar.set
         )
@@ -66,19 +65,19 @@ class FileEditorView(tk.Frame):
         self.linenums.pack(side="left", fill="y")
 
         # --- Bottom Section: Editor Tools ---
-        frame_tools = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        frame_tools = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         frame_tools.pack(fill="x", pady=5)
 
-        btn_comment = s.ReactiveButton(frame_tools, text="COMMENT (Ctrl+/)", command=self._on_comment)
+        btn_comment = shared.ReactiveButton(frame_tools, text="COMMENT (Ctrl+/)", command=self._on_comment)
         btn_comment.pack(side="left", padx=5)
 
-        btn_uncomment = s.ReactiveButton(frame_tools, text="UNCOMMENT (Ctrl+\\)", command=self._on_uncomment)
+        btn_uncomment = shared.ReactiveButton(frame_tools, text="UNCOMMENT (Ctrl+\\)", command=self._on_uncomment)
         btn_uncomment.pack(side="left", padx=5)
 
-        btn_find = s.ReactiveButton(frame_tools, text="FIND (Ctrl+F)", command=self._on_find)
+        btn_find = shared.ReactiveButton(frame_tools, text="FIND (Ctrl+F)", command=self._on_find)
         btn_find.pack(side="left", padx=5)
 
-        btn_replace = s.ReactiveButton(frame_tools, text="REPLACE (Ctrl+R)", command=self._on_replace)
+        btn_replace = shared.ReactiveButton(frame_tools, text="REPLACE (Ctrl+R)", command=self._on_replace)
         btn_replace.pack(side="left", padx=5)
 
     def _setup_bindings(self):
@@ -167,9 +166,9 @@ class FileEditorView(tk.Frame):
                 level = rest_of_line.rstrip().count(LEVEL_INDENT)
 
                 # Protect against files deeper than our defined delimiter levels
-                if level < len(self.current_levels) and level < len(s.INI_LEVEL_COLORS):
+                if level < len(self.current_levels) and level < len(shared.INI_LEVEL_COLORS):
                     level_tag = f'level{level}_{line_index}'
-                    self.text_widget.tag_config(level_tag, foreground=s.INI_LEVEL_COLORS[level])
+                    self.text_widget.tag_config(level_tag, foreground=shared.INI_LEVEL_COLORS[level])
 
                     first_word = rest_of_line.split()[0].strip()
 
@@ -178,7 +177,8 @@ class FileEditorView(tk.Frame):
 
     def _on_save(self):
         """ Writes the editor content back to disk. """
-        if not self.current_path: return
+        if not self.current_path:
+            return
 
         content = self.text_widget.get('1.0', 'end-1c')  # -1c prevents adding a blank newline at the end
 
@@ -268,12 +268,12 @@ class FileEditorView(tk.Frame):
     def _on_back(self):
         """ Handles safely leaving the editor. """
         if self.check_unsaved_changes():
-            answer = s.invoke_choice(
+            answer = shared.invoke_choice(
                 title='Closing Editor',
                 text='Do you want to save your changes?',
-                buttons=({s.KEY_LABEL: 'Yes', s.KEY_RETURN: True, s.KEY_INFO: ''},
-                         {s.KEY_LABEL: 'No', s.KEY_RETURN: False, s.KEY_INFO: ''},
-                         {s.KEY_LABEL: 'Cancel', s.KEY_RETURN: None, s.KEY_INFO: ''})
+                buttons=({shared.KEY_LABEL: 'Yes', shared.KEY_RETURN: True, shared.KEY_INFO: ''},
+                         {shared.KEY_LABEL: 'No', shared.KEY_RETURN: False, shared.KEY_INFO: ''},
+                         {shared.KEY_LABEL: 'Cancel', shared.KEY_RETURN: None, shared.KEY_INFO: ''})
             )
             if answer is True:
                 self._on_save()
