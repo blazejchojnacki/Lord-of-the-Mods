@@ -3,10 +3,10 @@ import tkinter as tk
 from tkinter import ttk
 from dataclasses import fields
 
-from source.messaging import InternalError
+from source.messaging import log, InternalError
 import source.core as core
 import source.shared as s
-from source.constants import Property, MOD_DEF_FILE_NAME
+from source.constants import Property, MOD_DEF_FILE_NAME, Setting
 from models.mod import Mod, LibraryManager
 
 MOD_COLUMNS = {Property.NAME: 1, Property.TRANSFER_TYPE: 1, Property.DESCRIPTION: 5}
@@ -137,14 +137,10 @@ class ModManagerView(tk.Frame):
                         return  # Stop refreshing and jump to the new screen
 
                     elif do_initiate is False:
-                        # Add to exceptions so we don't ask again
-                        from source.constants import Setting
-                        exceptions = core.state.raw_settings.get(Setting.EXCEPTIONS, []).copy()
-                        exceptions.append(f'{core.state.library}/{folder}')
-                        core.state.raw_settings.save({Setting.EXCEPTIONS: exceptions})
-
-        except InternalError:
-            pass
+                        core.state.add_to_list(Setting.EXCEPTIONS, folder)
+                        log.info(f"added {folder} to exceptions")
+        except InternalError as err:
+            log.error(err.message)
 
         # 2. Populate Active Mods
         self.tree_active.delete(*self.tree_active.get_children())
