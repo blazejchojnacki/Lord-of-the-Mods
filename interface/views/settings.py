@@ -39,6 +39,7 @@ class SettingsView(tk.Frame):
                 button_browse = shared.ReactiveButton(row, text="BROWSE TO ADD", small=True,
                                                       command=lambda k=setting_key: self._browse_path_add(k))
                 button_browse.pack(side="left")
+            # TODO: allow changing the install path - cascading changes in other fields
 
         # Save Button
         btn_save = shared.ReactiveButton(self, text="SAVE SETTINGS", command=self._save_settings)
@@ -64,20 +65,26 @@ class SettingsView(tk.Frame):
         """ Pure UI Interaction """
         path = askdirectory(title="Select Folder")
         if path:
+            formatted_path = core.state.make_path_relative(path)
             self.entries[key].delete(0, tk.END)
-            self.entries[key].insert(0, path)
+            self.entries[key].insert(0, formatted_path)
 
     def _browse_path_add(self, key):
         """ Pure UI Interaction """
         path = askdirectory(title="Select Folder")
         if path:
-            self.entries[key].insert(tk.END, f", {path}")
+            formatted_path = core.state.make_path_relative(path)
+            self.entries[key].insert(tk.END, f", {formatted_path}")
 
     def _save_settings(self):
         """ Collects UI data and hands it to the core logic. """
         new_settings = {}
         for key, entry in self.entries.items():
-            new_settings[key] = entry.get()
+            entry_value = entry.get()
+            if ', ' in entry_value:
+                new_settings[key] = entry_value.split(', ')
+            else:
+                new_settings[key] = entry_value
 
         # Hand off to the core logic!
         core.state.save(new_settings)

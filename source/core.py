@@ -106,8 +106,10 @@ class AppConfig:
         self.save({setting: present_values})
 
     def make_path_relative(self, absolute_path):
+        if absolute_path == self.install_path:
+            return absolute_path
         if absolute_path.startswith(self.install_path):
-            return absolute_path[len(self.install_path):]
+            return absolute_path[len(f"{self.install_path}/"):]
         elif os.path.isdir(f"{self.library}/{absolute_path}"):
             return f"{self.raw_settings[Setting.LIBRARY]}/{absolute_path}"
         else:
