@@ -98,6 +98,15 @@ class Application(tk.Tk):
 
     def show_frame(self, page_name: str):
         """ Swaps the currently visible screen. """
+
+        # --- Intercept Navigation ---
+        if hasattr(self, 'last_view') and self.last_view in self.frames:
+            current_frame = self.frames[self.last_view]
+            # Ask the current view if we are allowed to leave
+            if hasattr(current_frame, 'confirm_leave'):
+                if not current_frame.confirm_leave():
+                    return  # The user clicked "Cancel", abort the navigation!
+
         # Hide all existing frames
         for frame in self.frames.values():
             frame.pack_forget()
@@ -108,10 +117,14 @@ class Application(tk.Tk):
                 self.frames[page_name] = ModManagerView(self.main_container, self)
             elif page_name == "SettingsView":
                 self.frames[page_name] = SettingsView(self.main_container, self)
+            elif page_name == "FileEditorView":
+                self.frames[page_name] = FileEditorView(self.main_container, self)
 
         # Show the requested frame
         frame = self.frames[page_name]
         frame.pack(fill="both", expand=True)
+
+        self.last_view = page_name
 
         # Tell the view it just became active so it can refresh its data
         if hasattr(frame, "on_show"):

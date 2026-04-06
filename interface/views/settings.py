@@ -82,3 +82,42 @@ class SettingsView(tk.Frame):
         # Hand off to the core logic!
         core.state.save(new_settings)
         print("Settings Saved Successfully")
+
+    def _has_unsaved_changes(self) -> bool:
+        """ Compares current UI values against the saved core state. """
+        for key, entry in self.entries.items():
+            current_ui_val = entry.get().strip()
+            saved_val = core.state.raw_settings.get(key, "")
+
+            # Format the saved value exactly how it appears in the UI
+            if isinstance(saved_val, list):
+                saved_val_str = ", ".join(saved_val)
+            else:
+                saved_val_str = str(saved_val)
+
+            if current_ui_val != saved_val_str:
+                return True
+        return False
+
+    def confirm_leave(self) -> bool:
+        """ Called by the main controller before navigating away. """
+        if self._has_unsaved_changes():
+            answer = shared.invoke_choice(
+                title='Unsaved Settings',
+                text='You have unsaved changes in your settings.\nDo you want to save them before leaving?',
+                buttons=({shared.KEY_LABEL: 'Yes', shared.KEY_RETURN: 'yes', shared.KEY_INFO: ''},
+                         {shared.KEY_LABEL: 'No', shared.KEY_RETURN: 'no', shared.KEY_INFO: ''},
+                         {shared.KEY_LABEL: 'Cancel', shared.KEY_RETURN: 'cancel', shared.KEY_INFO: ''})
+            )
+
+            if answer == 'yes':
+                self._save_settings()
+                return True  # Saved successfully, safe to leave
+            elif answer == 'no':
+                # Revert UI to saved state so they aren't lingering if we return
+                self._populate_fields()
+                return True  # User doesn't care, safe to leave
+            else:
+                return False  # User cancelled, DO NOT LEAVE
+
+        return True  # No changes, safe to leave

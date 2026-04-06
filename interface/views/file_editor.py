@@ -282,3 +282,21 @@ class FileEditorView(tk.Frame):
 
         if hasattr(self.controller, 'show_frame'):
             self.controller.show_frame("FileBrowserView")
+
+    def confirm_leave(self) -> bool:
+        if self.check_unsaved_changes():
+            answer = shared.invoke_choice(
+                title='Closing Editor',
+                text='Do you want to save your changes?',
+                buttons=({shared.KEY_LABEL: 'Yes', shared.KEY_RETURN: True, shared.KEY_INFO: ''},
+                         {shared.KEY_LABEL: 'No', shared.KEY_RETURN: False, shared.KEY_INFO: ''},
+                         {shared.KEY_LABEL: 'Cancel', shared.KEY_RETURN: None, shared.KEY_INFO: ''})
+            )
+            if answer is True:
+                self._on_save()
+                return True
+            elif answer is False:
+                return True
+            else:
+                return False
+        return True
