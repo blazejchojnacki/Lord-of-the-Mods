@@ -1,7 +1,9 @@
 import tkinter as tk
 from tkinter.filedialog import askdirectory
+
 import source.core as core
 import source.shared as shared
+from source.constants import Setting
 
 
 class SettingsView(tk.Frame):
@@ -29,10 +31,14 @@ class SettingsView(tk.Frame):
             entry.pack(side="left", fill="x", expand=True, padx=5)
             self.entries[setting_key] = entry
 
-            # Add a "Browse" button for path settings
-            btn_browse = shared.ReactiveButton(row, text="BROWSE", small=True,
-                                               command=lambda k=setting_key: self._browse_path(k))
-            btn_browse.pack(side="left")
+            if setting_key in (Setting.LIBRARY, Setting.ARCHIVE):
+                button_browse = shared.ReactiveButton(row, text="BROWSE TO CHANGE", small=True,
+                                                      command=lambda k=setting_key: self._browse_path_replace(k))
+                button_browse.pack(side="left")
+            elif setting_key in (Setting.EXCEPTIONS, Setting.GAMES):
+                button_browse = shared.ReactiveButton(row, text="BROWSE TO ADD", small=True,
+                                                      command=lambda k=setting_key: self._browse_path_add(k))
+                button_browse.pack(side="left")
 
         # Save Button
         btn_save = shared.ReactiveButton(self, text="SAVE SETTINGS", command=self._save_settings)
@@ -54,12 +60,18 @@ class SettingsView(tk.Frame):
             else:
                 entry.insert(0, str(val))
 
-    def _browse_path(self, key):
+    def _browse_path_replace(self, key):
         """ Pure UI Interaction """
         path = askdirectory(title="Select Folder")
         if path:
             self.entries[key].delete(0, tk.END)
             self.entries[key].insert(0, path)
+
+    def _browse_path_add(self, key):
+        """ Pure UI Interaction """
+        path = askdirectory(title="Select Folder")
+        if path:
+            self.entries[key].insert(tk.END, f", {path}")
 
     def _save_settings(self):
         """ Collects UI data and hands it to the core logic. """
@@ -68,5 +80,5 @@ class SettingsView(tk.Frame):
             new_settings[key] = entry.get()
 
         # Hand off to the core logic!
-        core.state.raw_settings.save(new_settings)
+        core.state.save(new_settings)
         print("Settings Saved Successfully")
