@@ -1,6 +1,9 @@
+import os
 import tkinter as tk
-import source.shared as s
 
+import source.shared as shared
+from source.shared import load_aesthetic, ReactiveButton
+from source.constants import PROGRAM_NAME
 from models.mod import Mod
 
 from interface.views.mod_manager import ModManagerView
@@ -19,16 +22,18 @@ class Application(tk.Tk):
         super().__init__()
 
         # Setup aesthetic defaults
-        s.load_aesthetic()
-        self.title("Modificator App")
+        load_aesthetic()
+        self.title(PROGRAM_NAME)
+        if os.path.isfile(shared.ICON_PATH):
+            self.iconbitmap(shared.ICON_PATH)
         self.geometry("1250x650")
-        self.configure(bg=s.APP_BACKGROUND_COLOR)
+        self.configure(bg=shared.APP_BACKGROUND_COLOR)
 
         # Build the Navigation Header
         self._build_header()
 
         # This is the master container where screens will be loaded
-        self.main_container = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        self.main_container = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         self.main_container.pack(fill="both", expand=True, padx=10, pady=10)
         self.last_view = ''
 
@@ -40,13 +45,13 @@ class Application(tk.Tk):
 
     def _build_header(self):
         """ Builds a permanent navigation bar at the top of the window. """
-        header = tk.Frame(self, bg=s.APP_BACKGROUND_COLOR)
+        header = tk.Frame(self, bg=shared.APP_BACKGROUND_COLOR)
         header.pack(fill="x", padx=10, pady=(10, 0))
 
-        btn_mods = s.ReactiveButton(header, text="MODS", command=lambda: self.show_frame("ModManagerView"))
+        btn_mods = ReactiveButton(header, text="MODS", command=lambda: self.show_frame("ModManagerView"))
         btn_mods.pack(side="left", padx=(0, 5))
 
-        btn_settings = s.ReactiveButton(header, text="SETTINGS", command=lambda: self.show_frame("SettingsView"))
+        btn_settings = ReactiveButton(header, text="SETTINGS", command=lambda: self.show_frame("SettingsView"))
         btn_settings.pack(side="left")
 
     def show_frame(self, page_name: str):

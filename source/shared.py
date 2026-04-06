@@ -154,7 +154,7 @@ class ChoiceWindow(tkinter.Toplevel):
         super().__init__()
         load_aesthetic()
         set_title_bar_color(self)
-        if os.path.isfile(f'{AESTHETIC_PATH}icon.ico'):
+        if os.path.isfile(ICON_PATH):
             self.iconbitmap(ICON_PATH)
         self.width = DOUBLE_WIDTH*4
         self.height = UNIT_HEIGHT*6
