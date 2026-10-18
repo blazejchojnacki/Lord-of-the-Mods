@@ -2,3 +2,6 @@
 /out
 /.idea
 /.venv
+/build
+
+/tests/big-example
