@@ -8,9 +8,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Require Python and nanobind before processing subdirectories
-find_package(Python 3.11 COMPONENTS Interpreter Development.Module REQUIRED)
+find_package(Python 3.12 COMPONENTS Interpreter Development.Module REQUIRED)
 find_package(nanobind CONFIG REQUIRED)
 
 # # Modular targets: each folder handles its own sources and includes
+add_subdirectory(src/core)
 add_subdirectory(src/big)
 add_subdirectory(src/cppy_bridge)

@@ -1,6 +1,8 @@
 // Gemini Pro 3.1
 
 #include <big/big_pack.hpp>
+#include <big/types.hpp>
+#include <core/endian.hpp>
 #include <fstream>
 #include <stdexcept>
 #include <vector>
@@ -9,14 +11,6 @@
 #include <algorithm>
 
 namespace lotm::big {
-
-    // Local byte swap to avoid modifying big_unpack.cpp or requiring a core library dependency here
-    static uint32_t swap_endian_pack(uint32_t val) noexcept {
-        return ((val & 0xFF000000) >> 24) |
-            ((val & 0x00FF0000) >> 8) |
-            ((val & 0x0000FF00) << 8) |
-            ((val & 0x000000FF) << 24);
-    }
 
     void BigPacker::pack_from_directory(const std::filesystem::path& source_dir, const std::filesystem::path& output_file) {
         if (!std::filesystem::exists(source_dir) || !std::filesystem::is_directory(source_dir)) {
@@ -55,13 +49,13 @@ namespace lotm::big {
             });
 
         uint32_t num_files = static_cast<uint32_t>(file_list.size());
-        uint32_t header_size = 16;
+        uint32_t header_size = HEADER_BASE_SIZE;
         for (const auto& f : file_list) {
             header_size += 4 + 4 + static_cast<uint32_t>(f.rel_path.length()) + 1;
         }
 
         // + 8 for byte-for-byte alignment with the EA "L219" gap
-        header_size += 8;
+        header_size += EA_PADDING_SIZE;
 
         uint32_t current_offset = header_size;
         for (auto& f : file_list) {
@@ -77,20 +71,20 @@ namespace lotm::big {
             throw std::runtime_error("Cannot create output file: " + output_file.string());
         }
 
-        out.write("BIG4", 4);
+        out.write(BIG4_MAGIC.data(), 4);
         out.write(reinterpret_cast<const char*>(&total_size), sizeof(total_size));
 
-        uint32_t be_num_files = swap_endian_pack(num_files);
+        uint32_t be_num_files = lotm::core::to_big_endian(num_files);
         out.write(reinterpret_cast<const char*>(&be_num_files), sizeof(be_num_files));
 
-        uint32_t be_header_size = swap_endian_pack(header_size);
+        uint32_t be_header_size = lotm::core::to_big_endian(header_size);
         out.write(reinterpret_cast<const char*>(&be_header_size), sizeof(be_header_size));
 
         for (const auto& f : file_list) {
-            uint32_t be_offset = swap_endian_pack(f.offset);
+            uint32_t be_offset = lotm::core::to_big_endian(f.offset);
             out.write(reinterpret_cast<const char*>(&be_offset), sizeof(be_offset));
 
-            uint32_t be_size = swap_endian_pack(f.size);
+            uint32_t be_size = lotm::core::to_big_endian(f.size);
             out.write(reinterpret_cast<const char*>(&be_size), sizeof(be_size));
 
             out.write(f.rel_path.c_str(), f.rel_path.length());
@@ -98,7 +92,7 @@ namespace lotm::big {
         }
 
         // for byte-for-byte alignment with the EA "L219" gap
-        out.write("L219", 8);
+        out.write(EA_PADDING_TAG.data(), EA_PADDING_SIZE);
 
         std::vector<char> chunk(1024 * 1024);
         for (const auto& f : file_list) {
