@@ -11,18 +11,57 @@ nanobind for Python - C++ bridge.
 BIG archive extractor
 BIG archive compressor
 
+## possible upgrades:
+1. Currently, the engine must extract the entire archive to disk.
+Modding tools, diff inspectors, and patchers usually only need to read a single file (e.g., data\ini\armor.ini) directly into memory as a std::span<const uint8_t> or std::string without touching the disk.
+2. Simulate mounting several overriding BIG by the game.
+3. CSF file parser?
+4. map decoder for object name updates, procedural changes accross multiple maps, Git tracking.
+
 # structure:
 lord-of-the-mods/
-├── CMakeLists.txt
+├── .gitignore
+├── CMakeLists.txt                     # main CMake
 ├── pyproject.toml                     # scikit-build-core configuration
+├── README.md
 │
 ├── include/
+│   ├── big/
+│   │   ├── big_pack.hpp
+│   │   ├── big_unpack.hpp
+│   │   ├── types.hpp
+│   │   └── ...
+│   ├── core/
+│   │   ├── endian.hpp
+│   │   └── ...
 │   └── ...
 │
-├── src/          
+├── src/
+│   ├── big/
+│   │   ├── big_pack.cpp
+│   │   ├── big_unpack.cpp
+│   │   ├── CMakeLists.txt
+│   │   └── ...
+│   ├── core/
+│   │   ├── CMakeLists.txt
+│   │   └── ...
+│   ├── cppy_bridge/
+│   │   ├── big_bind.cpp
+│   │   ├── register.hpp
+│   │   ├── main.cpp
+│   │   ├── CMakeLists.txt
+│   │   └── ...
 │   └── ...
+|
+├── scripts/
+│   ├── big_pack.py
+│   ├── big_unpack.py
+│   └── ...
+|
 └── tests/
-    ├── CMakeLists.txt
+    ├── big-example/...
+    ├── manual_test.md
+    ├── (CMakeLists.txt)
     └── ...
 
 # launch:
