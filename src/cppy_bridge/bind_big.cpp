@@ -7,6 +7,7 @@
 
 #include "register.hpp"
 #include <big/big_unpack.hpp>
+#include <big/big_pack.hpp>
 
 namespace nb = nanobind;
 
@@ -25,6 +26,10 @@ namespace lotm::python {
             .def("read_header", &lotm::big::BigArchive::read_header)
             .def("extract_all", &lotm::big::BigArchive::extract_all, nb::arg("output_dir"))
             .def("get_entries", &lotm::big::BigArchive::get_entries);
+
+        nb::class_<lotm::big::BigPacker>(sub, "BigPacker")
+            .def_static("pack_from_directory", &lotm::big::BigPacker::pack_from_directory,
+                nb::arg("source_dir"), nb::arg("output_file"));
     }
 
     // Static instance registers this function before NB_MODULE executes

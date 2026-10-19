@@ -2,6 +2,7 @@
 
 add_library(lotm_big STATIC
     big_unpack.cpp
+    big_pack.cpp
 )
 
 target_include_directories(lotm_big PUBLIC
