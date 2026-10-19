@@ -6,6 +6,7 @@
 #include <vector>
 #include <iostream>
 #include <string>
+#include <algorithm>
 
 namespace lotm::big {
 
@@ -47,11 +48,20 @@ namespace lotm::big {
             }
         }
 
+        // CRITICAL FIX: Sort the index alphabetically.
+        // SAGE engine uses bsearch on the archive index. An unsorted BIG file will crash the game.
+        std::sort(file_list.begin(), file_list.end(), [](const PackEntry& a, const PackEntry& b) {
+            return a.rel_path < b.rel_path;
+            });
+
         uint32_t num_files = static_cast<uint32_t>(file_list.size());
         uint32_t header_size = 16;
         for (const auto& f : file_list) {
             header_size += 4 + 4 + static_cast<uint32_t>(f.rel_path.length()) + 1;
         }
+
+        // + 8 for byte-for-byte alignment with the EA "L219" gap
+        header_size += 8;
 
         uint32_t current_offset = header_size;
         for (auto& f : file_list) {
@@ -86,6 +96,9 @@ namespace lotm::big {
             out.write(f.rel_path.c_str(), f.rel_path.length());
             out.write("\0", 1);
         }
+
+        // for byte-for-byte alignment with the EA "L219" gap
+        out.write("L219", 8);
 
         std::vector<char> chunk(1024 * 1024);
         for (const auto& f : file_list) {
