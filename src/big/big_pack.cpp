@@ -1,0 +1,118 @@
+// Gemini Pro 3.1
+
+#include <big/big_pack.hpp>
+#include <big/types.hpp>
+#include <core/endian.hpp>
+#include <fstream>
+#include <stdexcept>
+#include <vector>
+#include <iostream>
+#include <string>
+#include <algorithm>
+
+namespace lotm::big {
+
+    void BigPacker::pack_from_directory(const std::filesystem::path& source_dir, const std::filesystem::path& output_file) {
+        if (!std::filesystem::exists(source_dir) || !std::filesystem::is_directory(source_dir)) {
+            throw std::invalid_argument("Source directory does not exist or is not a directory.");
+        }
+
+        struct PackEntry {
+            std::filesystem::path full_path;
+            std::string rel_path;
+            uint32_t size{ 0 };
+            uint32_t offset{ 0 };
+        };
+
+        std::vector<PackEntry> file_list;
+
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(source_dir)) {
+            if (entry.is_regular_file()) {
+                PackEntry pack_entry;
+                pack_entry.full_path = entry.path();
+
+                auto rel_path = std::filesystem::relative(entry.path(), source_dir);
+                pack_entry.rel_path = rel_path.string();
+                for (char& c : pack_entry.rel_path) {
+                    if (c == '/') c = '\\';
+                }
+
+                pack_entry.size = static_cast<uint32_t>(std::filesystem::file_size(entry.path()));
+                file_list.push_back(std::move(pack_entry));
+            }
+        }
+
+        // CRITICAL FIX: Sort the index alphabetically.
+        // SAGE engine uses bsearch on the archive index. An unsorted BIG file will crash the game.
+        std::sort(file_list.begin(), file_list.end(), [](const PackEntry& a, const PackEntry& b) {
+            return a.rel_path < b.rel_path;
+            });
+
+        uint32_t num_files = static_cast<uint32_t>(file_list.size());
+        uint32_t header_size = HEADER_BASE_SIZE;
+        for (const auto& f : file_list) {
+            header_size += 4 + 4 + static_cast<uint32_t>(f.rel_path.length()) + 1;
+        }
+
+        // + 8 for byte-for-byte alignment with the EA "L219" gap
+        header_size += EA_PADDING_SIZE;
+
+        uint32_t current_offset = header_size;
+        for (auto& f : file_list) {
+            f.offset = current_offset;
+            current_offset += f.size;
+        }
+
+        uint32_t total_size = current_offset;
+
+        std::cout << "Creating archive: " << output_file.string() << '\n';
+        std::ofstream out(output_file, std::ios::binary);
+        if (!out.is_open()) {
+            throw std::runtime_error("Cannot create output file: " + output_file.string());
+        }
+
+        out.write(BIG4_MAGIC.data(), 4);
+        out.write(reinterpret_cast<const char*>(&total_size), sizeof(total_size));
+
+        uint32_t be_num_files = lotm::core::to_big_endian(num_files);
+        out.write(reinterpret_cast<const char*>(&be_num_files), sizeof(be_num_files));
+
+        uint32_t be_header_size = lotm::core::to_big_endian(header_size);
+        out.write(reinterpret_cast<const char*>(&be_header_size), sizeof(be_header_size));
+
+        for (const auto& f : file_list) {
+            uint32_t be_offset = lotm::core::to_big_endian(f.offset);
+            out.write(reinterpret_cast<const char*>(&be_offset), sizeof(be_offset));
+
+            uint32_t be_size = lotm::core::to_big_endian(f.size);
+            out.write(reinterpret_cast<const char*>(&be_size), sizeof(be_size));
+
+            out.write(f.rel_path.c_str(), f.rel_path.length());
+            out.write("\0", 1);
+        }
+
+        // for byte-for-byte alignment with the EA "L219" gap
+        out.write(EA_PADDING_TAG.data(), EA_PADDING_SIZE);
+
+        std::vector<char> chunk(1024 * 1024);
+        for (const auto& f : file_list) {
+            std::cout << "Packing: " << f.rel_path << '\n';
+            std::ifstream src(f.full_path, std::ios::binary);
+            if (!src.is_open()) {
+                throw std::runtime_error("Cannot read source file: " + f.full_path.string());
+            }
+
+            while (src) {
+                src.read(chunk.data(), chunk.size());
+                std::streamsize bytes_read = src.gcount();
+                if (bytes_read > 0) {
+                    out.write(chunk.data(), bytes_read);
+                }
+            }
+        }
+
+        std::cout << "\nSuccess! Created file: " << output_file.string() << '\n';
+        std::cout << "Total size: " << total_size << " bytes\n";
+    }
+
+} // namespace lotm::big

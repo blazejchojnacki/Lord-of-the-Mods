@@ -2,18 +2,13 @@
 
 #pragma once
 
+#include <big/types.hpp>
 #include <filesystem>
 #include <string>
 #include <vector>
 #include <cstdint>
 
 namespace lotm::big {
-
-    struct BigEntry {
-        uint32_t offset;
-        uint32_t size;
-        std::string name;
-    };
 
     class BigArchive {
     public:
@@ -32,9 +27,6 @@ namespace lotm::big {
         std::vector<BigEntry> entries_;
         uint32_t total_size_{ 0 };
         uint32_t header_size_{ 0 };
-
-        // Helper for Big-Endian conversion (equivalent to struct.unpack('>I'))
-        static uint32_t swap_endian(uint32_t val) noexcept;
     };
 
 } // namespace lotm::big

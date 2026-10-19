@@ -1,6 +1,7 @@
 // Gemini Pro 3.1
 
 #include <big/big_unpack.hpp>
+#include <core/endian.hpp>
 #include <fstream>
 #include <stdexcept>
 #include <iostream>
@@ -13,14 +14,6 @@ namespace lotm::big {
         std::string result;
         std::getline(stream, result, '\0');
         return result;
-    }
-
-    uint32_t BigArchive::swap_endian(uint32_t val) noexcept {
-        // Manual byte swap needed because x86/x64 architecture is Little-Endian natively
-        return ((val & 0xFF000000) >> 24) |
-            ((val & 0x00FF0000) >> 8) |
-            ((val & 0x0000FF00) << 8) |
-            ((val & 0x000000FF) << 24);
     }
 
     BigArchive::BigArchive(std::filesystem::path file_path)
@@ -36,7 +29,7 @@ namespace lotm::big {
         // Header reading
         char magic[5] = { 0 };
         file.read(magic, 4);
-        if (std::string_view(magic) != "BIG4") {
+        if (std::string_view(magic) != BIG4_MAGIC) {
             throw std::invalid_argument(std::string("Not a BIG4 file! Found: ") + magic);
         }
 
@@ -46,10 +39,10 @@ namespace lotm::big {
         // Number of files and header size (Big Endian - hence swapping)
         uint32_t num_files = 0;
         file.read(reinterpret_cast<char*>(&num_files), sizeof(num_files));
-        num_files = swap_endian(num_files);
+        num_files = lotm::core::from_big_endian(num_files);
 
         file.read(reinterpret_cast<char*>(&header_size_), sizeof(header_size_));
-        header_size_ = swap_endian(header_size_);
+        header_size_ = lotm::core::from_big_endian(header_size_);
 
         std::cout << "File: " << file_path_.string() << '\n';
         std::cout << "Number of files inside: " << num_files << '\n';
@@ -61,10 +54,10 @@ namespace lotm::big {
             BigEntry entry;
 
             file.read(reinterpret_cast<char*>(&entry.offset), sizeof(entry.offset));
-            entry.offset = swap_endian(entry.offset);
+            entry.offset = lotm::core::from_big_endian(entry.offset);
 
             file.read(reinterpret_cast<char*>(&entry.size), sizeof(entry.size));
-            entry.size = swap_endian(entry.size);
+            entry.size = lotm::core::from_big_endian(entry.size);
 
             // Read file name until null byte
             entry.name = read_null_terminated_string(file);
