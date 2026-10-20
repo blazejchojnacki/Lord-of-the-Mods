@@ -12,3 +12,12 @@ target_include_directories(lotm PRIVATE
 )
 
 target_link_libraries(lotm PRIVATE lotm_big)
+
+install(TARGETS lotm LIBRARY DESTINATION .)
+install(
+    FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/../lotm/__init__.pyi
+        ${CMAKE_CURRENT_SOURCE_DIR}/../lotm/big.pyi
+        ${CMAKE_CURRENT_SOURCE_DIR}/../lotm/py.typed
+    DESTINATION lotm
+)
