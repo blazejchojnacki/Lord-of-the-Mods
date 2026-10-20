@@ -1,6 +1,6 @@
 '''
 @file src/lotm/__init__.pyi
-@brief stud for type checks and hints in Python IDE.
+@brief stub for type checks and hints in Python IDE.
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
 Part of the Lord of the Mods (lotm) project.
