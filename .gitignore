@@ -3,5 +3,7 @@
 /.idea
 /.venv
 /build
+/dist
+*.egg-info/
 
 /tests/big-example
