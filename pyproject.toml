@@ -5,6 +5,13 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "lord-of-the-mods"
 version = "0.1.0"
+license = { text = "GPL-3.0-or-later" }
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3.12"
+]
 description = "Modular library for Battle for Middle-earth modifications"
 readme = "README.md"
 requires-python = ">=3.12"
