@@ -1,4 +1,12 @@
-# Extracting an Archive:
+# Python library user manual
+
+`lotm` exposes high-performance C++ archive operations directly to Python scripts.
+
+---
+
+## Extracting an Archive:
+
+Use `BigArchive` to inspect headers and unpack files
 
 ``` Python
 import lotm.big as big
@@ -15,7 +23,9 @@ for entry in archive.get_entries():
 archive.extract_all(Path("extracted_ini"))
 ```
 
-# Repacking a directory:
+## Repacking a directory:
+
+Use `BigPacker` to create a binary-search sorted archive compliant with the SAGE engine
 
 ``` Python
 import lotm.big as big

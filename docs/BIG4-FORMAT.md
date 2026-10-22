@@ -20,4 +20,4 @@ Repeated `File Count` times immediately following the header:
 
 ## Critical Format Quirks
 1. **Alphabetical Sorting:** Entries in the index table MUST be sorted alphabetically using standard ASCII comparisons. The SAGE runtime performs a `bsearch` on the index; an unsorted index leads to file lookup failures or game crashes.
-2. **Padding Block:** Original BFME archives contain an 8-byte padding tag (`"L219    "`) directly between the end of the last null-terminated file path and the start of the first file payload.
+2. **Padding Block:** Original BFME archives contain an 8-byte padding tag (`"L219"`) directly between the end of the last null-terminated file path and the start of the first file payload.

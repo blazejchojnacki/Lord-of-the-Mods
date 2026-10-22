@@ -23,12 +23,22 @@ Install the pre-compiled library via pip:
 pip install lord-of-the-mods
 ```
 
+No C++ compiler, CMake, or Visual Studio installation is required for pre-compiled wheels.
+
 ## Python Library Use
 
-For examples of use of the lotm python library, see docs/LIBRARY.md
+For Python code examples of use of the lotm library, see docs/LIBRARY.md
 
 ## Development
 
-For development, see docs/DEVELOPMENT.md
+To build the library from source or contribute to development, see docs/DEVELOPMENT.md
 
-## 
+For deep technical details regarding the BIG4 binary layout and alignment, see docs/BIG4_FORMAT.md.
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 or later (GPL-3.0-or-later). See the LICENSE file for the full license text.
+
+## Acknowledgments
+
+Developed with architectural and implementation assistance from Google Gemini.
