@@ -1,8 +1,17 @@
-# Python library user manual
+# Lord-of-the-Mods
+# Python library guide
 
 `lotm` exposes high-performance C++ archive operations directly to Python scripts.
 
----
+## Installation
+
+Install the pre-compiled library via pip:
+
+```
+pip install lord-of-the-mods
+```
+
+No C++ compiler, CMake, or Visual Studio installation is required for pre-compiled wheels.
 
 ## Extracting an Archive:
 

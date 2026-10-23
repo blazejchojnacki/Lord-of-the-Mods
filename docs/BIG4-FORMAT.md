@@ -1,4 +1,5 @@
-﻿# EA BIG4 Archive Specification
+﻿# Lord-of-the-Mods
+# EA BIG4 Archive Specification
 
 The SAGE engine utilizes the `BIG4` container format (FourCC: `BIG4`).
 
