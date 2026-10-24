@@ -7,3 +7,5 @@
 *.egg-info/
 
 /tests/big-example
+
+/progress.md
