@@ -133,3 +133,56 @@ TEST_CASE("Concept constraint verification", "[endian][concept]") {
         STATIC_REQUIRE_FALSE(std::integral<std::nullptr_t>);
     }
 }
+
+TEST_CASE("Noexcept specification contract", "[endian][noexcept]") {
+    SECTION("Positive scenario: All functions guarantee noexcept") {
+        uint32_t v32 = 0x12345678;
+        int64_t v64 = -100;
+
+        STATIC_REQUIRE(noexcept(byteswap(v32)));
+        STATIC_REQUIRE(noexcept(byteswap(v64)));
+        STATIC_REQUIRE(noexcept(to_big_endian(v32)));
+        STATIC_REQUIRE(noexcept(from_big_endian(v64)));
+    }
+}
+
+TEST_CASE("Extended character types support", "[endian][chartypes]") {
+    SECTION("Positive scenario: char16_t and char32_t swap correctly") {
+        char16_t c16 = u'\u1234';
+        REQUIRE(byteswap(c16) == static_cast<char16_t>(0x3412));
+
+        char32_t c32 = U'\U0001F600'; // 0x0001F600
+        REQUIRE(byteswap(c32) == static_cast<char32_t>(0x00F60100));
+    }
+
+    SECTION("Positive scenario: wchar_t matches host size swap") {
+        wchar_t w = static_cast<wchar_t>(0x1234);
+        if constexpr (sizeof(wchar_t) == 2) {
+            REQUIRE(byteswap(w) == static_cast<wchar_t>(0x3412));
+        }
+        else if constexpr (sizeof(wchar_t) == 4) {
+            REQUIRE(byteswap(w) == static_cast<wchar_t>(0x34120000));
+        }
+    }
+}
+
+TEST_CASE("Signed integer boundary extremes", "[endian][signed_limits]") {
+    SECTION("Negative scenario: Minimum two's complement values swap bit-accurately") {
+        // int16_t min is 0x8000 (-32768). Swapped: 0x0080 (128)
+        int16_t min16 = std::numeric_limits<int16_t>::min();
+        REQUIRE(byteswap(min16) == static_cast<int16_t>(0x0080));
+
+        // int32_t min is 0x80000000. Swapped: 0x00000080 (128)
+        int32_t min32 = std::numeric_limits<int32_t>::min();
+        REQUIRE(byteswap(min32) == static_cast<int32_t>(0x00000080));
+
+        // int64_t min is 0x8000000000000000. Swapped: 0x0000000000000080 (128)
+        int64_t min64 = std::numeric_limits<int64_t>::min();
+        REQUIRE(byteswap(min64) == static_cast<int64_t>(0x0000000000000080LL));
+    }
+
+    SECTION("Negative scenario: Signed 64-bit negative values retain exact bit pattern") {
+        int64_t neg64 = -2LL; // 0xFFFFFFFFFFFFFFFE. Swapped: 0xFEFFFFFFFFFFFFFF
+        REQUIRE(byteswap(neg64) == static_cast<int64_t>(0xFEFFFFFFFFFFFFFFULL));
+    }
+}
