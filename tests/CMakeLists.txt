@@ -19,6 +19,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+cmake_minimum_required(VERSION 3.20)
+project(lotm_tests LANGUAGES CXX)
+
 include(FetchContent)
 
 FetchContent_Declare(
@@ -30,15 +33,15 @@ FetchContent_MakeAvailable(Catch2)
 
 add_executable(lotm_cpp_tests
     cpp/main.cpp
-   # cpp/test_endian.cpp
+    cpp/core/test_endian.cpp
    # cpp/test_big_archive.cpp
    # cpp/test_big_packer.cpp
 )
 
 target_link_libraries(lotm_cpp_tests PRIVATE
     lotm_core
-    lotm_big
-    Catch2::Catch2WithMain
+   # lotm_big
+    Catch2::Catch2
 )
 
 target_compile_features(lotm_cpp_tests PRIVATE cxx_std_20)
