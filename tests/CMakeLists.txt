@@ -34,13 +34,13 @@ FetchContent_MakeAvailable(Catch2)
 add_executable(lotm_cpp_tests
     cpp/main.cpp
     cpp/core/test_endian.cpp
-   # cpp/test_big_archive.cpp
+    cpp/big/test_big_unpack.cpp
    # cpp/test_big_packer.cpp
 )
 
 target_link_libraries(lotm_cpp_tests PRIVATE
     lotm_core
-   # lotm_big
+    lotm_big
     Catch2::Catch2
 )
 
