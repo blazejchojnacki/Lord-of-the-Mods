@@ -1,25 +1,11 @@
-'''
+"""
 @file scripts/big_unpack.py
 @brief Script enabling unpacking files from .BIG using shell commands
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
 Part of the Lord of the Mods (lotm) project.
-
-This program is free software: you can redistribute it and/or modify
-	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option) any later version.
-
-	This program is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	GNU General Public License for more details.
-
-	You should have received a copy of the GNU General Public License
-	along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 SPDX-License-Identifier: GPL-3.0-or-later
-'''
+"""
 
 import argparse
 from pathlib import Path
@@ -36,7 +22,22 @@ except ModuleNotFoundError:
     sys.exit(1)
 
 
-def extract(big_path: Path, output_dir: Path) -> None:
+def unpack(big_path: Path, output_dir: Path) -> list[big.BigEntry]:
+    """
+    Unpacks an EA BIG4 archive into a target directory.
+
+    Args:
+        big_path: Path to the .big archive file.
+        output_dir: Destination directory where files will be extracted.
+
+    Returns:
+        List of BigEntry objects describing the extracted files.
+
+    Raises:
+        FileNotFoundError: If the archive file does not exist.
+        ValueError: If the file header does not match the BIG4 specification.
+        RuntimeError: If archive bounds checking or stream reads fail.
+    """
     if not big_path.is_file():
         raise FileNotFoundError(f"Archive not found: {big_path}")
 
@@ -53,6 +54,12 @@ def extract(big_path: Path, output_dir: Path) -> None:
     archive.extract_all(output_dir)
     print(f"Finished extracting into: {output_dir.resolve()}")
 
+    return entries
+
+
+# Backward-compatible alias
+extract = unpack
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Extract EA BIG4 archives using lotm.")
@@ -68,7 +75,7 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        extract(args.archive, args.output)
+        unpack(args.archive, args.output)
     except Exception as exc:
         print(f"Extraction failed: {exc}", file=sys.stderr)
         sys.exit(1)
