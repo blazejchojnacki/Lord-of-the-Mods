@@ -28,7 +28,7 @@ To build the library from source or contribute to development, see **[Developmen
 
 For deep technical details regarding the BIG4 binary layout and alignment, see **[BIG4 Format Specs](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/BIG4_FORMAT.md)**.
 
-For a short guide on manual testing, see **[Manual Tests](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/tests/manual-tests.md):**
+For a short guide on manual testing, see **[Manual Tests](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/tests/manual-tests.md)**
 
 ## License
 
