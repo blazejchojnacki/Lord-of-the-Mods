@@ -84,6 +84,19 @@ public:
 };
 
 
+TEST_CASE("BIG4 Type and Constant Invariants", "[big][types][constexpr]") {
+    // Validate constant size contracts required by the BIG4 specification
+    STATIC_REQUIRE(lotm::big::BIG4_MAGIC.size() == 4);
+    STATIC_REQUIRE(lotm::big::EA_PADDING_TAG.size() == 8);
+    STATIC_REQUIRE(lotm::big::HEADER_BASE_SIZE == 16);
+    STATIC_REQUIRE(lotm::big::EA_PADDING_SIZE == 8);
+
+    // Ensure BigEntry remains cheap to move and standard-conforming
+    STATIC_REQUIRE(std::is_nothrow_move_constructible_v<lotm::big::BigEntry>);
+    STATIC_REQUIRE(std::is_nothrow_move_assignable_v<lotm::big::BigEntry>);
+}
+
+
 TEST_CASE("BigArchive Initialization and Basic Error Handling", "[big_unpack][error]") {
     ScopedTempEnv env;
 
