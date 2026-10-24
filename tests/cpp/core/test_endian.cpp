@@ -1,5 +1,5 @@
 /**
- * @file tests/cpp/test_endian.cpp
+ * @file tests/cpp/core/test_endian.cpp
  * @brief Unit tests for lotm::core endianness utilities.
  *
  * Copyright (C) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
@@ -9,6 +9,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <core/endian.hpp>
+#include <concepts>
 #include <cstdint>
 #include <limits>
 
@@ -71,23 +72,6 @@ TEST_CASE("Endianness operations handle signed integers safely", "[endian][signe
     }
 }
 
-TEST_CASE("System endianness routing to_big_endian and from_big_endian", "[endian][system]") {
-    uint32_t test_val = 0xAABBCCDD;
-
-    if constexpr (std::endian::native == std::endian::little) {
-        SECTION("Positive scenario: Little Endian host swaps the bytes") {
-            REQUIRE(to_big_endian(test_val) == 0xDDCCBBAA);
-            REQUIRE(from_big_endian(test_val) == 0xDDCCBBAA);
-        }
-    }
-    else {
-        SECTION("Positive scenario: Big Endian host acts as a no-op") {
-            REQUIRE(to_big_endian(test_val) == 0xAABBCCDD);
-            REQUIRE(from_big_endian(test_val) == 0xAABBCCDD);
-        }
-    }
-}
-
 TEST_CASE("Endianness idempotency and byte invariants", "[endian][identity]") {
     SECTION("Positive scenario: Double swap restores the original value") {
         uint16_t v16 = 0x1234;
@@ -105,29 +89,47 @@ TEST_CASE("Endianness idempotency and byte invariants", "[endian][identity]") {
     }
 }
 
-TEST_CASE("System routing handles 16-bit and 64-bit boundaries", "[endian][routing]") {
+TEST_CASE("System endianness routing to_big_endian and from_big_endian", "[endian][routing]") {
     uint16_t v16 = 0x1234;
+    uint32_t v32 = 0xAABBCCDD;
     uint64_t v64 = 0x0102030405060708ULL;
 
     if constexpr (std::endian::native == std::endian::little) {
-        REQUIRE(to_big_endian(v16) == 0x3412);
-        REQUIRE(from_big_endian(v16) == 0x3412);
-        REQUIRE(to_big_endian(v64) == 0x0807060504030201ULL);
-        REQUIRE(from_big_endian(v64) == 0x0807060504030201ULL);
+        SECTION("Positive scenario: Little Endian host swaps the bytes") {
+            REQUIRE(to_big_endian(v16) == 0x3412);
+            REQUIRE(from_big_endian(v16) == 0x3412);
+            REQUIRE(to_big_endian(v32) == 0xDDCCBBAA);
+            REQUIRE(from_big_endian(v32) == 0xDDCCBBAA);
+            REQUIRE(to_big_endian(v64) == 0x0807060504030201ULL);
+            REQUIRE(from_big_endian(v64) == 0x0807060504030201ULL);
+        }
     }
     else {
-        REQUIRE(to_big_endian(v16) == v16);
-        REQUIRE(from_big_endian(v16) == v16);
-        REQUIRE(to_big_endian(v64) == v64);
-        REQUIRE(from_big_endian(v64) == v64);
+        SECTION("Positive scenario: Big Endian host acts as a no-op") {
+            REQUIRE(to_big_endian(v16) == 0x1234);
+            REQUIRE(from_big_endian(v16) == 0x1234);
+            REQUIRE(to_big_endian(v32) == 0xAABBCCDD);
+            REQUIRE(from_big_endian(v32) == 0xAABBCCDD);
+            REQUIRE(to_big_endian(v64) == 0x0102030405060708ULL);
+            REQUIRE(from_big_endian(v64) == 0x0102030405060708ULL);
+        }
     }
 }
 
-TEST_CASE("Concept rejection for non-integral types", "[endian][concept]") {
-    SECTION("Negative scenario: Non-integrals are rejected at compile time") {
-        STATIC_REQUIRE_FALSE(requires { byteswap(3.14f); });
-        STATIC_REQUIRE_FALSE(requires { byteswap(2.71828); });
-        STATIC_REQUIRE_FALSE(requires { byteswap("string"); });
-        STATIC_REQUIRE_FALSE(requires { to_big_endian(nullptr); });
+TEST_CASE("Concept constraint verification", "[endian][concept]") {
+    SECTION("Positive scenario: Integrals satisfy function template constraints") {
+        STATIC_REQUIRE(requires(uint8_t v) { byteswap(v); });
+        STATIC_REQUIRE(requires(uint16_t v) { byteswap(v); });
+        STATIC_REQUIRE(requires(uint32_t v) { byteswap(v); });
+        STATIC_REQUIRE(requires(uint64_t v) { byteswap(v); });
+        STATIC_REQUIRE(requires(int32_t v) { from_big_endian(v); });
+        STATIC_REQUIRE(requires(uint32_t v) { to_big_endian(v); });
+    }
+
+    SECTION("Negative scenario: Non-integral types do not satisfy std::integral") {
+        STATIC_REQUIRE_FALSE(std::integral<float>);
+        STATIC_REQUIRE_FALSE(std::integral<double>);
+        STATIC_REQUIRE_FALSE(std::integral<const char*>);
+        STATIC_REQUIRE_FALSE(std::integral<std::nullptr_t>);
     }
 }
