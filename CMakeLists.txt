@@ -34,3 +34,12 @@ find_package(nanobind CONFIG REQUIRED)
 add_subdirectory(src/core)
 add_subdirectory(src/big)
 add_subdirectory(src/cppy_bridge)
+
+
+# tests
+option(BUILD_TESTING "Build the test suite" ON)
+
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
