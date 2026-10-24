@@ -5,20 +5,40 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "lord-of-the-mods"
 version = "0.1.0"
-license = { text = "GPL-3.0-or-later" }
-classifiers = [
-    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
-    "Operating System :: Microsoft :: Windows",
-    "Programming Language :: C++",
-    "Programming Language :: Python :: 3.12"
-]
-description = "Modular library for Battle for Middle-earth modifications"
+description = "Modular Python library and modding toolkit for The Battle for Middle-earth game"
 readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
 requires-python = ">=3.12"
 authors = [
-    { name = "blazejchojnacki" }
+    { name = "Błażej Chojnacki" }
 ]
-
+keywords = [
+    "bfme",
+    "sage-engine",
+    "lotr",
+    "big4",
+    "modding"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Games/Entertainment",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed"
+]
 [tool.scikit-build]
 cmake.version = ">=3.20"
 cmake.build-type = "Release"
+
+[project.urls]
+Homepage = "https://github.com/blazejchojnacki/Lord-of-the-Mods"
+"Source Code" = "https://github.com/blazejchojnacki/Lord-of-the-Mods"
+"Issue Tracker" = "https://github.com/blazejchojnacki/Lord-of-the-Mods/issues"
+Changelog = "https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/CHANGELOG.md"
+Documentation = "https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/LIBRARY.md"
