@@ -1,6 +1,14 @@
-# Gemini Pro 3.1
+"""
+@file scripts/big_unpack.py
+@brief Script enabling unpacking files from .BIG using shell commands
+
+Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
+Part of the Lord of the Mods (lotm) project.
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
 
 import argparse
+import logging
 from pathlib import Path
 import sys
 
@@ -14,8 +22,25 @@ except ModuleNotFoundError:
     )
     sys.exit(1)
 
+logger = logging.getLogger("lotm")
 
-def extract(big_path: Path, output_dir: Path) -> None:
+
+def unpack(big_path: Path, output_dir: Path) -> list[big.BigEntry]:
+    """
+    Unpacks an EA BIG4 archive into a target directory.
+
+    Args:
+        big_path: Path to the .big archive file.
+        output_dir: Destination directory where files will be extracted.
+
+    Returns:
+        List of BigEntry objects describing the extracted files.
+
+    Raises:
+        FileNotFoundError: If the archive file does not exist.
+        ValueError: If the file header does not match the BIG4 specification.
+        RuntimeError: If archive bounds checking or stream reads fail.
+    """
     if not big_path.is_file():
         raise FileNotFoundError(f"Archive not found: {big_path}")
 
@@ -26,11 +51,17 @@ def extract(big_path: Path, output_dir: Path) -> None:
 
     # Inspect parsed entries via bindings
     entries = archive.get_entries()
-    print(f"Loaded {len(entries)} entries from {big_path.name}")
+    logger.info("Loaded %d entries from %s", len(entries), big_path.name)
 
     # Extract all indexed files to the destination folder
     archive.extract_all(output_dir)
-    print(f"Finished extracting into: {output_dir.resolve()}")
+    logger.info("Finished extracting into: %s", output_dir.resolve())
+
+    return entries
+
+
+# Backward-compatible alias
+extract = unpack
 
 
 def main() -> None:
@@ -47,7 +78,7 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        extract(args.archive, args.output)
+        unpack(args.archive, args.output)
     except Exception as exc:
         print(f"Extraction failed: {exc}", file=sys.stderr)
         sys.exit(1)

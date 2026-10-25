@@ -23,6 +23,7 @@ jobs:
   build-and-test:
     name: Build and Test (Windows)
     runs-on: windows-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -43,10 +44,12 @@ jobs:
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(python -m nanobind --cmake_dir)"
 
       - name: Build C++ Extension
+        # Compiles the C++ core and nanobind .pyd module.
         run: cmake --build build --config Release -j 4
 
       - name: Run C++ Native Tests (Catch2)
         working-directory: ${{ github.workspace }}/build
+        # Executes the Catch2 suite targeting the Release build.
         run: ctest --output-on-failure -C Release
 
       - name: Run Python Integration Tests (Pytest)

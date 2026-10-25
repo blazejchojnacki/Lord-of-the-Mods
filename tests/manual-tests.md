@@ -1,9 +1,4 @@
 # Lord-of-the-Mods
-
-## author:
-Błażej Chojnacki
-blazejchojnacki
-
 # Manual Tests:
 
 ## big_unpack

@@ -1,4 +1,11 @@
-// Gemini Pro 3.1
+/**
+ * @file src/big/big_pack.cpp
+ * @brief Implementation of BIG packing object
+ *
+ * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
+ * Part of the Lord of the Mods (lotm) project.
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 
 #include <big/big_pack.hpp>
 #include <big/types.hpp>
@@ -9,12 +16,18 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <limits>
 
 namespace lotm::big {
 
     void BigPacker::pack_from_directory(const std::filesystem::path& source_dir, const std::filesystem::path& output_file) {
         if (!std::filesystem::exists(source_dir) || !std::filesystem::is_directory(source_dir)) {
             throw std::invalid_argument("Source directory does not exist or is not a directory.");
+        }
+
+        // Create missing parent directories for the output file
+        if (auto parent = output_file.parent_path(); !parent.empty() && !std::filesystem::exists(parent)) {
+            std::filesystem::create_directories(parent);
         }
 
         struct PackEntry {
@@ -25,6 +38,7 @@ namespace lotm::big {
         };
 
         std::vector<PackEntry> file_list;
+        uintmax_t total_payload_size = 0;
 
         for (const auto& entry : std::filesystem::recursive_directory_iterator(source_dir)) {
             if (entry.is_regular_file()) {
@@ -37,7 +51,15 @@ namespace lotm::big {
                     if (c == '/') c = '\\';
                 }
 
-                pack_entry.size = static_cast<uint32_t>(std::filesystem::file_size(entry.path()));
+                uintmax_t fsize = std::filesystem::file_size(entry.path());
+
+                // Guard against individual files exceeding 32-bit limits
+                if (fsize > std::numeric_limits<uint32_t>::max()) {
+                    throw std::length_error("File '" + pack_entry.rel_path + "' exceeds the 4GB format limit.");
+                }
+
+                pack_entry.size = static_cast<uint32_t>(fsize);
+                total_payload_size += fsize;
                 file_list.push_back(std::move(pack_entry));
             }
         }
@@ -49,14 +71,20 @@ namespace lotm::big {
             });
 
         uint32_t num_files = static_cast<uint32_t>(file_list.size());
-        uint32_t header_size = HEADER_BASE_SIZE;
+        uintmax_t header_size_calc = HEADER_BASE_SIZE;
         for (const auto& f : file_list) {
-            header_size += 4 + 4 + static_cast<uint32_t>(f.rel_path.length()) + 1;
+            header_size_calc += 4 + 4 + f.rel_path.length() + 1;
         }
 
         // + 8 for byte-for-byte alignment with the EA "L219" gap
-        header_size += EA_PADDING_SIZE;
+        header_size_calc += EA_PADDING_SIZE;
 
+        // Guard against total archive size exceeding 32-bit limits (4GB overflow)
+        if (header_size_calc + total_payload_size > std::numeric_limits<uint32_t>::max()) {
+            throw std::length_error("Total archive size exceeds the 32-bit (4GB) BIG4 format limit.");
+        }
+
+        uint32_t header_size = static_cast<uint32_t>(header_size_calc);
         uint32_t current_offset = header_size;
         for (auto& f : file_list) {
             f.offset = current_offset;

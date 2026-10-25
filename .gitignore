@@ -3,5 +3,10 @@
 /.idea
 /.venv
 /build
+/dist
+*.egg-info/
+*__pycache__/
 
 /tests/big-example
+
+/progress.md

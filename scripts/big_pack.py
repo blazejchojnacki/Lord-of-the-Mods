@@ -1,6 +1,14 @@
-# Gemini Pro 3.1
+"""
+@file scripts/big_pack.py
+@brief Script enabling packing files into .BIG using shell commands
+
+Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
+Part of the Lord of the Mods (lotm) project.
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
 
 import argparse
+import logging
 from pathlib import Path
 import sys
 
@@ -13,6 +21,27 @@ except ModuleNotFoundError:
         file=sys.stderr,
     )
     sys.exit(1)
+
+logger = logging.getLogger("lotm")
+
+
+def pack(source_dir: Path, output_file: Path) -> None:
+    """
+    Packs a directory into an EA BIG4 archive.
+
+    Args:
+        source_dir: Path to the directory containing files to pack.
+        output_file: Destination .big file path.
+
+    Raises:
+        NotADirectoryError: If the source directory is missing or invalid.
+        RuntimeError/ValueError: Native C++ exceptions if packing fails.
+    """
+    if not source_dir.is_dir():
+        raise NotADirectoryError(f"Source directory '{source_dir}' does not exist or is not a directory.")
+
+    big.BigPacker.pack_from_directory(source_dir, output_file)
+    logger.info("Finished packing into: %s", output_file.resolve())
 
 
 def main() -> None:
@@ -28,12 +57,8 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if not args.source_dir.is_dir():
-        print(f"Error: Source directory '{args.source_dir}' does not exist.", file=sys.stderr)
-        sys.exit(1)
-
     try:
-        big.BigPacker.pack_from_directory(args.source_dir, args.output)
+        pack(args.source_dir, args.output)
     except Exception as exc:
         print(f"Packing failed: {exc}", file=sys.stderr)
         sys.exit(1)
