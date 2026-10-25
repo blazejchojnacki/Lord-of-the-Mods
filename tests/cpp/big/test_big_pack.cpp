@@ -194,15 +194,6 @@ TEST_CASE("BigPacker Payload Fidelity and Offset Alignment", "[big_pack][payload
 TEST_CASE("BigPacker Output Path Handling and Boundary Limits", "[big_pack][limits]") {
     ScopedPackEnv env;
 
-    SECTION("Positive scenario: Automatically create missing parent directories for destination archive") {
-        env.create_dummy_file("test.txt", "data");
-
-        std::filesystem::path nested_out = env.root_dir / "build_output" / "archive.big";
-
-        REQUIRE_NOTHROW(BigPacker::pack_from_directory(env.src_dir, nested_out));
-        REQUIRE(std::filesystem::exists(nested_out));
-    }
-
     SECTION("Negative scenario: Archive payload exceeding 4GB format limits throws std::length_error") {
         std::filesystem::path huge_file = env.src_dir / "large_payload.dat";
         std::ofstream out(huge_file, std::ios::binary);

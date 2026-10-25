@@ -25,9 +25,12 @@ namespace lotm::big {
             throw std::invalid_argument("Source directory does not exist or is not a directory.");
         }
 
-        // Create missing parent directories for the output file
+        if (std::filesystem::is_directory(output_file)) {
+            throw std::runtime_error("Target output path cannot be a directory: " + output_file.string());
+        }
+
         if (auto parent = output_file.parent_path(); !parent.empty() && !std::filesystem::exists(parent)) {
-            std::filesystem::create_directories(parent);
+            throw std::runtime_error("Target output directory does not exist: " + parent.string());
         }
 
         struct PackEntry {
@@ -137,6 +140,10 @@ namespace lotm::big {
                     out.write(chunk.data(), bytes_read);
                 }
             }
+        }
+
+        if (!out.good()) {
+            throw std::runtime_error("Failed writing data to archive: " + output_file.string());
         }
 
         std::cout << "\nSuccess! Created file: " << output_file.string() << '\n';
