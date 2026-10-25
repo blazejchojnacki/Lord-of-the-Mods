@@ -3,13 +3,13 @@ name: CI
 on:
   workflow_dispatch:
   push:
-    branches: [ main, release ]
+    branches: [main, release]
     paths-ignore:
       - 'docs/**'
       - '**.md'
       - '.gitignore'
   pull_request:
-    branches: [ main, release ]
+    branches: [main, release]
     paths-ignore:
       - 'docs/**'
       - '**.md'
@@ -23,7 +23,6 @@ jobs:
   build-and-test:
     name: Build and Test (Windows)
     runs-on: windows-latest
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -41,21 +40,14 @@ jobs:
           pip install -e ".[test]"
 
       - name: Configure CMake
-        # Generates the build system. Using MSVC by default on windows-latest.
-          $nanobind_dir = python -m nanobind --cmake_dir
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$nanobind_dir"
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(python -m nanobind --cmake_dir)"
 
       - name: Build C++ Extension
-        # Compiles the C++ core and nanobind .pyd module.
         run: cmake --build build --config Release -j 4
 
       - name: Run C++ Native Tests (Catch2)
         working-directory: ${{ github.workspace }}/build
-        # Executes the Catch2 suite targeting the Release build.
         run: ctest --output-on-failure -C Release
 
       - name: Run Python Integration Tests (Pytest)
-        # MSVC appends the configuration name (Release) to the output directory by default.
-        # If your CMake configuration overrides this, remove the '/Release' suffix.
-        run: |
-          pytest -o pythonpath=".;build/src/cppy_bridge/Release" --cov=scripts --cov-report=xml tests/python -v
+        run: pytest -o pythonpath=".;build/src/cppy_bridge/Release" --cov=scripts --cov-report=xml tests/python -v
