@@ -29,10 +29,11 @@ def test_programmatic_packing_and_unpacking_roundtrip(standard_mod_directory: Pa
     entries = big_unpack.unpack(archive_path, extract_dir)
 
     # Verify returned entries list
-    assert len(entries) == 2
+    assert len(entries) == 3
     names = [e.name for e in entries]
     assert "art\\texture.dds" in names
     assert "data\\weapon.ini" in names
+    assert "readme.txt" in names
 
     # Verify extracted file fidelity
     extracted_ini = extract_dir / "data" / "weapon.ini"

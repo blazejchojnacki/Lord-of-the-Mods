@@ -27,6 +27,7 @@ def test_cli_pack_successful_execution_returns_zero(standard_mod_directory: Path
     assert "Finished packing" in stdout
     assert stderr == ""
 
+
 def test_cli_pack_invalid_source_returns_nonzero(tmp_path: Path, monkeypatch, capsys):
     """Verify packing a missing directory exits with code 1 and writes to stderr."""
     missing_dir = tmp_path / "void"
@@ -37,7 +38,8 @@ def test_cli_pack_invalid_source_returns_nonzero(tmp_path: Path, monkeypatch, ca
 
     assert exc.value.code == 1
     stdout, stderr = capsys.readouterr()
-    assert "Error: Source directory" in stderr
+    assert "Packing failed" in stderr
+    assert "does not exist or is not a directory" in stderr
 
 
 def test_cli_unpack_successful_execution_returns_zero(standard_mod_directory: Path, tmp_path: Path, monkeypatch, capsys):
@@ -54,7 +56,7 @@ def test_cli_unpack_successful_execution_returns_zero(standard_mod_directory: Pa
 
     stdout, stderr = capsys.readouterr()
     assert (extract_dir / "data" / "weapon.ini").exists()
-    assert "Loaded 2 entries" in stdout
+    assert "Loaded 3 entries" in stdout
     assert stderr == ""
 
 
