@@ -8,6 +8,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 """
 
 import argparse
+import logging
 from pathlib import Path
 import sys
 
@@ -20,6 +21,8 @@ except ModuleNotFoundError:
         file=sys.stderr,
     )
     sys.exit(1)
+
+logger = logging.getLogger("lotm")
 
 
 def pack(source_dir: Path, output_file: Path) -> None:
@@ -38,7 +41,7 @@ def pack(source_dir: Path, output_file: Path) -> None:
         raise NotADirectoryError(f"Source directory '{source_dir}' does not exist or is not a directory.")
 
     big.BigPacker.pack_from_directory(source_dir, output_file)
-    print(f"Finished packing into: {output_file.resolve()}")
+    logger.info("Finished packing into: %s", output_file.resolve())
 
 
 def main() -> None:
@@ -54,10 +57,12 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
     try:
         pack(args.source_dir, args.output)
     except Exception as exc:
-        print(f"Packing failed: {exc}", file=sys.stderr)
+        logger.error("Packing failed: %s", exc)
         sys.exit(1)
 
 

@@ -8,6 +8,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 """
 
 import argparse
+import logging
 from pathlib import Path
 import sys
 
@@ -20,6 +21,8 @@ except ModuleNotFoundError:
         file=sys.stderr,
     )
     sys.exit(1)
+
+logger = logging.getLogger("lotm")
 
 
 def unpack(big_path: Path, output_dir: Path) -> list[big.BigEntry]:
@@ -48,11 +51,11 @@ def unpack(big_path: Path, output_dir: Path) -> list[big.BigEntry]:
 
     # Inspect parsed entries via bindings
     entries = archive.get_entries()
-    print(f"Loaded {len(entries)} entries from {big_path.name}")
+    logger.info("Loaded %d entries from %s", len(entries), big_path.name)
 
     # Extract all indexed files to the destination folder
     archive.extract_all(output_dir)
-    print(f"Finished extracting into: {output_dir.resolve()}")
+    logger.info("Finished extracting into: %s", output_dir.resolve())
 
     return entries
 
@@ -74,10 +77,12 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
     try:
         unpack(args.archive, args.output)
     except Exception as exc:
-        print(f"Extraction failed: {exc}", file=sys.stderr)
+        logger.error("Extraction failed: %s", exc)
         sys.exit(1)
 
 
