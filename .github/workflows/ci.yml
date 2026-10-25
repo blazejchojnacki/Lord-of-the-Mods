@@ -37,11 +37,13 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install nanobind
           pip install -e ".[test]"
 
       - name: Configure CMake
         # Generates the build system. Using MSVC by default on windows-latest.
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+          $nanobind_dir = python -m nanobind --cmake_dir
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$nanobind_dir"
 
       - name: Build C++ Extension
         # Compiles the C++ core and nanobind .pyd module.
