@@ -50,4 +50,4 @@ jobs:
         run: ctest --output-on-failure -C Release
 
       - name: Run Python Integration Tests (Pytest)
-        run: pytest -o pythonpath=".;build/src/cppy_bridge/Release" --cov=scripts --cov-report=xml tests/python -v
+        run: python -m pytest -o pythonpath=".;build/src/cppy_bridge/Release" --cov=scripts --cov-report=xml tests/python -v
