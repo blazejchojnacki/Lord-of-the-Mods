@@ -53,6 +53,7 @@ jobs:
         run: ctest --output-on-failure -C Release
 
       - name: Run Python Integration Tests (Pytest)
-        # might be pythonpath=".;build/src/cppy_bridge"
+        # MSVC appends the configuration name (Release) to the output directory by default.
+        # If your CMake configuration overrides this, remove the '/Release' suffix.
         run: |
-          pytest -o pythonpath=".;build/src/cppy_bridge/Release" --cov=scripts --cov-report=xml tests/python -v --cov=scripts --cov-report=xml tests/python -v
+          pytest -o pythonpath=".;build/src/cppy_bridge/Release" --cov=scripts --cov-report=xml tests/python -v
