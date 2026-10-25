@@ -77,12 +77,10 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-
     try:
         unpack(args.archive, args.output)
     except Exception as exc:
-        logger.error("Extraction failed: %s", exc)
+        print(f"Extraction failed: {exc}", file=sys.stderr)
         sys.exit(1)
 
 

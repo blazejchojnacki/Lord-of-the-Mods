@@ -57,12 +57,10 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-
     try:
         pack(args.source_dir, args.output)
     except Exception as exc:
-        logger.error("Packing failed: %s", exc)
+        print(f"Packing failed: {exc}", file=sys.stderr)
         sys.exit(1)
 
 
