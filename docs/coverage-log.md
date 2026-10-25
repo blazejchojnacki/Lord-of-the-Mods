@@ -1,4 +1,4 @@
-# # Lord-of-the-Mods
+# Lord-of-the-Mods
 # coverage-log
 
 ## 0.1.0 - 2026-10

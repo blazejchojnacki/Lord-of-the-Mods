@@ -95,8 +95,15 @@ python -m build --wheel
 The resulting package is stored inside the dist/ directory.
 
 
+## 5. Quality Gates & Testing
 
-## 5. Architecture & Targets
+* **Coverage Requirement:** Pull requests modifying core Python or C++ logic must maintain ≥ 85% test coverage.
+* **Pre-Commit Validation:** Always run both test suites locally before submitting your code:
+  * **Python:** `pytest -o pythonpath=".;build/src/cppy_bridge" tests/python`
+  * **C++:** Navigate to your build directory and run `ctest --output-on-failure -C Debug` (or your active build configuration).
+
+
+## 6. Architecture & Targets
 The build system is organized into decoupled CMake targets:
 
 - `lotm_core`: Header-only interface library containing endian-swapping utilities (endian.hpp).

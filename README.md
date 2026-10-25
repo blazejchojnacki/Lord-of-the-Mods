@@ -5,6 +5,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows_x64-0078D6.svg?logo=windows&logoColor=white)](https://www.microsoft.com/windows/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Code Style](https://img.shields.io/badge/C%2B%2B-20-00599C.svg?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/20)
+![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)
 
 A high-performance C++20 and Python toolkit designed for modding EA *The Battle for Middle-earth* games.
 
@@ -23,6 +24,17 @@ A high-performance C++20 and Python toolkit designed for modding EA *The Battle 
 To use the Python library in your project, see **[Python Library Guide](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/LIBRARY.md)**
 
 To build the library from source or contribute to development, see **[Development Guide](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/DEVELOPMENT.md)**
+
+## Testing
+
+Install the test dependencies and run the pytest suite by pointing it to your compiled C++ extension directory:
+
+```cmd
+pip install -e ".[test]"
+```
+```cmd
+pytest -o pythonpath=".;build/src/cppy_bridge" tests/python
+```
 
 ## Additional documentation:
 

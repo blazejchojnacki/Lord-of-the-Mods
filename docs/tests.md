@@ -41,7 +41,7 @@ cmake --build build --config Release --target lotm_cpp_tests
 Running the test binary directly provides real-time, colored terminal feedback and full access to Catch2 CLI flags:
 
 ```cmd
-.\build\tests\Release\lotm_cpp_tests.exe
+.\build\tests\lotm_cpp_tests.exe
 ```
 
 ### Method B: CTest Integration
@@ -91,4 +91,25 @@ List all available test cases without running them:
 List all defined tags:
 ```cmd
 .\build\tests\Release\lotm_cpp_tests.exe --list-tags
+```
+
+
+# Python Integration Tests (Pytest)
+
+The Python test suite (`tests/python/`) verifies the `nanobind` bindings, programmatic APIs, and CLI routing. 
+
+**Prerequisites:**
+You must build the C++ project first so the `.pyd` module is available.
+
+**Execution:**
+Run pytest from the repository root, overriding the `PYTHONPATH` to include your build directory:
+```cmd
+pytest -o pythonpath=".;build/src/cppy_bridge" tests/python -v
+```
+
+## Coverage Measurement:
+To generate a coverage report and verify the 85% requirement:
+
+```cmd
+pytest -o pythonpath=".;build/src/cppy_bridge" --cov=scripts --cov-report=term-missing tests/python
 ```

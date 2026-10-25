@@ -47,6 +47,16 @@ This program is free software: you can redistribute it and/or modify
 SPDX-License-Identifier: GPL-3.0-or-later
 '''
 
+"""
+@file >file_name<
+@brief >description<
+
+Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
+Part of the Lord of the Mods (lotm) project.
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
+
+
 # @file >file_name<
 # @brief >description<
 #
