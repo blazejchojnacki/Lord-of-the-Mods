@@ -8,6 +8,7 @@
  */
 
 #include <big/big_pack.hpp>
+#include <big/exceptions.hpp>
 #include <big/types.hpp>
 #include <core/endian.hpp>
 #include <fstream>
@@ -26,11 +27,11 @@ namespace lotm::big {
         }
 
         if (std::filesystem::is_directory(output_file)) {
-            throw std::runtime_error("Target output path cannot be a directory: " + output_file.string());
+            throw std::invalid_argument("Target output path cannot be a directory: " + output_file.string());
         }
 
         if (auto parent = output_file.parent_path(); !parent.empty() && !std::filesystem::exists(parent)) {
-            throw std::runtime_error("Target output directory does not exist: " + parent.string());
+            throw std::invalid_argument("Target output directory does not exist: " + parent.string());
         }
 
         // Guard against output_file residing inside source_dir (self-inclusion)
@@ -110,7 +111,7 @@ namespace lotm::big {
         std::cout << "Creating archive: " << output_file.string() << '\n';
         std::ofstream out(output_file, std::ios::binary);
         if (!out.is_open()) {
-            throw std::runtime_error("Cannot create output file: " + output_file.string());
+            throw BigArchiveError("Cannot create output file: " + output_file.string());
         }
 
         out.write(BIG4_MAGIC.data(), 4);
@@ -143,7 +144,7 @@ namespace lotm::big {
             if (!src.is_open()) {
                 out.close();
                 std::filesystem::remove(output_file);
-                throw std::runtime_error("Cannot read source file: " + f.full_path.string());
+                throw BigArchiveError("Cannot read source file: " + f.full_path.string());
             }
 
             uintmax_t bytes_copied = 0;
@@ -155,7 +156,7 @@ namespace lotm::big {
                     if (!out) {
                         out.close();
                         std::filesystem::remove(output_file);
-                        throw std::runtime_error("Failed writing data to archive: " + output_file.string());
+                        throw BigArchiveError("Failed writing data to archive: " + output_file.string());
                     }
                     bytes_copied += static_cast<uintmax_t>(bytes_read);
                 }
@@ -164,7 +165,7 @@ namespace lotm::big {
             if (src.bad() || bytes_copied != f.size) {
                 out.close();
                 std::filesystem::remove(output_file);
-                throw std::runtime_error("Byte count mismatch while packing file: " + f.rel_path);
+                throw BigArchiveError("Byte count mismatch while packing file: " + f.rel_path);
             }
         }
 
@@ -172,7 +173,7 @@ namespace lotm::big {
         if (!out.good()) {
             out.close();
             std::filesystem::remove(output_file);
-            throw std::runtime_error("Failed writing data to archive: " + output_file.string());
+            throw BigArchiveError("Failed writing data to archive: " + output_file.string());
         }
 
         std::cout << "\nSuccess! Created file: " << output_file.string() << '\n';

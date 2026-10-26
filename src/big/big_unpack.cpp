@@ -8,6 +8,7 @@
  */
 
 #include <big/big_unpack.hpp>
+#include <big/exceptions.hpp>
 #include <core/endian.hpp>
 #include <algorithm>
 #include <cctype>
@@ -15,7 +16,6 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <stdexcept>
 #include <string_view>
 #include <system_error>
 #include <vector>
@@ -79,14 +79,14 @@ namespace lotm::big {
 
         std::ifstream file(file_path_, std::ios::binary);
         if (!file.is_open()) {
-            throw std::runtime_error("Cannot open file: " + file_path_.string());
+            throw BigArchiveError("Cannot open file: " + file_path_.string());
         }
 
         // Header reading
         char magic[5] = { 0 };
         file.read(magic, 4);
         if (!file || std::string_view(magic) != BIG4_MAGIC) {
-            throw std::invalid_argument(std::string("Not a valid BIG4 file! Found: ") + magic);
+            throw BigFormatError(std::string("Not a valid BIG4 file! Found: ") + magic);
         }
 
         // Total size (Little Endian - '<I')
@@ -98,7 +98,7 @@ namespace lotm::big {
         file.read(reinterpret_cast<char*>(&header_size_), sizeof(header_size_));
 
         if (!file) {
-            throw std::runtime_error("Truncated BIG4 header metadata.");
+            throw BigFormatError("Truncated BIG4 header metadata.");
         }
 
         num_files = lotm::core::from_big_endian(num_files);
@@ -109,7 +109,7 @@ namespace lotm::big {
         if (header_size_ < HEADER_BASE_SIZE ||
             header_size_ > physical_size ||
             static_cast<uintmax_t>(num_files) * 8 > physical_size) {
-            throw std::runtime_error("Corrupted BIG4 index: Claims more files than physically possible.");
+            throw BigFormatError("Corrupted BIG4 index: Claims more files than physically possible.");
         }
 
         std::cout << "File: " << file_path_.string() << '\n';
@@ -125,7 +125,7 @@ namespace lotm::big {
             file.read(reinterpret_cast<char*>(&entry.size), sizeof(entry.size));
 
             if (!file) {
-                throw std::runtime_error("Truncated BIG4 file index.");
+                throw BigFormatError("Truncated BIG4 file index.");
             }
 
             entry.offset = lotm::core::from_big_endian(entry.offset);
@@ -133,7 +133,7 @@ namespace lotm::big {
 
             auto current_pos = file.tellg();
             if (current_pos < 0 || static_cast<uintmax_t>(current_pos) >= header_size_) {
-                throw std::runtime_error("Truncated BIG4 string table.");
+                throw BigFormatError("Truncated BIG4 string table.");
             }
 
             std::size_t remaining_header = static_cast<std::size_t>(
@@ -143,7 +143,7 @@ namespace lotm::big {
             entry.name = read_null_terminated_string(file, remaining_header);
 
             if (!file) {
-                throw std::runtime_error("Truncated BIG4 string table.");
+                throw BigFormatError("Truncated BIG4 string table.");
             }
 
             // Replace backslashes with native directory separators
@@ -169,7 +169,7 @@ namespace lotm::big {
         uintmax_t total_extracted_bytes = 0;
         for (const auto& entry : entries_) {
             if (max_extraction_quota - total_extracted_bytes < entry.size) {
-                throw std::runtime_error("Archive amplification (Zip Bomb) threshold exceeded.");
+                throw BigSecurityError("Archive amplification (Zip Bomb) threshold exceeded.");
             }
             total_extracted_bytes += entry.size;
         }
@@ -182,7 +182,7 @@ namespace lotm::big {
 
         std::ifstream file(file_path_, std::ios::binary);
         if (!file.is_open()) {
-            throw std::runtime_error("Cannot open file for extraction.");
+            throw BigArchiveError("Cannot open file for extraction.");
         }
 
         std::vector<char> buffer(EXTRACT_CHUNK_SIZE);
@@ -191,7 +191,7 @@ namespace lotm::big {
         for (const auto& entry : entries_) {
             // Check for malicious or corrupted bounds
             if (static_cast<uintmax_t>(entry.offset) + entry.size > physical_size) {
-                throw std::runtime_error("Extraction bounds exceeded for file: " + entry.name);
+                throw BigFormatError("Extraction bounds exceeded for file: " + entry.name);
             }
 
             std::filesystem::path entry_rel_path(entry.name);
@@ -199,7 +199,7 @@ namespace lotm::big {
                 entry_rel_path.is_absolute() ||
                 entry_rel_path.has_root_name() ||
                 entry_rel_path.has_root_directory()) {
-                throw std::runtime_error("Unsafe or rooted path in archive entry: " + entry.name);
+                throw BigSecurityError("Unsafe or rooted path in archive entry: " + entry.name);
             }
 
             // Verify path components against device names, alternate streams, and existing symlinks
@@ -209,14 +209,14 @@ namespace lotm::big {
                     continue;
                 }
                 if (is_unsafe_filename(part.string())) {
-                    throw std::runtime_error("Unsafe Windows device name or ADS stream in path: " + entry.name);
+                    throw BigSecurityError("Unsafe Windows device name or ADS stream in path: " + entry.name);
                 }
 
                 current_check /= part;
                 std::error_code ec;
                 auto st = std::filesystem::symlink_status(current_check, ec);
                 if (!ec && std::filesystem::is_symlink(st)) {
-                    throw std::runtime_error("Symlink traversal attempt detected for file: " + entry.name);
+                    throw BigSecurityError("Symlink traversal attempt detected for file: " + entry.name);
                 }
             }
 
@@ -226,7 +226,7 @@ namespace lotm::big {
                 target_path.begin(), target_path.end());
 
             if (mismatch_pair.first != canonical_output_dir.end() || target_path == canonical_output_dir) {
-                throw std::runtime_error("Path traversal attempt detected for file: " + entry.name);
+                throw BigSecurityError("Path traversal attempt detected for file: " + entry.name);
             }
 
             std::filesystem::path target_subdir = target_path.parent_path();
@@ -237,13 +237,13 @@ namespace lotm::big {
 
             std::ofstream out_file(target_path, std::ios::binary);
             if (!out_file.is_open()) {
-                throw std::runtime_error("Cannot create output file: " + target_path.string());
+                throw BigArchiveError("Cannot create output file: " + target_path.string());
             }
 
             if (entry.size > 0) {
                 file.seekg(entry.offset, std::ios::beg);
                 if (!file) {
-                    throw std::runtime_error("Failed to seek to offset for file: " + entry.name);
+                    throw BigArchiveError("Failed to seek to offset for file: " + entry.name);
                 }
 
                 // Stream payload through reusable chunk buffer
@@ -254,12 +254,12 @@ namespace lotm::big {
                     file.read(buffer.data(), chunk_size);
 
                     if (!file || file.gcount() != chunk_size) {
-                        throw std::runtime_error("Failed to read payload for file: " + entry.name);
+                        throw BigArchiveError("Failed to read payload for file: " + entry.name);
                     }
 
                     out_file.write(buffer.data(), chunk_size);
                     if (!out_file) {
-                        throw std::runtime_error("Failed to write extracted file: " + target_path.string());
+                        throw BigArchiveError("Failed to write extracted file: " + target_path.string());
                     }
 
                     remaining -= static_cast<uint32_t>(chunk_size);
@@ -268,7 +268,7 @@ namespace lotm::big {
 
             out_file.flush();
             if (!out_file) {
-                throw std::runtime_error("Failed to flush extracted file: " + target_path.string());
+                throw BigArchiveError("Failed to flush extracted file: " + target_path.string());
             }
 
             std::cout << "Extracted: " << entry.name << '\n';

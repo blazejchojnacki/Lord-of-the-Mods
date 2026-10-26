@@ -9,6 +9,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <big/big_pack.hpp>
+#include <big/exceptions.hpp>
 #include <core/endian.hpp>
 #include <filesystem>
 #include <fstream>
@@ -68,7 +69,7 @@ TEST_CASE("BigPacker Input Validation and Exceptions", "[big_pack][error]") {
 
     SECTION("Negative scenario: Output file path is invalid") {
         std::filesystem::path bad_out = env.root_dir / "non_existent_folder" / "out.big";
-        REQUIRE_THROWS_AS(BigPacker::pack_from_directory(env.src_dir, bad_out), std::runtime_error);
+        REQUIRE_THROWS_AS(BigPacker::pack_from_directory(env.src_dir, bad_out), std::invalid_argument);
     }
 
     SECTION("Negative scenario: Output file resides inside source directory (self-inclusion)") {

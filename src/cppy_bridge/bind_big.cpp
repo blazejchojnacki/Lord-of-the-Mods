@@ -15,6 +15,7 @@
 #include "register.hpp"
 #include <big/big_unpack.hpp>
 #include <big/big_pack.hpp>
+#include <big/exceptions.hpp>
 
 namespace nb = nanobind;
 
@@ -22,6 +23,11 @@ namespace lotm::python {
 
     void register_big_bindings(nb::module_& m) {
         auto sub = m.def_submodule("big", "BIG archive handling");
+
+        // Register custom exceptions
+        nb::exception<lotm::big::BigArchiveError> exc_archive(sub, "BigArchiveError");
+        nb::exception<lotm::big::BigFormatError>(sub, "BigFormatError", exc_archive);
+        nb::exception<lotm::big::BigSecurityError>(sub, "BigSecurityError", exc_archive);
 
         nb::class_<lotm::big::BigEntry>(sub, "BigEntry", "Metadata record for an entry inside a BIG4 archive")
             .def_ro("offset", &lotm::big::BigEntry::offset, "Byte offset within archive")

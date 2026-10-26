@@ -9,6 +9,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <big/big_unpack.hpp>
+#include <big/exceptions.hpp>
 #include <core/endian.hpp>
 #include <filesystem>
 #include <fstream>
@@ -100,12 +101,12 @@ TEST_CASE("BigArchive Initialization and Basic Error Handling", "[big_unpack][er
     ScopedTempEnv env;
 
     SECTION("Negative scenario: File does not exist") {
-        REQUIRE_THROWS_AS(BigArchive(env.root_dir / "non_existent.big"), std::runtime_error);
+        REQUIRE_THROWS_AS(BigArchive(env.root_dir / "non_existent.big"), BigArchiveError);
     }
 
     SECTION("Negative scenario: Invalid magic string") {
         env.write_big_file("BOGUS", {});
-        REQUIRE_THROWS_AS(BigArchive(env.test_file), std::invalid_argument);
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
     }
 }
 
@@ -167,7 +168,7 @@ TEST_CASE("BigArchive Extraction", "[big_unpack][extraction]") {
         // Delete file underneath the object before extracting
         std::filesystem::remove(env.test_file);
 
-        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), std::runtime_error);
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigArchiveError);
     }
 
     SECTION("Positive scenario: Extract all files preserves data and creates directories") {
@@ -210,7 +211,7 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         out.close();
 
         // Expect the implementation to check stream state and throw upon construction
-        REQUIRE_THROWS_AS(BigArchive(env.test_file), std::runtime_error);
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
     }
 
     SECTION("Negative scenario: Truncated index (EOF before reading all claimed files)") {
@@ -228,10 +229,10 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         out.close();
 
         // Must throw instead of allocating a massive vector of garbage
-        REQUIRE_THROWS_AS(BigArchive(env.test_file), std::runtime_error);
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
     }
 
-    SECTION("Negative scenario: Unterminated string in index table throws std::runtime_error") {
+    SECTION("Negative scenario: Unterminated string in index table throws BigFormatError") {
         std::ofstream out(env.test_file, std::ios::binary);
         out.write("BIG4", 4);
         uint32_t total_size = 32;
@@ -252,7 +253,7 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         out.write("ABCDDATA", 8);
         out.close();
 
-        REQUIRE_THROWS_AS(BigArchive(env.test_file), std::runtime_error);
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
     }
 
     SECTION("Negative scenario: Zip-Slip relative path traversal is blocked during extraction") {
@@ -260,7 +261,7 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
 
         BigArchive archive(env.test_file);
 
-        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), std::runtime_error);
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
         REQUIRE_FALSE(std::filesystem::exists(env.root_dir / "escaped.txt"));
     }
 
@@ -269,7 +270,7 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
 
         BigArchive archive(env.test_file);
 
-        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), std::runtime_error);
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
     }
 
     SECTION("Negative scenario: Payload offset out of physical file bounds") {
@@ -285,7 +286,7 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         BigArchive archive(env.test_file);
 
         // Extraction should fail upon detecting bad offset limits
-        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), std::runtime_error);
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigFormatError);
     }
 
     SECTION("Positive scenario: Zero-byte file extraction succeeds safely") {
