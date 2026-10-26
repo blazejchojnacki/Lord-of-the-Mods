@@ -1,4 +1,33 @@
 COMMENT-HEADER TEMPLATE FOR PROJECT FILES
+
+026 X 26G
+
+/**
+ * @file >file_name<
+ * @brief >description<
+ *
+ * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
+ * Part of the Lord of the Mods (lotm) project.
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+ """
+@file >file_name<
+@brief >description<
+
+Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
+Part of the Lord of the Mods (lotm) project.
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
+
+# @file >file_name<
+# @brief >description<
+#
+# Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
+# Part of the Lord of the Mods (lotm) project.
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+
 024 X 20G
 
 /**

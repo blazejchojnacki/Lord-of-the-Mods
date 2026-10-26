@@ -1,3 +1,4 @@
+# Lord-of-the-Mods
 # Command-Line Interface (CLI)
 
 The `lotm` repository includes standalone shell scripts to manipulate BIG4 archives directly from the terminal.

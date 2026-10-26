@@ -1,4 +1,3 @@
-
 /**
  * @file tests/cpp/big/test_big_unpack.cpp
  * @brief Unit tests for the BigArchive unpacking implementation.
