@@ -10,6 +10,7 @@
 #include <big/big_unpack.hpp>
 #include <core/endian.hpp>
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -23,24 +24,53 @@ namespace lotm::big {
     namespace {
         constexpr std::size_t MAX_ENTRY_PATH_LENGTH = 4096;
         constexpr std::size_t EXTRACT_CHUNK_SIZE = 1024 * 1024;
-    } // namespace
 
-    // Internal helper for reading strings until null-terminator within a byte budget
-    static std::string read_null_terminated_string(std::ifstream& stream, std::size_t max_bytes) {
-        std::string result;
-        char ch = '\0';
-        for (std::size_t i = 0; i < max_bytes; ++i) {
-            if (!stream.get(ch)) {
-                return result;
+        // Internal helper for reading strings until null-terminator within a byte budget
+        static std::string read_null_terminated_string(std::ifstream& stream, std::size_t max_bytes) {
+            std::string result;
+            char ch = '\0';
+            for (std::size_t i = 0; i < max_bytes; ++i) {
+                if (!stream.get(ch)) {
+                    return result;
+                }
+                if (ch == '\0') {
+                    return result;
+                }
+                result.push_back(ch);
             }
-            if (ch == '\0') {
-                return result;
-            }
-            result.push_back(ch);
+            stream.setstate(std::ios::failbit);
+            return result;
         }
-        stream.setstate(std::ios::failbit);
-        return result;
-    }
+
+        // Checks for Windows reserved device names and Alternate Data Streams (ADS)
+        bool is_unsafe_filename(std::string_view name) {
+            if (name.find(':') != std::string_view::npos) {
+                return true;
+            }
+
+            std::string upper_name;
+            upper_name.reserve(name.size());
+            for (char c : name) {
+                upper_name.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+            }
+
+            auto dot_pos = upper_name.find('.');
+            std::string_view base = (dot_pos != std::string::npos)
+                ? std::string_view(upper_name).substr(0, dot_pos)
+                : upper_name;
+
+            if (base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" ||
+                base == "CONIN$" || base == "CONOUT$") {
+                return true;
+            }
+            if (base.size() == 4 && (base.starts_with("COM") || base.starts_with("LPT"))) {
+                if (base[3] >= '1' && base[3] <= '9') {
+                    return true;
+                }
+            }
+            return false;
+        }
+    } // namespace
 
     BigArchive::BigArchive(std::filesystem::path file_path)
         : file_path_(std::move(file_path)) {
@@ -156,6 +186,15 @@ namespace lotm::big {
                 entry_rel_path.has_root_name() ||
                 entry_rel_path.has_root_directory()) {
                 throw std::runtime_error("Unsafe or rooted path in archive entry: " + entry.name);
+            }
+
+            for (const auto& part : entry_rel_path) {
+                if (part.empty() || part == "." || part == "..") {
+                    continue;
+                }
+                if (is_unsafe_filename(part.string())) {
+                    throw std::runtime_error("Unsafe Windows device name or ADS stream in path: " + entry.name);
+                }
             }
 
             std::filesystem::path target_path = std::filesystem::weakly_canonical(canonical_output_dir / entry_rel_path);
