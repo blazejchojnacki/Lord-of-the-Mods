@@ -1,3 +1,10 @@
+# @file .github/workflows/ci.yml
+# @brief GitHub Actions workflow for C++ and Python continuous integration
+#
+# Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
+# Part of the Lord of the Mods (lotm) project.
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 name: CI
 
 on:
@@ -51,6 +58,9 @@ jobs:
         working-directory: ${{ github.workspace }}/build
         # Executes the Catch2 suite targeting the Release build.
         run: ctest --output-on-failure -C Release
+
+      - name: Validate Type Stubs and Scripts (Mypy)
+        run: python -m mypy src/lotm scripts
 
       - name: Run Python Integration Tests (Pytest)
         run: python -m pytest -o pythonpath=".;build/src/cppy_bridge/Release" --cov=scripts --cov-report=xml tests/python -v

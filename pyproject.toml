@@ -1,3 +1,10 @@
+# @file pyproject.toml
+# @brief Python package configuration and scikit-build-core settings
+#
+# Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
+# Part of the Lord of the Mods (lotm) project.
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 [build-system]
 requires = ["scikit-build-core>=0.9.0", "nanobind>=2.0.0"]
 build-backend = "scikit_build_core.build"
@@ -36,8 +43,13 @@ classifiers = [
 [project.optional-dependencies]
 test = [
     "pytest>=8.0.0",
-    "pytest-cov>=4.1.0"
+    "pytest-cov>=4.1.0",
+    "mypy>=1.8.0"
 ]
+
+[project.scripts]
+lotm-pack = "scripts.big_pack:main"
+lotm-unpack = "scripts.big_unpack:main"
 
 [project.urls]
 Homepage = "https://github.com/blazejchojnacki/Lord-of-the-Mods"
@@ -49,3 +61,8 @@ Documentation = "https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/d
 [tool.scikit-build]
 cmake.version = ">=3.20"
 cmake.build-type = "Release"
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+strict = true

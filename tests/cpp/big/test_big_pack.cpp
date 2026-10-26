@@ -1,5 +1,5 @@
 /**
- * @file tests/cpp/big/test_big_packer.cpp
+ * @file tests/cpp/big/test_big_pack.cpp
  * @brief Unit tests for the BigPacker serialization implementation.
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
@@ -16,7 +16,7 @@
 #include <string>
 #include <string_view>
 
-    using namespace lotm::big;
+using namespace lotm::big;
 
 // RAII Helper to create temporary environments and files
 class ScopedPackEnv {
@@ -41,7 +41,7 @@ public:
         std::filesystem::path full_path = src_dir / rel_path;
         std::filesystem::create_directories(full_path.parent_path());
         std::ofstream out(full_path, std::ios::binary);
-        out.write(content.data(), content.size());
+        out.write(content.data(), static_cast<std::streamsize>(content.size()));
     }
 };
 
@@ -69,6 +69,12 @@ TEST_CASE("BigPacker Input Validation and Exceptions", "[big_pack][error]") {
     SECTION("Negative scenario: Output file path is invalid") {
         std::filesystem::path bad_out = env.root_dir / "non_existent_folder" / "out.big";
         REQUIRE_THROWS_AS(BigPacker::pack_from_directory(env.src_dir, bad_out), std::runtime_error);
+    }
+
+    SECTION("Negative scenario: Output file resides inside source directory (self-inclusion)") {
+        env.create_dummy_file("unit.ini", "Health=100");
+        std::filesystem::path nested_out = env.src_dir / "nested_output.big";
+        REQUIRE_THROWS_AS(BigPacker::pack_from_directory(env.src_dir, nested_out), std::invalid_argument);
     }
 }
 
@@ -141,7 +147,7 @@ TEST_CASE("BigPacker Payload Fidelity and Offset Alignment", "[big_pack][payload
 
     SECTION("Positive scenario: Payload bytes are packed accurately at their designated offsets") {
         std::string payload1 = "Hello World";
-        std::string payload2 = "BinaryData";
+        std::string payload2(1500000, 'B'); // 1.5 MB payload spanning multiple 1 MB chunks
 
         env.create_dummy_file("file1.txt", payload1);
         env.create_dummy_file("file2.txt", payload2);
@@ -178,7 +184,7 @@ TEST_CASE("BigPacker Payload Fidelity and Offset Alignment", "[big_pack][payload
         REQUIRE(index[0].size == payload1.size());
         in.seekg(index[0].offset, std::ios::beg);
         std::vector<char> buf1(index[0].size);
-        in.read(buf1.data(), buf1.size());
+        in.read(buf1.data(), static_cast<std::streamsize>(buf1.size()));
         REQUIRE(std::string(buf1.begin(), buf1.end()) == payload1);
 
         // Verify payload 2 (file2.txt)
@@ -186,7 +192,7 @@ TEST_CASE("BigPacker Payload Fidelity and Offset Alignment", "[big_pack][payload
         REQUIRE(index[1].size == payload2.size());
         in.seekg(index[1].offset, std::ios::beg);
         std::vector<char> buf2(index[1].size);
-        in.read(buf2.data(), buf2.size());
+        in.read(buf2.data(), static_cast<std::streamsize>(buf2.size()));
         REQUIRE(std::string(buf2.begin(), buf2.end()) == payload2);
     }
 }

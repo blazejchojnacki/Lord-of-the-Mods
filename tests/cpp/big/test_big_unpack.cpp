@@ -15,7 +15,7 @@
 #include <vector>
 #include <string>
 
-    using namespace lotm::big;
+using namespace lotm::big;
 
 // RAII Helper to create temporary binary files and directories for testing
 class ScopedTempEnv {
@@ -51,7 +51,7 @@ public:
         // Calculate Header Size: 16 bytes base + size of all index entries
         uint32_t header_size = 16;
         for (const auto& entry : entries) {
-            header_size += 8 + entry.first.size() + 1;
+            header_size += 8 + static_cast<uint32_t>(entry.first.size()) + 1;
         }
 
         uint32_t be_header_size = lotm::core::to_big_endian(header_size);
@@ -65,14 +65,14 @@ public:
 
             out.write(reinterpret_cast<const char*>(&be_offset), 4);
             out.write(reinterpret_cast<const char*>(&be_size), 4);
-            out.write(entry.first.c_str(), entry.first.size() + 1); // include null terminator
+            out.write(entry.first.c_str(), static_cast<std::streamsize>(entry.first.size() + 1)); // include null terminator
 
             current_offset += static_cast<uint32_t>(entry.second.size());
         }
 
         // Write Payloads
         for (const auto& entry : entries) {
-            out.write(entry.second.c_str(), entry.second.size());
+            out.write(entry.second.c_str(), static_cast<std::streamsize>(entry.second.size()));
         }
 
         // Fix up total size (Little Endian)
@@ -145,6 +145,20 @@ TEST_CASE("BigArchive Header Parsing", "[big_unpack][header]") {
         REQUIRE(entries[0].offset < entries[1].offset);
     }
 
+    SECTION("Positive scenario: Repeated read_header calls clear previous entries without duplication") {
+        env.write_big_file("BIG4", {
+            { "file1.txt", "Hello World" },
+            { "data/file2.ini", "ConfigData=1" }
+            });
+
+        BigArchive archive(env.test_file);
+        archive.read_header();
+        REQUIRE(archive.get_entries().size() == 2);
+
+        archive.read_header();
+        REQUIRE(archive.get_entries().size() == 2);
+    }
+
     SECTION("Positive scenario: Path separator normalization") {
         // Windows uses backslashes, BIG4 uses backslashes or forward slashes.
         env.write_big_file("BIG4", {
@@ -176,9 +190,10 @@ TEST_CASE("BigArchive Extraction", "[big_unpack][extraction]") {
     }
 
     SECTION("Positive scenario: Extract all files preserves data and creates directories") {
+        std::string large_payload(1500000, 'X'); // 1.5 MB payload spanning multiple chunks
         env.write_big_file("BIG4", {
             { "root.txt", "Root Data" },
-            { "nested/deep/file.txt", "Deep Data" }
+            { "nested/deep/file.txt", large_payload }
             });
 
         BigArchive archive(env.test_file);
@@ -189,7 +204,7 @@ TEST_CASE("BigArchive Extraction", "[big_unpack][extraction]") {
         std::filesystem::path p1 = env.out_dir / "root.txt";
         REQUIRE(std::filesystem::exists(p1));
 
-        std::ifstream in1(p1);
+        std::ifstream in1(p1, std::ios::binary);
         std::string content1((std::istreambuf_iterator<char>(in1)), std::istreambuf_iterator<char>());
         REQUIRE(content1 == "Root Data");
 
@@ -197,9 +212,9 @@ TEST_CASE("BigArchive Extraction", "[big_unpack][extraction]") {
         std::filesystem::path p2 = env.out_dir / "nested" / "deep" / "file.txt";
         REQUIRE(std::filesystem::exists(p2));
 
-        std::ifstream in2(p2);
+        std::ifstream in2(p2, std::ios::binary);
         std::string content2((std::istreambuf_iterator<char>(in2)), std::istreambuf_iterator<char>());
-        REQUIRE(content2 == "Deep Data");
+        REQUIRE(content2 == large_payload);
     }
 }
 
@@ -236,6 +251,50 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         BigArchive archive(env.test_file);
         // Must throw instead of allocating a massive vector of garbage
         REQUIRE_THROWS_AS(archive.read_header(), std::runtime_error);
+    }
+
+    SECTION("Negative scenario: Unterminated string in index table throws std::runtime_error") {
+        std::ofstream out(env.test_file, std::ios::binary);
+        out.write("BIG4", 4);
+        uint32_t total_size = 32;
+        out.write(reinterpret_cast<const char*>(&total_size), 4);
+
+        uint32_t num_files = lotm::core::to_big_endian(static_cast<uint32_t>(1));
+        out.write(reinterpret_cast<const char*>(&num_files), 4);
+
+        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(28));
+        out.write(reinterpret_cast<const char*>(&header_size), 4);
+
+        uint32_t offset = lotm::core::to_big_endian(static_cast<uint32_t>(28));
+        uint32_t size = lotm::core::to_big_endian(static_cast<uint32_t>(4));
+        out.write(reinterpret_cast<const char*>(&offset), 4);
+        out.write(reinterpret_cast<const char*>(&size), 4);
+
+        // Write 4 non-null characters up to header_size (28) + 4 payload bytes without any '\0'
+        out.write("ABCDDATA", 8);
+        out.close();
+
+        BigArchive archive(env.test_file);
+        REQUIRE_THROWS_AS(archive.read_header(), std::runtime_error);
+    }
+
+    SECTION("Negative scenario: Zip-Slip relative path traversal is blocked during extraction") {
+        env.write_big_file("BIG4", { { "..\\escaped.txt", "malicious_payload" } });
+
+        BigArchive archive(env.test_file);
+        archive.read_header();
+
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), std::runtime_error);
+        REQUIRE_FALSE(std::filesystem::exists(env.root_dir / "escaped.txt"));
+    }
+
+    SECTION("Negative scenario: Rooted path in entry is blocked during extraction") {
+        env.write_big_file("BIG4", { { "\\rooted_evil.txt", "malicious_payload" } });
+
+        BigArchive archive(env.test_file);
+        archive.read_header();
+
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), std::runtime_error);
     }
 
     SECTION("Negative scenario: Payload offset out of physical file bounds") {

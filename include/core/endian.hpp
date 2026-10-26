@@ -15,7 +15,11 @@
 
 namespace lotm::core {
 
-    template <std::integral T>
+    template <typename T>
+    concept SwappableIntegral = std::integral<T> &&
+        (sizeof(T) == 1 || sizeof(T) == 2 || sizeof(T) == 4 || sizeof(T) == 8);
+
+    template <SwappableIntegral T>
     [[nodiscard]] constexpr T byteswap(T value) noexcept {
         if constexpr (sizeof(T) == 1) {
             return value;
@@ -48,7 +52,7 @@ namespace lotm::core {
         }
     }
 
-    template <std::integral T>
+    template <SwappableIntegral T>
     [[nodiscard]] constexpr T from_big_endian(T value) noexcept {
         if constexpr (std::endian::native == std::endian::little) {
             return byteswap(value);
@@ -58,9 +62,24 @@ namespace lotm::core {
         }
     }
 
-    template <std::integral T>
+    template <SwappableIntegral T>
     [[nodiscard]] constexpr T to_big_endian(T value) noexcept {
         return from_big_endian(value);
+    }
+
+    template <SwappableIntegral T>
+    [[nodiscard]] constexpr T from_little_endian(T value) noexcept {
+        if constexpr (std::endian::native == std::endian::big) {
+            return byteswap(value);
+        }
+        else {
+            return value;
+        }
+    }
+
+    template <SwappableIntegral T>
+    [[nodiscard]] constexpr T to_little_endian(T value) noexcept {
+        return from_little_endian(value);
     }
 
 } // namespace lotm::core

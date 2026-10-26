@@ -95,23 +95,37 @@ TEST_CASE("System endianness routing to_big_endian and from_big_endian", "[endia
     uint64_t v64 = 0x0102030405060708ULL;
 
     if constexpr (std::endian::native == std::endian::little) {
-        SECTION("Positive scenario: Little Endian host swaps the bytes") {
+        SECTION("Positive scenario: Little Endian host swaps big-endian values and preserves little-endian values") {
             REQUIRE(to_big_endian(v16) == 0x3412);
             REQUIRE(from_big_endian(v16) == 0x3412);
             REQUIRE(to_big_endian(v32) == 0xDDCCBBAA);
             REQUIRE(from_big_endian(v32) == 0xDDCCBBAA);
             REQUIRE(to_big_endian(v64) == 0x0807060504030201ULL);
             REQUIRE(from_big_endian(v64) == 0x0807060504030201ULL);
+
+            REQUIRE(to_little_endian(v16) == v16);
+            REQUIRE(from_little_endian(v16) == v16);
+            REQUIRE(to_little_endian(v32) == v32);
+            REQUIRE(from_little_endian(v32) == v32);
+            REQUIRE(to_little_endian(v64) == v64);
+            REQUIRE(from_little_endian(v64) == v64);
         }
     }
     else {
-        SECTION("Positive scenario: Big Endian host acts as a no-op") {
+        SECTION("Positive scenario: Big Endian host preserves big-endian values and swaps little-endian values") {
             REQUIRE(to_big_endian(v16) == 0x1234);
             REQUIRE(from_big_endian(v16) == 0x1234);
             REQUIRE(to_big_endian(v32) == 0xAABBCCDD);
             REQUIRE(from_big_endian(v32) == 0xAABBCCDD);
             REQUIRE(to_big_endian(v64) == 0x0102030405060708ULL);
             REQUIRE(from_big_endian(v64) == 0x0102030405060708ULL);
+
+            REQUIRE(to_little_endian(v16) == 0x3412);
+            REQUIRE(from_little_endian(v16) == 0x3412);
+            REQUIRE(to_little_endian(v32) == 0xDDCCBBAA);
+            REQUIRE(from_little_endian(v32) == 0xDDCCBBAA);
+            REQUIRE(to_little_endian(v64) == 0x0807060504030201ULL);
+            REQUIRE(from_little_endian(v64) == 0x0807060504030201ULL);
         }
     }
 }
@@ -124,13 +138,15 @@ TEST_CASE("Concept constraint verification", "[endian][concept]") {
         STATIC_REQUIRE(requires(uint64_t v) { byteswap(v); });
         STATIC_REQUIRE(requires(int32_t v) { from_big_endian(v); });
         STATIC_REQUIRE(requires(uint32_t v) { to_big_endian(v); });
+        STATIC_REQUIRE(requires(int32_t v) { from_little_endian(v); });
+        STATIC_REQUIRE(requires(uint32_t v) { to_little_endian(v); });
     }
 
-    SECTION("Negative scenario: Non-integral types do not satisfy std::integral") {
-        STATIC_REQUIRE_FALSE(std::integral<float>);
-        STATIC_REQUIRE_FALSE(std::integral<double>);
-        STATIC_REQUIRE_FALSE(std::integral<const char*>);
-        STATIC_REQUIRE_FALSE(std::integral<std::nullptr_t>);
+    SECTION("Negative scenario: Non-integral types do not satisfy SwappableIntegral") {
+        STATIC_REQUIRE_FALSE(SwappableIntegral<float>);
+        STATIC_REQUIRE_FALSE(SwappableIntegral<double>);
+        STATIC_REQUIRE_FALSE(SwappableIntegral<const char*>);
+        STATIC_REQUIRE_FALSE(SwappableIntegral<std::nullptr_t>);
     }
 }
 
@@ -143,6 +159,8 @@ TEST_CASE("Noexcept specification contract", "[endian][noexcept]") {
         STATIC_REQUIRE(noexcept(byteswap(v64)));
         STATIC_REQUIRE(noexcept(to_big_endian(v32)));
         STATIC_REQUIRE(noexcept(from_big_endian(v64)));
+        STATIC_REQUIRE(noexcept(to_little_endian(v32)));
+        STATIC_REQUIRE(noexcept(from_little_endian(v64)));
     }
 }
 
