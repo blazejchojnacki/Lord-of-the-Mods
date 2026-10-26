@@ -10,13 +10,13 @@ name: CI
 on:
   workflow_dispatch:
   push:
-    branches: [main, release/v0.1.0]
+    branches: [main, 'release/**']
     paths-ignore:
       - 'docs/**'
       - '**.md'
       - '.gitignore'
   pull_request:
-    branches: [main, release/v0.1.0]
+    branches: [main, 'release/**']
     paths-ignore:
       - 'docs/**'
       - '**.md'
