@@ -25,9 +25,6 @@ class BigArchive:
     def get_entries(self) -> list[lotm.big.BigEntry]:
         ...
 
-    def read_header(self) -> None:
-        ...
-
 
 class BigEntry:
     """

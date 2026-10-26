@@ -19,15 +19,13 @@ namespace lotm::big {
 
     class BigArchive {
     public:
+        // Parses the header and file index immediately upon construction
         explicit BigArchive(std::filesystem::path file_path);
 
-        // Parses the header and file index
-        void read_header();
+        // Extracts all files to the output directory
+        void extract_all(const std::filesystem::path& output_dir) const;
 
-        // Extracts all files to the output directory (equivalent to read_big4)
-        void extract_all(const std::filesystem::path& output_dir);
-
-        [[nodiscard]] const std::vector<BigEntry>& get_entries() const noexcept { return entries_; }
+        [[nodiscard]] std::vector<BigEntry> get_entries() const;
 
     private:
         std::filesystem::path file_path_;

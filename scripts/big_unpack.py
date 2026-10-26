@@ -46,9 +46,6 @@ def unpack(big_path: Path, output_dir: Path) -> list[big.BigEntry]:
 
     archive = big.BigArchive(big_path)
 
-    # Parse header and index
-    archive.read_header()
-
     # Inspect parsed entries via bindings
     entries = archive.get_entries()
     logger.info("Loaded %d entries from %s", len(entries), big_path.name)

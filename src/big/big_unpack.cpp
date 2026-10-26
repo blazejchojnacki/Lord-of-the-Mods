@@ -76,9 +76,7 @@ namespace lotm::big {
 
     BigArchive::BigArchive(std::filesystem::path file_path)
         : file_path_(std::move(file_path)) {
-    }
 
-    void BigArchive::read_header() {
         std::ifstream file(file_path_, std::ios::binary);
         if (!file.is_open()) {
             throw std::runtime_error("Cannot open file: " + file_path_.string());
@@ -117,7 +115,6 @@ namespace lotm::big {
         std::cout << "File: " << file_path_.string() << '\n';
         std::cout << "Number of files inside: " << num_files << '\n';
 
-        entries_.clear();
         entries_.reserve(num_files);
 
         // Index reading
@@ -160,7 +157,11 @@ namespace lotm::big {
         }
     }
 
-    void BigArchive::extract_all(const std::filesystem::path& output_dir) {
+    std::vector<BigEntry> BigArchive::get_entries() const {
+        return entries_;
+    }
+
+    void BigArchive::extract_all(const std::filesystem::path& output_dir) const {
         const auto physical_size = std::filesystem::file_size(file_path_);
         const uintmax_t max_extraction_quota = physical_size * MAX_AMPLIFICATION_RATIO;
 

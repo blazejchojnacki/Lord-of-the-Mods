@@ -100,14 +100,12 @@ TEST_CASE("BigArchive Initialization and Basic Error Handling", "[big_unpack][er
     ScopedTempEnv env;
 
     SECTION("Negative scenario: File does not exist") {
-        BigArchive archive(env.root_dir / "non_existent.big");
-        REQUIRE_THROWS_AS(archive.read_header(), std::runtime_error);
+        REQUIRE_THROWS_AS(BigArchive(env.root_dir / "non_existent.big"), std::runtime_error);
     }
 
     SECTION("Negative scenario: Invalid magic string") {
         env.write_big_file("BOGUS", {});
-        BigArchive archive(env.test_file);
-        REQUIRE_THROWS_AS(archive.read_header(), std::invalid_argument);
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), std::invalid_argument);
     }
 }
 
@@ -116,8 +114,8 @@ TEST_CASE("BigArchive Header Parsing", "[big_unpack][header]") {
 
     SECTION("Positive scenario: Valid BIG4 file with zero entries") {
         env.write_big_file("BIG4", {});
+        REQUIRE_NOTHROW(BigArchive(env.test_file));
         BigArchive archive(env.test_file);
-        REQUIRE_NOTHROW(archive.read_header());
         REQUIRE(archive.get_entries().empty());
     }
 
@@ -128,7 +126,6 @@ TEST_CASE("BigArchive Header Parsing", "[big_unpack][header]") {
             });
 
         BigArchive archive(env.test_file);
-        REQUIRE_NOTHROW(archive.read_header());
 
         const auto& entries = archive.get_entries();
         REQUIRE(entries.size() == 2);
@@ -145,20 +142,6 @@ TEST_CASE("BigArchive Header Parsing", "[big_unpack][header]") {
         REQUIRE(entries[0].offset < entries[1].offset);
     }
 
-    SECTION("Positive scenario: Repeated read_header calls clear previous entries without duplication") {
-        env.write_big_file("BIG4", {
-            { "file1.txt", "Hello World" },
-            { "data/file2.ini", "ConfigData=1" }
-            });
-
-        BigArchive archive(env.test_file);
-        archive.read_header();
-        REQUIRE(archive.get_entries().size() == 2);
-
-        archive.read_header();
-        REQUIRE(archive.get_entries().size() == 2);
-    }
-
     SECTION("Positive scenario: Path separator normalization") {
         // Windows uses backslashes, BIG4 uses backslashes or forward slashes.
         env.write_big_file("BIG4", {
@@ -166,7 +149,6 @@ TEST_CASE("BigArchive Header Parsing", "[big_unpack][header]") {
             });
 
         BigArchive archive(env.test_file);
-        archive.read_header();
 
         char expected_sep = static_cast<char>(std::filesystem::path::preferred_separator);
         std::string expected_name = std::string("art") + expected_sep + "textures" + expected_sep + "image.dds";
@@ -181,7 +163,6 @@ TEST_CASE("BigArchive Extraction", "[big_unpack][extraction]") {
     SECTION("Negative scenario: Missing file during extraction") {
         env.write_big_file("BIG4", { { "test.txt", "data" } });
         BigArchive archive(env.test_file);
-        archive.read_header();
 
         // Delete file underneath the object before extracting
         std::filesystem::remove(env.test_file);
@@ -197,7 +178,6 @@ TEST_CASE("BigArchive Extraction", "[big_unpack][extraction]") {
             });
 
         BigArchive archive(env.test_file);
-        archive.read_header();
         archive.extract_all(env.out_dir);
 
         // Verify root file
@@ -229,9 +209,8 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         // File ends at 8 bytes, missing num_files and header_size
         out.close();
 
-        BigArchive archive(env.test_file);
-        // Expect the implementation to check stream state and throw
-        REQUIRE_THROWS_AS(archive.read_header(), std::runtime_error);
+        // Expect the implementation to check stream state and throw upon construction
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), std::runtime_error);
     }
 
     SECTION("Negative scenario: Truncated index (EOF before reading all claimed files)") {
@@ -248,9 +227,8 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         out.write(reinterpret_cast<const char*>(&header_size), 4);
         out.close();
 
-        BigArchive archive(env.test_file);
         // Must throw instead of allocating a massive vector of garbage
-        REQUIRE_THROWS_AS(archive.read_header(), std::runtime_error);
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), std::runtime_error);
     }
 
     SECTION("Negative scenario: Unterminated string in index table throws std::runtime_error") {
@@ -274,15 +252,13 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         out.write("ABCDDATA", 8);
         out.close();
 
-        BigArchive archive(env.test_file);
-        REQUIRE_THROWS_AS(archive.read_header(), std::runtime_error);
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), std::runtime_error);
     }
 
     SECTION("Negative scenario: Zip-Slip relative path traversal is blocked during extraction") {
         env.write_big_file("BIG4", { { "..\\escaped.txt", "malicious_payload" } });
 
         BigArchive archive(env.test_file);
-        archive.read_header();
 
         REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), std::runtime_error);
         REQUIRE_FALSE(std::filesystem::exists(env.root_dir / "escaped.txt"));
@@ -292,7 +268,6 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         env.write_big_file("BIG4", { { "\\rooted_evil.txt", "malicious_payload" } });
 
         BigArchive archive(env.test_file);
-        archive.read_header();
 
         REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), std::runtime_error);
     }
@@ -308,7 +283,6 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         file.close();
 
         BigArchive archive(env.test_file);
-        archive.read_header(); // Header parses fine
 
         // Extraction should fail upon detecting bad offset limits
         REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), std::runtime_error);
@@ -318,7 +292,6 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         env.write_big_file("BIG4", { { "empty.txt", "" } });
 
         BigArchive archive(env.test_file);
-        archive.read_header();
         REQUIRE_NOTHROW(archive.extract_all(env.out_dir));
 
         std::filesystem::path empty_path = env.out_dir / "empty.txt";
@@ -333,7 +306,6 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         std::filesystem::create_directories(env.out_dir);
 
         BigArchive archive(env.test_file);
-        archive.read_header();
         REQUIRE_NOTHROW(archive.extract_all(env.out_dir));
         REQUIRE(std::filesystem::exists(env.out_dir / "file.txt"));
     }

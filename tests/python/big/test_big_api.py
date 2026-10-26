@@ -68,19 +68,6 @@ def test_unpack_missing_archive_raises_error(tmp_path: Path):
         big_unpack.unpack(missing_file, out_dir)
 
 
-def test_repeated_read_header_is_idempotent(standard_mod_directory: Path, tmp_path: Path):
-    """Verify calling read_header() multiple times on the same BigArchive does not duplicate entries."""
-    archive_path = tmp_path / "idempotent.big"
-    big_pack.pack(standard_mod_directory, archive_path)
-
-    archive = big.BigArchive(archive_path)
-    archive.read_header()
-    assert len(archive.get_entries()) == 3
-
-    archive.read_header()
-    assert len(archive.get_entries()) == 3
-
-
 def test_concurrent_pack_and_unpack_releases_gil(standard_mod_directory: Path, tmp_path: Path):
     """Verify multi-threaded packing and extraction execute concurrently without GIL deadlocks."""
     def worker(worker_id: int) -> int:
