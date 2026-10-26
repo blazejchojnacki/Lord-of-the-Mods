@@ -10,6 +10,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import pytest
+import struct
 
 import lotm.big as big
 import scripts.big_pack as big_pack
@@ -66,6 +67,45 @@ def test_unpack_missing_archive_raises_error(tmp_path: Path):
 
     with pytest.raises(FileNotFoundError, match="Archive not found"):
         big_unpack.unpack(missing_file, out_dir)
+
+
+def test_cpp_api_raises_big_format_error_on_corrupt_magic(tmp_path: Path):
+    """Verify that the C++ bindings propagate BigFormatError for invalid magic headers."""
+    bad_archive = tmp_path / "corrupt.big"
+    bad_archive.write_bytes(b"BOGUS_DATA")
+
+    with pytest.raises(big.BigFormatError, match="Not a valid BIG4 file"):
+        big.BigArchive(bad_archive)
+
+
+def test_cpp_api_raises_big_security_error_on_zip_slip(tmp_path: Path):
+    """Verify that the C++ bindings propagate BigSecurityError for path traversal attempts."""
+    bad_archive = tmp_path / "zipslip.big"
+    
+    # Synthesize a malicious archive manually with a Zip-Slip payload
+    name = b"../escaped.txt\x00"
+    header_size = 16 + 8 + len(name)
+    payload_size = 4
+    offset = header_size
+    total_size = header_size + payload_size
+    
+    with open(bad_archive, "wb") as f:
+        f.write(b"BIG4")
+        f.write(struct.pack("<I", total_size))
+        f.write(struct.pack(">I", 1))             # File count
+        f.write(struct.pack(">I", header_size))
+        f.write(struct.pack(">I", offset))
+        f.write(struct.pack(">I", payload_size))
+        f.write(name)
+        f.write(b"DATA")
+        
+    # The header will parse successfully because the structure itself is intact
+    archive = big.BigArchive(bad_archive)
+    out_dir = tmp_path / "out"
+    
+    # Extraction must trigger the C++ BigSecurityError
+    with pytest.raises(big.BigSecurityError, match="Path traversal attempt"):
+        archive.extract_all(out_dir)
 
 
 def test_concurrent_pack_and_unpack_releases_gil(standard_mod_directory: Path, tmp_path: Path):
