@@ -33,6 +33,17 @@ namespace lotm::big {
             throw std::runtime_error("Target output directory does not exist: " + parent.string());
         }
 
+        // Guard against output_file residing inside source_dir (self-inclusion)
+        const std::filesystem::path canonical_source = std::filesystem::weakly_canonical(source_dir);
+        const std::filesystem::path canonical_output = std::filesystem::weakly_canonical(output_file);
+        auto mismatch_pair = std::mismatch(
+            canonical_source.begin(), canonical_source.end(),
+            canonical_output.begin(), canonical_output.end());
+        if (mismatch_pair.first == canonical_source.end()) {
+            throw std::invalid_argument(
+                "Target output archive cannot reside inside the source directory: " + output_file.string());
+        }
+
         struct PackEntry {
             std::filesystem::path full_path;
             std::string rel_path;
@@ -118,7 +129,7 @@ namespace lotm::big {
             uint32_t be_size = lotm::core::to_big_endian(f.size);
             out.write(reinterpret_cast<const char*>(&be_size), sizeof(be_size));
 
-            out.write(f.rel_path.c_str(), f.rel_path.length());
+            out.write(f.rel_path.c_str(), static_cast<std::streamsize>(f.rel_path.length()));
             out.write("\0", 1);
         }
 
@@ -130,19 +141,37 @@ namespace lotm::big {
             std::cout << "Packing: " << f.rel_path << '\n';
             std::ifstream src(f.full_path, std::ios::binary);
             if (!src.is_open()) {
+                out.close();
+                std::filesystem::remove(output_file);
                 throw std::runtime_error("Cannot read source file: " + f.full_path.string());
             }
 
+            uintmax_t bytes_copied = 0;
             while (src) {
-                src.read(chunk.data(), chunk.size());
+                src.read(chunk.data(), static_cast<std::streamsize>(chunk.size()));
                 std::streamsize bytes_read = src.gcount();
                 if (bytes_read > 0) {
                     out.write(chunk.data(), bytes_read);
+                    if (!out) {
+                        out.close();
+                        std::filesystem::remove(output_file);
+                        throw std::runtime_error("Failed writing data to archive: " + output_file.string());
+                    }
+                    bytes_copied += static_cast<uintmax_t>(bytes_read);
                 }
+            }
+
+            if (src.bad() || bytes_copied != f.size) {
+                out.close();
+                std::filesystem::remove(output_file);
+                throw std::runtime_error("Byte count mismatch while packing file: " + f.rel_path);
             }
         }
 
+        out.flush();
         if (!out.good()) {
+            out.close();
+            std::filesystem::remove(output_file);
             throw std::runtime_error("Failed writing data to archive: " + output_file.string());
         }
 

@@ -7,61 +7,66 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
-from typing import Any, Optional, overload, Typing, Sequence, Iterable, Union, Callable
-from enum import Enum
+import os
 import lotm.big
+
 
 class BigArchive:
     """
-    None
+    Parser and extractor for BIG4 archives
     """
 
-    def __init__(self, file_path: str | os.PathLike) -> None:
+    def __init__(self, file_path: str | os.PathLike[str]) -> None:
         ...
-    
-    def extract_all(self, output_dir: str | os.PathLike) -> None:
+
+    def extract_all(self, output_dir: str | os.PathLike[str]) -> None:
         ...
-    
+
     def get_entries(self) -> list[lotm.big.BigEntry]:
         ...
-    
+
     def read_header(self) -> None:
         ...
-    
+
+
 class BigEntry:
     """
-    None
+    Metadata record for an entry inside a BIG4 archive
     """
 
-    def __init__(*args, **kwargs):
+    def __init__(self, *args: object, **kwargs: object) -> None:
         """
         Initialize self.  See help(type(self)) for accurate signature.
         """
         ...
-    
+
     @property
     def name(self) -> str:
         ...
-    
+
     @property
     def offset(self) -> int:
         ...
-    
+
     @property
     def size(self) -> int:
         ...
-    
+
+    def __repr__(self) -> str:
+        ...
+
+
 class BigPacker:
     """
-    None
+    Packing engine for BIG4 archives
     """
 
-    def __init__(*args, **kwargs):
+    def __init__(self, *args: object, **kwargs: object) -> None:
         """
         Initialize self.  See help(type(self)) for accurate signature.
         """
         ...
-    
-    def pack_from_directory(source_dir: str | os.PathLike, output_file: str | os.PathLike) -> None:
+
+    @staticmethod
+    def pack_from_directory(source_dir: str | os.PathLike[str], output_file: str | os.PathLike[str]) -> None:
         ...
-    

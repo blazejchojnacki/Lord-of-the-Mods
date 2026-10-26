@@ -9,18 +9,36 @@
 
 #include <big/big_unpack.hpp>
 #include <core/endian.hpp>
-#include <fstream>
-#include <stdexcept>
-#include <iostream>
-#include <string_view>
+#include <algorithm>
+#include <cstddef>
 #include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <stdexcept>
+#include <string_view>
+#include <vector>
 
 namespace lotm::big {
 
-    // Internal helper for reading strings until null-terminator
-    static std::string read_null_terminated_string(std::ifstream& stream) {
+    namespace {
+        constexpr std::size_t MAX_ENTRY_PATH_LENGTH = 4096;
+        constexpr std::size_t EXTRACT_CHUNK_SIZE = 1024 * 1024;
+    } // namespace
+
+    // Internal helper for reading strings until null-terminator within a byte budget
+    static std::string read_null_terminated_string(std::ifstream& stream, std::size_t max_bytes) {
         std::string result;
-        std::getline(stream, result, '\0');
+        char ch = '\0';
+        for (std::size_t i = 0; i < max_bytes; ++i) {
+            if (!stream.get(ch)) {
+                return result;
+            }
+            if (ch == '\0') {
+                return result;
+            }
+            result.push_back(ch);
+        }
+        stream.setstate(std::ios::failbit);
         return result;
     }
 
@@ -58,13 +76,16 @@ namespace lotm::big {
 
         // Prevent memory exhaustion from malicious/corrupted num_files claims
         auto physical_size = std::filesystem::file_size(file_path_);
-        if (header_size_ > physical_size || static_cast<uintmax_t>(num_files) * 8 > physical_size) {
+        if (header_size_ < HEADER_BASE_SIZE ||
+            header_size_ > physical_size ||
+            static_cast<uintmax_t>(num_files) * 8 > physical_size) {
             throw std::runtime_error("Corrupted BIG4 index: Claims more files than physically possible.");
         }
 
         std::cout << "File: " << file_path_.string() << '\n';
         std::cout << "Number of files inside: " << num_files << '\n';
 
+        entries_.clear();
         entries_.reserve(num_files);
 
         // Index reading
@@ -81,8 +102,16 @@ namespace lotm::big {
             entry.offset = lotm::core::from_big_endian(entry.offset);
             entry.size = lotm::core::from_big_endian(entry.size);
 
+            auto current_pos = file.tellg();
+            if (current_pos < 0 || static_cast<uintmax_t>(current_pos) >= header_size_) {
+                throw std::runtime_error("Truncated BIG4 string table.");
+            }
+
+            std::size_t remaining_header = static_cast<std::size_t>(
+                std::min<uintmax_t>(header_size_ - static_cast<uintmax_t>(current_pos), MAX_ENTRY_PATH_LENGTH));
+
             // Read file name until null byte
-            entry.name = read_null_terminated_string(file);
+            entry.name = read_null_terminated_string(file, remaining_header);
 
             if (!file) {
                 throw std::runtime_error("Truncated BIG4 string table.");
@@ -104,12 +133,15 @@ namespace lotm::big {
             std::filesystem::create_directories(output_dir);
         }
 
+        const std::filesystem::path canonical_output_dir = std::filesystem::weakly_canonical(output_dir);
+
         std::ifstream file(file_path_, std::ios::binary);
         if (!file.is_open()) {
             throw std::runtime_error("Cannot open file for extraction.");
         }
 
         auto physical_size = std::filesystem::file_size(file_path_);
+        std::vector<char> buffer(EXTRACT_CHUNK_SIZE);
 
         // File extraction
         for (const auto& entry : entries_) {
@@ -118,7 +150,23 @@ namespace lotm::big {
                 throw std::runtime_error("Extraction bounds exceeded for file: " + entry.name);
             }
 
-            std::filesystem::path target_path = output_dir / entry.name;
+            std::filesystem::path entry_rel_path(entry.name);
+            if (entry_rel_path.empty() ||
+                entry_rel_path.is_absolute() ||
+                entry_rel_path.has_root_name() ||
+                entry_rel_path.has_root_directory()) {
+                throw std::runtime_error("Unsafe or rooted path in archive entry: " + entry.name);
+            }
+
+            std::filesystem::path target_path = std::filesystem::weakly_canonical(canonical_output_dir / entry_rel_path);
+            auto mismatch_pair = std::mismatch(
+                canonical_output_dir.begin(), canonical_output_dir.end(),
+                target_path.begin(), target_path.end());
+
+            if (mismatch_pair.first != canonical_output_dir.end() || target_path == canonical_output_dir) {
+                throw std::runtime_error("Path traversal attempt detected for file: " + entry.name);
+            }
+
             std::filesystem::path target_subdir = target_path.parent_path();
 
             if (!std::filesystem::exists(target_subdir)) {
@@ -136,15 +184,29 @@ namespace lotm::big {
                     throw std::runtime_error("Failed to seek to offset for file: " + entry.name);
                 }
 
-                // Read directly to a vector buffer
-                std::vector<char> buffer(entry.size);
-                file.read(buffer.data(), entry.size);
+                // Stream payload through reusable chunk buffer
+                uint32_t remaining = entry.size;
+                while (remaining > 0) {
+                    const auto chunk_size = static_cast<std::streamsize>(
+                        std::min<std::size_t>(remaining, buffer.size()));
+                    file.read(buffer.data(), chunk_size);
 
-                if (!file) {
-                    throw std::runtime_error("Failed to read payload for file: " + entry.name);
+                    if (!file || file.gcount() != chunk_size) {
+                        throw std::runtime_error("Failed to read payload for file: " + entry.name);
+                    }
+
+                    out_file.write(buffer.data(), chunk_size);
+                    if (!out_file) {
+                        throw std::runtime_error("Failed to write extracted file: " + target_path.string());
+                    }
+
+                    remaining -= static_cast<uint32_t>(chunk_size);
                 }
+            }
 
-                out_file.write(buffer.data(), entry.size);
+            out_file.flush();
+            if (!out_file) {
+                throw std::runtime_error("Failed to flush extracted file: " + target_path.string());
             }
 
             std::cout << "Extracted: " << entry.name << '\n';

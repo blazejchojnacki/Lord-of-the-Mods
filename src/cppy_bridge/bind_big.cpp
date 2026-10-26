@@ -36,8 +36,10 @@ namespace lotm::python {
             .def(nb::init<std::filesystem::path>(), nb::arg("file_path"),
                 "Open a BIG archive from disk")
             .def("read_header", &lotm::big::BigArchive::read_header,
+                nb::call_guard<nb::gil_scoped_release>(),
                 "Parses and validates the archive header and index")
             .def("extract_all", &lotm::big::BigArchive::extract_all, nb::arg("output_dir"),
+                nb::call_guard<nb::gil_scoped_release>(),
                 "Extracts all contained files into the specified directory")
             .def("get_entries", &lotm::big::BigArchive::get_entries, nb::rv_policy::reference_internal,
                 "Returns list of indexed file entries");
@@ -45,6 +47,7 @@ namespace lotm::python {
         nb::class_<lotm::big::BigPacker>(sub, "BigPacker", "Packing engine for BIG4 archives")
             .def_static("pack_from_directory", &lotm::big::BigPacker::pack_from_directory,
                 nb::arg("source_dir"), nb::arg("output_file"),
+                nb::call_guard<nb::gil_scoped_release>(),
                 "Packs a directory tree into a compliant BIG4 archive");
     }
 

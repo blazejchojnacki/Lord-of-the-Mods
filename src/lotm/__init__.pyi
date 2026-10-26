@@ -7,7 +7,6 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
-from typing import Any, Optional, overload, Typing, Sequence, Iterable, Union, Callable
-from enum import Enum
-import lotm
+from . import big as big
 
+__all__ = ["big"]

@@ -10,6 +10,15 @@ add_library(lotm_big STATIC
     big_pack.cpp
 )
 
+set_target_properties(lotm_big PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+
+target_compile_options(lotm_big PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
+)
+
 target_include_directories(lotm_big PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
 )
