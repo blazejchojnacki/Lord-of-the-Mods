@@ -24,6 +24,7 @@ namespace lotm::big {
     namespace {
         constexpr std::size_t MAX_ENTRY_PATH_LENGTH = 4096;
         constexpr std::size_t EXTRACT_CHUNK_SIZE = 1024 * 1024;
+        constexpr uintmax_t MAX_AMPLIFICATION_RATIO = 20;
 
         // Internal helper for reading strings until null-terminator within a byte budget
         static std::string read_null_terminated_string(std::ifstream& stream, std::size_t max_bytes) {
@@ -159,6 +160,18 @@ namespace lotm::big {
     }
 
     void BigArchive::extract_all(const std::filesystem::path& output_dir) {
+        const auto physical_size = std::filesystem::file_size(file_path_);
+        const uintmax_t max_extraction_quota = physical_size * MAX_AMPLIFICATION_RATIO;
+
+        // Upfront quota evaluation across all entries to prevent amplification / zip-bomb attacks
+        uintmax_t total_extracted_bytes = 0;
+        for (const auto& entry : entries_) {
+            if (max_extraction_quota - total_extracted_bytes < entry.size) {
+                throw std::runtime_error("Archive amplification (Zip Bomb) threshold exceeded.");
+            }
+            total_extracted_bytes += entry.size;
+        }
+
         if (!std::filesystem::exists(output_dir)) {
             std::filesystem::create_directories(output_dir);
         }
@@ -170,7 +183,6 @@ namespace lotm::big {
             throw std::runtime_error("Cannot open file for extraction.");
         }
 
-        auto physical_size = std::filesystem::file_size(file_path_);
         std::vector<char> buffer(EXTRACT_CHUNK_SIZE);
 
         // File extraction
