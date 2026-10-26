@@ -105,7 +105,13 @@ namespace lotm::big {
         header_size_ = lotm::core::from_big_endian(header_size_);
 
         // Prevent memory exhaustion from malicious/corrupted num_files claims
-        auto physical_size = std::filesystem::file_size(file_path_);
+        // Use error_code overload to prevent raw filesystem_error propagation
+        std::error_code ec;
+        auto physical_size = std::filesystem::file_size(file_path_, ec);
+        if (ec) {
+            throw BigArchiveError("Cannot read physical file size: " + file_path_.string());
+        }
+
         if (header_size_ < HEADER_BASE_SIZE ||
             header_size_ > physical_size ||
             static_cast<uintmax_t>(num_files) * 8 > physical_size) {
@@ -162,7 +168,13 @@ namespace lotm::big {
     }
 
     void BigArchive::extract_all(const std::filesystem::path& output_dir) const {
-        const auto physical_size = std::filesystem::file_size(file_path_);
+        // Use error_code overload to prevent raw filesystem_error propagation when file is deleted
+        std::error_code ec;
+        const auto physical_size = std::filesystem::file_size(file_path_, ec);
+        if (ec) {
+            throw BigArchiveError("Cannot open file for extraction: " + file_path_.string());
+        }
+
         const uintmax_t max_extraction_quota = physical_size * MAX_AMPLIFICATION_RATIO;
 
         // Upfront quota evaluation across all entries to prevent amplification / zip-bomb attacks
@@ -213,9 +225,9 @@ namespace lotm::big {
                 }
 
                 current_check /= part;
-                std::error_code ec;
-                auto st = std::filesystem::symlink_status(current_check, ec);
-                if (!ec && std::filesystem::is_symlink(st)) {
+                std::error_code check_ec;
+                auto st = std::filesystem::symlink_status(current_check, check_ec);
+                if (!check_ec && std::filesystem::is_symlink(st)) {
                     throw BigSecurityError("Symlink traversal attempt detected for file: " + entry.name);
                 }
             }
