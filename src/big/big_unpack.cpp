@@ -17,6 +17,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 namespace lotm::big {
@@ -200,12 +201,21 @@ namespace lotm::big {
                 throw std::runtime_error("Unsafe or rooted path in archive entry: " + entry.name);
             }
 
+            // Verify path components against device names, alternate streams, and existing symlinks
+            std::filesystem::path current_check = canonical_output_dir;
             for (const auto& part : entry_rel_path) {
                 if (part.empty() || part == "." || part == "..") {
                     continue;
                 }
                 if (is_unsafe_filename(part.string())) {
                     throw std::runtime_error("Unsafe Windows device name or ADS stream in path: " + entry.name);
+                }
+
+                current_check /= part;
+                std::error_code ec;
+                auto st = std::filesystem::symlink_status(current_check, ec);
+                if (!ec && std::filesystem::is_symlink(st)) {
+                    throw std::runtime_error("Symlink traversal attempt detected for file: " + entry.name);
                 }
             }
 
