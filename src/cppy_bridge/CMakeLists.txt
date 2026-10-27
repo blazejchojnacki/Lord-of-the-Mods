@@ -5,24 +5,23 @@
 # Part of the Lord of the Mods (lotm) project.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-nanobind_add_module(lotm
+nanobind_add_module(_core
     NB_STATIC
     main.cpp
     bind_big.cpp
 )
 
-target_include_directories(lotm PRIVATE
+target_include_directories(_core PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
 )
 
-target_link_libraries(lotm PRIVATE lotm_big)
+target_link_libraries(_core PRIVATE lotm_big)
 
-install(TARGETS lotm LIBRARY DESTINATION .)
+install(TARGETS _core LIBRARY DESTINATION lotm)
 install(
     FILES
-        ${CMAKE_CURRENT_SOURCE_DIR}/../lotm/__init__.pyi
-        ${CMAKE_CURRENT_SOURCE_DIR}/../lotm/big.pyi
+        ${CMAKE_CURRENT_SOURCE_DIR}/../lotm/_core.pyi
         ${CMAKE_CURRENT_SOURCE_DIR}/../lotm/py.typed
     DESTINATION lotm
 )
