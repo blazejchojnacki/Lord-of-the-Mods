@@ -22,6 +22,7 @@ except ModuleNotFoundError:
     )
     sys.exit(1)
 
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("lotm")
 
 
@@ -40,7 +41,10 @@ def pack(source_dir: Path, output_file: Path) -> None:
     if not source_dir.is_dir():
         raise NotADirectoryError(f"Source directory '{source_dir}' does not exist or is not a directory.")
 
-    big.BigPacker.pack_from_directory(source_dir, output_file)
+    def on_progress(name: str) -> None:
+        logger.debug("Packed: %s", name)
+
+    big.BigPacker.pack_from_directory(source_dir, output_file, progress_callback=on_progress)
     logger.info("Finished packing into: %s", output_file.resolve())
 
 
@@ -54,8 +58,17 @@ def main() -> None:
         default=Path("packed_archive.big"),
         help="Destination .big file path (default: ./packed_archive.big)",
     )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output logging individual files",
+    )
 
     args = parser.parse_args()
+
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
 
     try:
         pack(args.source_dir, args.output)

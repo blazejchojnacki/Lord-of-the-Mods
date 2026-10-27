@@ -22,6 +22,7 @@ except ModuleNotFoundError:
     )
     sys.exit(1)
 
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("lotm")
 
 
@@ -50,8 +51,11 @@ def unpack(big_path: Path, output_dir: Path) -> list[big.BigEntry]:
     entries = archive.get_entries()
     logger.info("Loaded %d entries from %s", len(entries), big_path.name)
 
+    def on_progress(name: str) -> None:
+        logger.debug("Extracted: %s", name)
+
     # Extract all indexed files to the destination folder
-    archive.extract_all(output_dir)
+    archive.extract_all(output_dir, progress_callback=on_progress)
     logger.info("Finished extracting into: %s", output_dir.resolve())
 
     return entries
@@ -71,8 +75,17 @@ def main() -> None:
         default=Path("extracted_files"),
         help="Destination directory (default: ./extracted_files)",
     )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output logging individual files",
+    )
 
     args = parser.parse_args()
+
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
 
     try:
         unpack(args.archive, args.output)

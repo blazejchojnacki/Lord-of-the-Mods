@@ -15,7 +15,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
+#include <functional>
 #include <string_view>
 #include <system_error>
 #include <vector>
@@ -105,7 +105,6 @@ namespace lotm::big {
         header_size_ = lotm::core::from_big_endian(header_size_);
 
         // Prevent memory exhaustion from malicious/corrupted num_files claims
-        // Use error_code overload to prevent raw filesystem_error propagation
         std::error_code ec;
         auto physical_size = std::filesystem::file_size(file_path_, ec);
         if (ec) {
@@ -117,9 +116,6 @@ namespace lotm::big {
             static_cast<uintmax_t>(num_files) * 8 > physical_size) {
             throw BigFormatError("Corrupted BIG4 index: Claims more files than physically possible.");
         }
-
-        std::cout << "File: " << file_path_.string() << '\n';
-        std::cout << "Number of files inside: " << num_files << '\n';
 
         entries_.reserve(num_files);
 
@@ -167,8 +163,7 @@ namespace lotm::big {
         return entries_;
     }
 
-    void BigArchive::extract_all(const std::filesystem::path& output_dir) const {
-        // Use error_code overload to prevent raw filesystem_error propagation when file is deleted
+    void BigArchive::extract_all(const std::filesystem::path& output_dir, std::function<void(std::string_view)> progress_callback) const {
         std::error_code ec;
         const auto physical_size = std::filesystem::file_size(file_path_, ec);
         if (ec) {
@@ -283,7 +278,9 @@ namespace lotm::big {
                 throw BigArchiveError("Failed to flush extracted file: " + target_path.string());
             }
 
-            std::cout << "Extracted: " << entry.name << '\n';
+            if (progress_callback) {
+                progress_callback(entry.name);
+            }
         }
     }
 

@@ -7,6 +7,7 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
+from typing import Callable
 import os
 import lotm.big
 
@@ -19,7 +20,11 @@ class BigArchive:
     def __init__(self, file_path: str | os.PathLike[str]) -> None:
         ...
 
-    def extract_all(self, output_dir: str | os.PathLike[str]) -> None:
+    def extract_all(
+        self, 
+        output_dir: str | os.PathLike[str], 
+        progress_callback: Callable[[str], None] | None = None
+    ) -> None:
         ...
 
     def get_entries(self) -> list[lotm.big.BigEntry]:
@@ -65,5 +70,9 @@ class BigPacker:
         ...
 
     @staticmethod
-    def pack_from_directory(source_dir: str | os.PathLike[str], output_file: str | os.PathLike[str]) -> None:
+    def pack_from_directory(
+        source_dir: str | os.PathLike[str], 
+        output_file: str | os.PathLike[str], 
+        progress_callback: Callable[[str], None] | None = None
+    ) -> None:
         ...

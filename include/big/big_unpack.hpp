@@ -11,7 +11,9 @@
 
 #include <big/types.hpp>
 #include <filesystem>
+#include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <cstdint>
 
@@ -23,7 +25,10 @@ namespace lotm::big {
         explicit BigArchive(std::filesystem::path file_path);
 
         // Extracts all files to the output directory
-        void extract_all(const std::filesystem::path& output_dir) const;
+        void extract_all(
+            const std::filesystem::path& output_dir,
+            std::function<void(std::string_view)> progress_callback = {}
+        ) const;
 
         [[nodiscard]] std::vector<BigEntry> get_entries() const;
 

@@ -11,11 +11,13 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/filesystem.h>
 #include <nanobind/stl/vector.h>
+#include <nanobind/stl/function.h>
 
 #include "register.hpp"
 #include <big/big_unpack.hpp>
 #include <big/big_pack.hpp>
 #include <big/exceptions.hpp>
+#include <functional>
 
 namespace nb = nanobind;
 
@@ -42,16 +44,41 @@ namespace lotm::python {
             .def(nb::init<std::filesystem::path>(), nb::arg("file_path"),
                 nb::call_guard<nb::gil_scoped_release>(),
                 "Open a BIG archive from disk and parses its header index")
-            .def("extract_all", &lotm::big::BigArchive::extract_all, nb::arg("output_dir"),
-                nb::call_guard<nb::gil_scoped_release>(),
-                "Extracts all contained files into the specified directory")
             .def("get_entries", &lotm::big::BigArchive::get_entries,
-                "Returns list of indexed file entries");
+                "Returns list of indexed file entries")
+            .def("extract_all", [](const lotm::big::BigArchive& self, const std::filesystem::path& out_dir, std::function<void(std::string_view)> cb) {
+            // Wrap the callback to securely reacquire the GIL when invoking Python code
+            std::function<void(std::string_view)> safe_cb;
+            if (cb) {
+                safe_cb = [cb](std::string_view sv) {
+                    nb::gil_scoped_acquire acquire;
+                    cb(sv);
+                    };
+            }
+
+            // Release GIL for the duration of the C++ disk I/O
+            nb::gil_scoped_release release;
+            self.extract_all(out_dir, safe_cb);
+                },
+                nb::arg("output_dir"), nb::arg("progress_callback") = nb::none(),
+                "Extracts all contained files into the specified directory");
 
         nb::class_<lotm::big::BigPacker>(sub, "BigPacker", "Packing engine for BIG4 archives")
-            .def_static("pack_from_directory", &lotm::big::BigPacker::pack_from_directory,
-                nb::arg("source_dir"), nb::arg("output_file"),
-                nb::call_guard<nb::gil_scoped_release>(),
+            .def_static("pack_from_directory", [](const std::filesystem::path& source_dir, const std::filesystem::path& output_file, std::function<void(std::string_view)> cb) {
+            // Wrap the callback to securely reacquire the GIL when invoking Python code
+            std::function<void(std::string_view)> safe_cb;
+            if (cb) {
+                safe_cb = [cb](std::string_view sv) {
+                    nb::gil_scoped_acquire acquire;
+                    cb(sv);
+                    };
+            }
+
+            // Release GIL for the duration of the C++ disk I/O
+            nb::gil_scoped_release release;
+            lotm::big::BigPacker::pack_from_directory(source_dir, output_file, safe_cb);
+                },
+                nb::arg("source_dir"), nb::arg("output_file"), nb::arg("progress_callback") = nb::none(),
                 "Packs a directory tree into a compliant BIG4 archive");
     }
 

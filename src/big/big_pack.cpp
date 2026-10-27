@@ -12,16 +12,17 @@
 #include <big/types.hpp>
 #include <core/endian.hpp>
 #include <fstream>
+#include <functional>
 #include <stdexcept>
 #include <vector>
-#include <iostream>
 #include <string>
+#include <string_view>
 #include <algorithm>
 #include <limits>
 
 namespace lotm::big {
 
-    void BigPacker::pack_from_directory(const std::filesystem::path& source_dir, const std::filesystem::path& output_file) {
+    void BigPacker::pack_from_directory(const std::filesystem::path& source_dir, const std::filesystem::path& output_file, std::function<void(std::string_view)> progress_callback) {
         if (!std::filesystem::exists(source_dir) || !std::filesystem::is_directory(source_dir)) {
             throw std::invalid_argument("Source directory does not exist or is not a directory.");
         }
@@ -108,7 +109,6 @@ namespace lotm::big {
 
         uint32_t total_size = current_offset;
 
-        std::cout << "Creating archive: " << output_file.string() << '\n';
         std::ofstream out(output_file, std::ios::binary);
         if (!out.is_open()) {
             throw BigArchiveError("Cannot create output file: " + output_file.string());
@@ -139,7 +139,6 @@ namespace lotm::big {
 
         std::vector<char> chunk(1024 * 1024);
         for (const auto& f : file_list) {
-            std::cout << "Packing: " << f.rel_path << '\n';
             std::ifstream src(f.full_path, std::ios::binary);
             if (!src.is_open()) {
                 out.close();
@@ -167,6 +166,10 @@ namespace lotm::big {
                 std::filesystem::remove(output_file);
                 throw BigArchiveError("Byte count mismatch while packing file: " + f.rel_path);
             }
+
+            if (progress_callback) {
+                progress_callback(f.rel_path);
+            }
         }
 
         out.flush();
@@ -175,9 +178,6 @@ namespace lotm::big {
             std::filesystem::remove(output_file);
             throw BigArchiveError("Failed writing data to archive: " + output_file.string());
         }
-
-        std::cout << "\nSuccess! Created file: " << output_file.string() << '\n';
-        std::cout << "Total size: " << total_size << " bytes\n";
     }
 
 } // namespace lotm::big

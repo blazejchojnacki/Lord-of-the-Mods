@@ -10,12 +10,18 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
+#include <string_view>
 
 namespace lotm::big {
 
     class BigPacker {
     public:
-        static void pack_from_directory(const std::filesystem::path& source_dir, const std::filesystem::path& output_file);
+        static void pack_from_directory(
+            const std::filesystem::path& source_dir,
+            const std::filesystem::path& output_file,
+            std::function<void(std::string_view)> progress_callback = {}
+        );
     };
 
 } // namespace lotm::big
