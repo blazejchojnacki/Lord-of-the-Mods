@@ -213,3 +213,24 @@ TEST_CASE("BigPacker Output Path Handling and Boundary Limits", "[big_pack][limi
         REQUIRE_THROWS_AS(BigPacker::pack_from_directory(env.src_dir, env.out_file), std::length_error);
     }
 }
+
+TEST_CASE("BigPacker Progress Callback Integration", "[big_pack][callback]") {
+    ScopedPackEnv env;
+
+    SECTION("Positive scenario: Callback is invoked for each file packed") {
+        env.create_dummy_file("fileA.txt", "data");
+        env.create_dummy_file("sub/fileB.txt", "data");
+
+        std::vector<std::string> reported_files;
+        auto cb = [&](std::string_view name) {
+            reported_files.emplace_back(name);
+            };
+
+        REQUIRE_NOTHROW(BigPacker::pack_from_directory(env.src_dir, env.out_file, cb));
+
+        REQUIRE(reported_files.size() == 2);
+        // SAGE sorting puts fileA before sub\fileB
+        REQUIRE(reported_files[0] == "fileA.txt");
+        REQUIRE(reported_files[1] == "sub\\fileB.txt");
+    }
+}

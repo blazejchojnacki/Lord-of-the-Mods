@@ -121,3 +121,28 @@ def test_concurrent_pack_and_unpack_releases_gil(standard_mod_directory: Path, t
         results = list(pool.map(worker, range(4)))
 
     assert results == [3, 3, 3, 3]
+
+
+def test_cpp_api_progress_callbacks_propagate(standard_mod_directory: Path, tmp_path: Path):
+    """Verify that C++ progress callbacks correctly invoke Python callables."""
+    archive_path = tmp_path / "callback.big"
+    out_dir = tmp_path / "out"
+    
+    packed = []
+    def pack_cb(name: str) -> None:
+        packed.append(name)
+        
+    big.BigPacker.pack_from_directory(standard_mod_directory, archive_path, progress_callback=pack_cb)
+    
+    assert len(packed) == 3
+    assert any("weapon.ini" in p for p in packed)
+    
+    archive = big.BigArchive(archive_path)
+    extracted = []
+    def extract_cb(name: str) -> None:
+        extracted.append(name)
+        
+    archive.extract_all(out_dir, progress_callback=extract_cb)
+    
+    assert len(extracted) == 3
+    assert any("texture.dds" in e for e in extracted)

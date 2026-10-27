@@ -311,3 +311,26 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         REQUIRE(std::filesystem::exists(env.out_dir / "file.txt"));
     }
 }
+
+TEST_CASE("BigArchive Progress Callback Integration", "[big_unpack][callback]") {
+    ScopedTempEnv env;
+
+    SECTION("Positive scenario: Callback is invoked for each extracted file") {
+        env.write_big_file("BIG4", {
+            { "fileA.txt", "data" },
+            { "fileB.txt", "data" }
+            });
+
+        BigArchive archive(env.test_file);
+        std::vector<std::string> reported_files;
+        auto cb = [&](std::string_view name) {
+            reported_files.emplace_back(name);
+            };
+
+        REQUIRE_NOTHROW(archive.extract_all(env.out_dir, cb));
+
+        REQUIRE(reported_files.size() == 2);
+        REQUIRE(reported_files[0] == "fileA.txt");
+        REQUIRE(reported_files[1] == "fileB.txt");
+    }
+}
