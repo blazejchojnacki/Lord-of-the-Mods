@@ -64,3 +64,15 @@ jobs:
 
       - name: Run Python Integration Tests (Pytest)
         run: python -m pytest -o pythonpath=".;build/src/cppy_bridge/Release" --cov=scripts --cov-report=xml tests/python -v
+
+      - name: Build and Validate Wheel
+        run: |
+          pip install build twine
+          python -m build --wheel
+          twine check dist/*
+
+      - name: Test Installed Wheel
+        run: |
+          pip install (Get-Item dist/*.whl).FullName
+          lotm-pack --help
+          lotm-unpack --help
