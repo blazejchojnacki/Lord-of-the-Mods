@@ -100,6 +100,9 @@ The Python test suite (`tests/python/`) verifies the `nanobind` bindings, progra
 
 **Prerequisites:**
 You must build the C++ project first so the `.pyd` module is available.
+``` cmd
+cmake --build build --config Release
+```
 
 **Execution:**
 Run pytest from the repository root, overriding the `PYTHONPATH` to include your build directory:
