@@ -11,16 +11,16 @@ import pytest
 import sys
 from pathlib import Path
 
-import scripts.big_pack as big_pack
-import scripts.big_unpack as big_unpack
+import lotm.big.cli as cli
+import lotm.big as big
 
 
 def test_cli_pack_successful_execution(standard_mod_directory: Path, tmp_path: Path, monkeypatch):
     """Verify standard packing CLI command executes successfully and creates the archive."""
     out_big = tmp_path / "cli_test.big"
-    monkeypatch.setattr(sys, "argv", ["big_pack", str(standard_mod_directory), "-o", str(out_big)])
+    monkeypatch.setattr(sys, "argv", ["lotm-big-pack", str(standard_mod_directory), "-o", str(out_big)])
 
-    big_pack.main()
+    cli.main_pack()
     assert out_big.exists()
     assert out_big.stat().st_size > 0
 
@@ -28,10 +28,10 @@ def test_cli_pack_successful_execution(standard_mod_directory: Path, tmp_path: P
 def test_cli_pack_invalid_source_exits_with_error(tmp_path: Path, monkeypatch, capsys):
     """Verify packing an invalid directory exits non-zero and writes diagnostic output."""
     missing_dir = tmp_path / "void"
-    monkeypatch.setattr(sys, "argv", ["big_pack", str(missing_dir)])
+    monkeypatch.setattr(sys, "argv", ["lotm-big-pack", str(missing_dir)])
 
     with pytest.raises(SystemExit) as exc:
-        big_pack.main()
+        cli.main_pack()
 
     assert exc.value.code != 0
     _, stderr = capsys.readouterr()
@@ -44,20 +44,20 @@ def test_cli_unpack_successful_execution(standard_mod_directory: Path, tmp_path:
     extract_dir = tmp_path / "extracted"
 
     # Pre-pack an archive using the API to test the CLI unpacker
-    big_pack.pack(standard_mod_directory, archive)
-    monkeypatch.setattr(sys, "argv", ["big_unpack", str(archive), "-o", str(extract_dir)])
+    big.pack(standard_mod_directory, archive)
+    monkeypatch.setattr(sys, "argv", ["lotm-big-unpack", str(archive), "-o", str(extract_dir)])
 
-    big_unpack.main()
+    cli.main_unpack()
     assert (extract_dir / "data" / "weapon.ini").exists()
 
 
 def test_cli_unpack_missing_archive_exits_with_error(tmp_path: Path, monkeypatch, capsys):
     """Verify unpacking a missing archive exits non-zero and writes diagnostic output."""
     missing_file = tmp_path / "void.big"
-    monkeypatch.setattr(sys, "argv", ["big_unpack", str(missing_file)])
+    monkeypatch.setattr(sys, "argv", ["lotm-big-unpack", str(missing_file)])
 
     with pytest.raises(SystemExit) as exc:
-        big_unpack.main()
+        cli.main_unpack()
 
     assert exc.value.code != 0
     _, stderr = capsys.readouterr()

@@ -13,8 +13,6 @@ import pytest
 import struct
 
 import lotm.big as big
-import scripts.big_pack as big_pack
-import scripts.big_unpack as big_unpack
 
 
 def test_programmatic_packing_and_unpacking_roundtrip(standard_mod_directory: Path, tmp_path: Path):
@@ -23,12 +21,12 @@ def test_programmatic_packing_and_unpacking_roundtrip(standard_mod_directory: Pa
     extract_dir = tmp_path / "output_dir"
 
     # Pack the standard fixture directory
-    big_pack.pack(standard_mod_directory, archive_path)
+    big.pack(standard_mod_directory, archive_path)
     assert archive_path.is_file()
     assert archive_path.stat().st_size > 0
 
     # Unpack the generated archive
-    entries = big_unpack.unpack(archive_path, extract_dir)
+    entries = big.unpack(archive_path, extract_dir)
 
     # Verify returned entries list
     assert len(entries) == 3
@@ -49,7 +47,7 @@ def test_pack_invalid_source_directory_raises_error(tmp_path: Path):
     out_file = tmp_path / "out.big"
 
     with pytest.raises(NotADirectoryError, match="does not exist"):
-        big_pack.pack(missing_dir, out_file)
+        big.pack(missing_dir, out_file)
 
 
 def test_pack_output_inside_source_directory_raises_error(standard_mod_directory: Path):
@@ -57,7 +55,7 @@ def test_pack_output_inside_source_directory_raises_error(standard_mod_directory
     self_included_out = standard_mod_directory / "nested.big"
 
     with pytest.raises(ValueError, match="cannot reside inside the source directory"):
-        big_pack.pack(standard_mod_directory, self_included_out)
+        big.pack(standard_mod_directory, self_included_out)
 
 
 def test_unpack_missing_archive_raises_error(tmp_path: Path):
@@ -66,7 +64,7 @@ def test_unpack_missing_archive_raises_error(tmp_path: Path):
     out_dir = tmp_path / "out"
 
     with pytest.raises(FileNotFoundError, match="Archive not found"):
-        big_unpack.unpack(missing_file, out_dir)
+        big.unpack(missing_file, out_dir)
 
 
 def test_cpp_api_raises_big_format_error_on_corrupt_magic(tmp_path: Path):
@@ -82,7 +80,6 @@ def test_cpp_api_raises_big_security_error_on_zip_slip(tmp_path: Path):
     """Verify that the C++ bindings propagate BigSecurityError for path traversal attempts."""
     bad_archive = tmp_path / "zipslip.big"
     
-    # Synthesize a malicious archive manually with a Zip-Slip payload
     name = b"../escaped.txt\x00"
     header_size = 16 + 8 + len(name)
     payload_size = 4
@@ -92,18 +89,16 @@ def test_cpp_api_raises_big_security_error_on_zip_slip(tmp_path: Path):
     with open(bad_archive, "wb") as f:
         f.write(b"BIG4")
         f.write(struct.pack("<I", total_size))
-        f.write(struct.pack(">I", 1))             # File count
+        f.write(struct.pack(">I", 1))
         f.write(struct.pack(">I", header_size))
         f.write(struct.pack(">I", offset))
         f.write(struct.pack(">I", payload_size))
         f.write(name)
         f.write(b"DATA")
         
-    # The header will parse successfully because the structure itself is intact
     archive = big.BigArchive(bad_archive)
     out_dir = tmp_path / "out"
     
-    # Extraction must trigger the C++ BigSecurityError
     with pytest.raises(big.BigSecurityError, match="Path traversal attempt"):
         archive.extract_all(out_dir)
 
@@ -113,8 +108,8 @@ def test_concurrent_pack_and_unpack_releases_gil(standard_mod_directory: Path, t
     def worker(worker_id: int) -> int:
         archive_path = tmp_path / f"concurrent_{worker_id}.big"
         extract_dir = tmp_path / f"extract_{worker_id}"
-        big_pack.pack(standard_mod_directory, archive_path)
-        entries = big_unpack.unpack(archive_path, extract_dir)
+        big.pack(standard_mod_directory, archive_path)
+        entries = big.unpack(archive_path, extract_dir)
         return len(entries)
 
     with ThreadPoolExecutor(max_workers=4) as pool:

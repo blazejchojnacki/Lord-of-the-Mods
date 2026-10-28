@@ -60,10 +60,10 @@ jobs:
         run: ctest --output-on-failure -C Release
 
       - name: Validate Type Stubs and Scripts (Mypy)
-        run: python -m mypy src/lotm scripts
+        run: python -m mypy src/lotm
 
       - name: Run Python Integration Tests (Pytest)
-        run: python -m pytest -o pythonpath=".;build/src/cppy_bridge/Release" --cov=scripts --cov-report=xml tests/python -v
+        run: python -m pytest -o pythonpath="src build/src/cppy_bridge/Release" --cov=lotm --cov-report=xml tests/python -v
 
       - name: Build and Validate Wheel
         run: |
@@ -74,5 +74,5 @@ jobs:
       - name: Test Installed Wheel
         run: |
           pip install (Get-Item dist/*.whl).FullName
-          lotm-pack --help
-          lotm-unpack --help
+          lotm-big-pack --help
+          lotm-big-unpack --help
