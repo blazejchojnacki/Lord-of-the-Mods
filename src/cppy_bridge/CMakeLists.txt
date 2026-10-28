@@ -25,3 +25,9 @@ install(
         ${CMAKE_CURRENT_SOURCE_DIR}/../lotm/py.typed
     DESTINATION lotm
 )
+
+# Output directly into the Python source directory for uninstalled local testing
+set_target_properties(_core PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../lotm"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../lotm"
+)
