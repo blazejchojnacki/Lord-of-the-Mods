@@ -1,29 +1,17 @@
 """
-@file scripts/big_unpack.py
-@brief Script enabling unpacking files from .BIG using shell commands
+@file src/lotm/big/unpacker.py
+@brief Unpack files from .BIG archives (Library API)
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
 Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
-import argparse
 import logging
 from pathlib import Path
-import sys
+from lotm._core import big
 
-try:
-    import lotm.big as big
-except ModuleNotFoundError:
-    print(
-        "Error: 'lotm' module not found. "
-        "Ensure PYTHONPATH includes the build directory (e.g., build\\src\\cppy_bridge).",
-        file=sys.stderr,
-    )
-    sys.exit(1)
-
-logging.basicConfig(level=logging.INFO, format="%(message)s")
-logger = logging.getLogger("lotm")
+logger = logging.getLogger("lotm.big.unpacker")
 
 
 def unpack(big_path: Path, output_dir: Path) -> list[big.BigEntry]:
@@ -63,36 +51,3 @@ def unpack(big_path: Path, output_dir: Path) -> list[big.BigEntry]:
 
 # Backward-compatible alias
 extract = unpack
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Extract EA BIG4 archives using lotm.")
-    parser.add_argument("archive", type=Path, help="Path to the .big file")
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=Path,
-        default=Path("extracted_files"),
-        help="Destination directory (default: ./extracted_files)",
-    )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Enable verbose output logging individual files",
-    )
-
-    args = parser.parse_args()
-
-    if args.verbose:
-        logger.setLevel(logging.DEBUG)
-
-    try:
-        unpack(args.archive, args.output)
-    except Exception as exc:
-        print(f"Extraction failed: {exc}", file=sys.stderr)
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
