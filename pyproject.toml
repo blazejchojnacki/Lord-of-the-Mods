@@ -61,6 +61,7 @@ Documentation = "https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/d
 [tool.scikit-build]
 cmake.version = ">=3.20"
 cmake.build-type = "Release"
+wheel.packages = ["src/lotm"]
 
 [tool.mypy]
 python_version = "3.12"

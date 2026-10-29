@@ -19,12 +19,7 @@ target_include_directories(_core PRIVATE
 target_link_libraries(_core PRIVATE lotm_big)
 
 install(TARGETS _core LIBRARY DESTINATION lotm)
-install(
-    FILES
-        ${CMAKE_CURRENT_SOURCE_DIR}/../lotm/_core.pyi
-        ${CMAKE_CURRENT_SOURCE_DIR}/../lotm/py.typed
-    DESTINATION lotm
-)
+# Only install the compiled target; python files and stubs are handled by wheel.packages
 
 # Output directly into the Python source directory for uninstalled local testing
 set_target_properties(_core PROPERTIES
