@@ -114,5 +114,5 @@ pytest -o pythonpath=".;build/src/cppy_bridge" tests/python -v
 To generate a coverage report and verify the 85% requirement:
 
 ```cmd
-pytest -o pythonpath=".;build/src/cppy_bridge" --cov=scripts --cov-report=term-missing tests/python
+python -m pytest tests/python -o pythonpath="src build/src/cppy_bridge/Release" --cov=lotm --cov-report=term-missing
 ```

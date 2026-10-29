@@ -9,7 +9,7 @@ Compresses a standard file directory into a `.big` archive, automatically aligni
 
 **Usage:**
 ```cmd
-python scripts/big_pack.py <source_dir> [-o <output_file>]
+python -m lotm/big/big_pack <source_dir> [-o <output_file>]
 ```
 **Arguments:**
 
@@ -19,7 +19,7 @@ python scripts/big_pack.py <source_dir> [-o <output_file>]
 
 Example:
 ```cmd 
-python scripts/big_pack.py "mod_workspace/data" -o "my_mod.big"
+python -m lotm/big/big_pack "mod_workspace/data" -o "my_mod.big"
 ```
 
 ## Unpacking Archives (big_unpack.py)
@@ -27,7 +27,7 @@ Extracts all files from a BIG4 archive into a standard directory tree.
 
 **Usage:**
 ```cmd
-python scripts/big_unpack.py <archive> [-o <output_dir>]
+python -m lotm/big/big_unpack <archive> [-o <output_dir>]
 ```
 **Arguments:**
 
@@ -37,5 +37,5 @@ python scripts/big_unpack.py <archive> [-o <output_dir>]
 
 **Example:**
 ```cmd
-python scripts/big_unpack.py "my_mod.big" -o "workspace_dump"
+python -m lotm/big/big_unpack "my_mod.big" -o "workspace_dump"
 ```
