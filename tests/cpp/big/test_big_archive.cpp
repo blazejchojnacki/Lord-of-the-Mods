@@ -310,6 +310,71 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         REQUIRE_NOTHROW(archive.extract_all(env.out_dir));
         REQUIRE(std::filesystem::exists(env.out_dir / "file.txt"));
     }
+
+    SECTION("Negative scenario: Strict abort on symlink in extraction path") {
+        // Create a symlink in the output directory
+        std::filesystem::create_directories(env.out_dir);
+        std::filesystem::path safe_target = env.root_dir / "safe_folder";
+        std::filesystem::create_directories(safe_target);
+
+        std::filesystem::path link_path = env.out_dir / "link_dir";
+        std::error_code ec;
+        std::filesystem::create_directory_symlink(safe_target, link_path, ec);
+
+        // Only run test if OS privileges allow symlink creation
+        if (!ec) {
+            env.write_big_file("BIG4", { { "link_dir\\payload.txt", "malicious_payload" } });
+            BigArchive archive(env.test_file);
+
+            // Extraction must strictly abort because a component is a symlink
+            REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
+        }
+    }
+
+    SECTION("Negative scenario: Windows DOS device name evasion") {
+        // Test names that evade simple base == "CON" checks due to spaces or extensions
+        env.write_big_file("BIG4", { { "data\\CON .txt", "payload" } });
+        BigArchive archive1(env.test_file);
+        REQUIRE_THROWS_AS(archive1.extract_all(env.out_dir), BigSecurityError);
+
+        env.write_big_file("BIG4", { { "data\\COM1.ini", "payload" } });
+        BigArchive archive2(env.test_file);
+        REQUIRE_THROWS_AS(archive2.extract_all(env.out_dir), BigSecurityError);
+    }
+
+    SECTION("Negative scenario: Zip-Bomb Amplification Threshold Exceeded") {
+        // Create an archive where entries heavily overlap to claim massive extracted size
+        std::ofstream out(env.test_file, std::ios::binary);
+        out.write("BIG4", 4);
+        uint32_t total_size = 100;
+        out.write(reinterpret_cast<const char*>(&total_size), 4);
+
+        uint32_t num_files = lotm::core::to_big_endian(static_cast<uint32_t>(50));
+        out.write(reinterpret_cast<const char*>(&num_files), 4);
+
+        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(16 + (50 * 13)));
+        out.write(reinterpret_cast<const char*>(&header_size), 4);
+
+        // 50 files all pointing to the exact same 1MB byte range
+        uint32_t offset = lotm::core::to_big_endian(static_cast<uint32_t>(16 + (50 * 13)));
+        uint32_t size = lotm::core::to_big_endian(static_cast<uint32_t>(1024 * 1024));
+
+        for (int i = 0; i < 50; ++i) {
+            out.write(reinterpret_cast<const char*>(&offset), 4);
+            out.write(reinterpret_cast<const char*>(&size), 4);
+            out.write("A.txt", 6);
+        }
+
+        // Write 1MB of actual payload
+        std::vector<char> payload(1024 * 1024, 'X');
+        out.write(payload.data(), static_cast<std::streamsize>(payload.size()));
+        out.close();
+
+        // Total physical size is ~1MB. Claimed extracted size is 50MB.
+        // If MAX_AMPLIFICATION_RATIO is 20, this exceeds it (50 > 20).
+        BigArchive archive(env.test_file);
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
+    }
 }
 
 TEST_CASE("BigArchive Progress Callback Integration", "[big_unpack][callback]") {

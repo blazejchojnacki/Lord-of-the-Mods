@@ -141,3 +141,44 @@ def test_cpp_api_progress_callbacks_propagate(standard_mod_directory: Path, tmp_
     
     assert len(extracted) == 3
     assert any("texture.dds" in e for e in extracted)
+
+    def test_pack_exception_in_callback_cleans_up_partial_file(standard_mod_directory: Path, tmp_path: Path):
+    """Verify that Python exceptions inside the C++ callback trigger RAII cleanup of the output file."""
+    archive_path = tmp_path / "failed_pack.big"
+    
+    def raising_cb(name: str) -> None:
+        if "texture.dds" in name:
+            raise RuntimeError("Simulated user interrupt during packing")
+            
+    with pytest.raises(RuntimeError, match="Simulated user interrupt"):
+        big.BigPacker.pack_from_directory(standard_mod_directory, archive_path, progress_callback=raising_cb)
+        
+    assert not archive_path.exists(), "The partial .big file was not deleted by the RAII guard"
+
+
+def test_unpack_exception_in_callback_aborts_safely(standard_mod_directory: Path, tmp_path: Path):
+    """Verify GIL safe exception unwinding during extraction."""
+    archive = tmp_path / "valid.big"
+    out_dir = tmp_path / "aborted_extract"
+    big.pack(standard_mod_directory, archive)
+    
+    def raising_cb(name: str) -> None:
+        raise ValueError("Simulated extraction abort")
+        
+    with pytest.raises(ValueError, match="Simulated extraction abort"):
+        archive_obj = big.BigArchive(archive)
+        archive_obj.extract_all(out_dir, progress_callback=raising_cb)
+
+
+def test_pack_case_insensitive_collision_raises_error(tmp_path: Path):
+    """Verify that packing directories with case-insensitive collisions raises an error."""
+    src_dir = tmp_path / "colliding_mod"
+    src_dir.mkdir()
+    (src_dir / "data").mkdir()
+    (src_dir / "data" / "unit.ini").write_text("Damage=10", encoding="utf-8")
+    (src_dir / "data" / "UNIT.INI").write_text("Damage=99", encoding="utf-8")
+    
+    out_file = tmp_path / "collision.big"
+    
+    with pytest.raises(ValueError, match="Duplicate case-insensitive path"):
+        big.pack(src_dir, out_file)
