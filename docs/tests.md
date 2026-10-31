@@ -1,7 +1,7 @@
 # Lord-of-the-Mods
 # C++ Test Suite Manual
 
-This document details how to configure, compile, and execute the Catch2 native test suite for the `lotm` project.
+This document details how to configure, compile, and execute the Catch2 native test suite and code coverage for the `lotm` project.
 
 ## 1. Directory Structure
 
@@ -22,17 +22,17 @@ Lord-of-the-Mods/
 
 ## 2. Compiling the Tests
 
-Always execute these commands from the **x64 Native Tools Command Prompt** (`vcvars64.bat`):
+Always execute these commands from the **x64 Native Tools Command Prompt** (`vcvars64.bat`). We strictly enforce **Ninja** as the build generator to prevent configuration pollution.
 
 ### 1. Configure CMake with Testing Enabled
 ```cmd
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 ```
 
 ### 2. Build Only the Test Executable
 Instead of building all Python extensions, compile just the test target:
 ```cmd
-cmake --build build --config Release --target lotm_cpp_tests
+cmake --build build --target lotm_cpp_tests
 ```
 
 ## 3. Running the Tests
@@ -48,71 +48,54 @@ Running the test binary directly provides real-time, colored terminal feedback a
 To run the tests through CMake's test driver:
 
 ```cmd
-ctest --test-dir build -C Release --output-on-failure
+ctest --test-dir build --output-on-failure
 ```
 
 ## 4. Catch2 CLI Command Reference
 
 The test binary accepts filters, tag selectors, and output flags directly.
 
-### Running Specific Tests by Tag
-Run only the endianness tests:
+*   Run tests by tag: `.\build\tests\lotm_cpp_tests.exe [endian]`
+*   List available tests: `.\build\tests\lotm_cpp_tests.exe --list-tests`
+
+---
+
+## 5. C++ Code Coverage (OpenCppCoverage)
+
+To verify internal test coverage thresholds, run OpenCppCoverage against the test binary.
+
+**Prerequisites:**
 ```cmd
-.\build\tests\Release\lotm_cpp_tests.exe [endian]
+winget install OpenCppCoverage.OpenCppCoverage
 ```
 
-Run only compile-time `constexpr` verification:
+**Generate Interactive HTML Report:**
+Run the following command from the repository root to output a report into the `coverage_cpp` folder:
+
 ```cmd
-.\build\tests\Release\lotm_cpp_tests.exe [constexpr]
+OpenCppCoverage.exe --sources "%CD%\src" --sources "%CD%\include" --excluded_sources "%CD%\tests" --export_type html:coverage_cpp -- "%CD%\build\tests\lotm_cpp_tests.exe"
 ```
 
-Exclude system routing tests:
+Open the report in your browser:
 ```cmd
-.\build\tests\Release\lotm_cpp_tests.exe ~[routing]
+start .\coverage_cpp\index.html
 ```
 
-### Running Specific Tests by Name
-Run tests matching a wildcard pattern:
-```cmd
-.\build\tests\Release\lotm_cpp_tests.exe "*Compile-time*"
-```
+---
 
-### Detailed Output Flags
-Show successful assertions as well as failures:
-```cmd
-.\build\tests\Release\lotm_cpp_tests.exe -s
-```
-
-List all available test cases without running them:
-```cmd
-.\build\tests\Release\lotm_cpp_tests.exe --list-tests
-```
-
-List all defined tags:
-```cmd
-.\build\tests\Release\lotm_cpp_tests.exe --list-tags
-```
-
-
-# Python Integration Tests (Pytest)
+## 6. Python Integration Tests (Pytest)
 
 The Python test suite (`tests/python/`) verifies the `nanobind` bindings, programmatic APIs, and CLI routing. 
 
-**Prerequisites:**
-You must build the C++ project first so the `.pyd` module is available.
-``` cmd
-cmake --build build --config Release
-```
-
 **Execution:**
-Run pytest from the repository root, overriding the `PYTHONPATH` to include your build directory:
+Run pytest from the repository root using the editable pip installation:
 ```cmd
-pytest -o pythonpath=".;build/src/cppy_bridge" tests/python -v
+pip install -e ".[test]"
+pytest tests/python -v
 ```
 
-## Coverage Measurement:
-To generate a coverage report and verify the 85% requirement:
-
+**Coverage Measurement:**
+To generate a Python coverage report and verify the 85% requirement:
 ```cmd
-python -m pytest tests/python -o pythonpath="src build/src/cppy_bridge/Release" --cov=lotm --cov-report=term-missing
+python -m pytest tests/python --cov=lotm --cov-report=term-missing
 ```

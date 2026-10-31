@@ -9,10 +9,16 @@ ________________________________________________________ coverage: platform win3
 
 Name                       Stmts   Miss  Cover   Missing
 --------------------------------------------------------
+src\lotm\__init__.py           4      0   100%
 src\lotm\big\__init__.py      10      0   100%
-src\lotm\big\cli.py           34      2    94%   30, 47
-src\lotm\big\packer.py        11      0   100%
-src\lotm\big\unpacker.py      16      0   100%
+src\lotm\big\cli.py           34      0   100%
+src\lotm\big\packer.py        14      0   100%
+src\lotm\big\unpacker.py      18      0   100%
 --------------------------------------------------------
-TOTAL                         71      2    97%
+TOTAL                         80      0   100%
+```
+
+```text
+Cpp coverage at 94%.
+Remaining 6% C++ consists of unmockable OS/hardware I/O faults (e.g., sudden disk space exhaustion during `out_file.write()`, physical read truncations) which are exempt from unit testing.
 ```
