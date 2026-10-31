@@ -5,7 +5,8 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows_x64-0078D6.svg?logo=windows&logoColor=white)](https://www.microsoft.com/windows/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Code Style](https://img.shields.io/badge/C%2B%2B-20-00599C.svg?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/20)
-![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)
+[![Python Coverage](https://img.shields.io/badge/coverage--python-100%25-brightgreen)](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/coverage-log.md)
+[![C++ Coverage](https://img.shields.io/badge/coverage--c%2B%2B-95%25-brightgreen)](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/coverage-log.md)
 
 A high-performance C++20 and Python toolkit designed for modding EA *The Battle for Middle-earth* games.
 
