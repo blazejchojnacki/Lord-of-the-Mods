@@ -19,6 +19,13 @@ TOTAL                         80      0   100%
 ```
 
 ```text
-Cpp coverage at 94%.
-Remaining 6% C++ consists of unmockable OS/hardware I/O faults (e.g., sudden disk space exhaustion during `out_file.write()`, physical read truncations) which are exempt from unit testing.
+Cpp coverage at 95%.
+Coverage    Total lines    Items
+     95%            300    build\tests\lotm_cpp_tests.exe
+     93%            161	   src\big\big_archive.cpp
+     96%            116	   src\big\big_packer.cpp
+    100%              2    include\big\big_archive.hpp
+    100%             21	   include\core\endian.hpp
+
+Remaining 5% C++ consists of unmockable OS/hardware I/O faults (e.g., sudden disk space exhaustion during `out_file.write()`, physical read truncations) which are exempt from unit testing.
 ```

@@ -1,5 +1,5 @@
 # Lord-of-the-Mods
-# Developers guide
+# Contributing guide
 
 This guide describes how to configure, build, and test Lord of the Mods from source.
 
@@ -60,7 +60,7 @@ Link the compiled extension directly into your virtual environment seamlessly:
 pip install -e ".[test]"
 ```
 
-## 3. After modifing bindings - Generating Type Stubs (.pyi)
+## 3. After modifying bindings - Generating Type Stubs (.pyi)
 
 To provide autocomplete and parameter definitions for IDEs (like PyCharm and VS Code), generate the stubs using nanobind-stubgen:
 
