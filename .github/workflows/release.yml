@@ -1,0 +1,60 @@
+# @file .github/workflows/release.yml
+# @brief GitHub Actions workflow to build and publish wheels and source distribution on tag release
+#
+# Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
+# Part of the Lord of the Mods (lotm) project.
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build Distributions and Create Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Build Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install nanobind ninja build twine
+
+      - name: Build Source Distribution and Wheel
+        run: python -m build --sdist --wheel
+
+      - name: Validate Package Metadata
+        run: twine check dist/*
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
