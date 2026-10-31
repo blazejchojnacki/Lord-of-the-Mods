@@ -16,6 +16,7 @@
 #include <vector>
 #include <string>
 #include <string_view>
+#include <stdio.h>
 
 using namespace lotm::big;
 
@@ -255,5 +256,87 @@ TEST_CASE("BigPacker Case-Insensitive Deduplication", "[big_pack][dedup]") {
         };
 
         REQUIRE_NOTHROW(lotm::big::detail::sort_and_validate_entries(entries));
+    }
+}
+
+TEST_CASE("BigPacker Cumulative Limits and RAII Cleanup", "[big_pack][limits][raii]") {
+    ScopedPackEnv env;
+
+    SECTION("Negative scenario: Target output is an existing directory") {
+        std::filesystem::create_directories(env.out_file);
+
+        REQUIRE_THROWS_AS(
+            BigPacker::pack_from_directory(env.src_dir, env.out_file),
+            std::invalid_argument
+        );
+    }
+
+    SECTION("Negative scenario: Exception in progress callback triggers RAII cleanup") {
+        env.create_dummy_file("file.txt", "data");
+
+        auto throwing_cb = [](std::string_view) {
+            throw std::runtime_error("Simulated interrupt");
+            };
+
+        REQUIRE_THROWS_AS(
+            BigPacker::pack_from_directory(env.src_dir, env.out_file, throwing_cb),
+            std::runtime_error
+        );
+
+        // Verify the partial archive was deleted by the RAII guard during stack unwind
+        REQUIRE_FALSE(std::filesystem::exists(env.out_file));
+    }
+
+    SECTION("Negative scenario: Cumulative archive size exceeds 4GB format limit") {
+        std::filesystem::path huge1 = env.src_dir / "huge1.dat";
+        std::filesystem::path huge2 = env.src_dir / "huge2.dat";
+
+        std::ofstream(huge1).put('X');
+        std::ofstream(huge2).put('X');
+
+        // Resize each sparse file to ~2.1 GB. 
+        // Individually they pass the single-file 32-bit limit, but their sum overflows 4GB.
+        std::filesystem::resize_file(huge1, 2200000000ULL);
+        std::filesystem::resize_file(huge2, 2200000000ULL);
+
+        REQUIRE_THROWS_AS(
+            BigPacker::pack_from_directory(env.src_dir, env.out_file),
+            std::length_error
+        );
+    }
+}
+
+
+TEST_CASE("BigPacker File I/O Error Handling", "[big_pack][io]") {
+    ScopedPackEnv env;
+
+    SECTION("Negative scenario: Target output file cannot be created") {
+        env.create_dummy_file("test.txt", "data");
+
+        // A standard std::ofstream cannot open a path for writing if a directory 
+        // already exists at that exact location.
+        std::filesystem::create_directories(env.out_file);
+
+        REQUIRE_THROWS_AS(
+            BigPacker::pack_from_directory(env.src_dir, env.out_file),
+            BigArchiveError
+        );
+    }
+
+    SECTION("Negative scenario: Source file cannot be read during packing") {
+        env.create_dummy_file("locked.txt", "data");
+
+        // Lock the file exclusively using Windows _fsopen (_SH_DENYRW = 0x10).
+        // This guarantees std::ifstream inside BigPacker will fail to open it.
+        std::string path_str = (env.src_dir / "locked.txt").string();
+        FILE* locked_file = _fsopen(path_str.c_str(), "rb", 0x10);
+
+        if (locked_file) {
+            REQUIRE_THROWS_AS(
+                BigPacker::pack_from_directory(env.src_dir, env.out_file),
+                BigArchiveError
+            );
+            fclose(locked_file);
+        }
     }
 }

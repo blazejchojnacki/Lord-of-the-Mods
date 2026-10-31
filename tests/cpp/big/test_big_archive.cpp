@@ -410,3 +410,115 @@ TEST_CASE("BigArchive Progress Callback Integration", "[big_unpack][callback]") 
         REQUIRE(reported_files[1] == "fileB.txt");
     }
 }
+
+TEST_CASE("BigArchive File I/O Error Handling", "[big_unpack][io]") {
+    ScopedTempEnv env;
+
+    SECTION("Negative scenario: Extraction fails if target output cannot be created") {
+        env.write_big_file("BIG4", { { "conflict.txt", "data" } });
+
+        // Force a collision by creating a DIRECTORY with the exact same name 
+        // as the target file. std::ofstream will fail to open a directory for writing.
+        std::filesystem::create_directories(env.out_dir / "conflict.txt");
+
+        BigArchive archive(env.test_file);
+
+        // This exercises !out_file.is_open() and covers the throw BigArchiveError block
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigArchiveError);
+    }
+}
+
+TEST_CASE("BigArchive Coverage Padding Edge Cases", "[big_unpack][coverage]") {
+    ScopedTempEnv env;
+
+    SECTION("Path contains reserved colon") {
+        env.write_big_file("BIG4", { { "C:\\Windows\\system32.dll", "data" } });
+        BigArchive archive(env.test_file);
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
+    }
+
+    SECTION("Truncated index (EOF during offset/size read)") {
+        std::ofstream out(env.test_file, std::ios::binary);
+        out.write("BIG4", 4);
+        uint32_t total = lotm::core::to_little_endian(24u); out.write(reinterpret_cast<char*>(&total), 4);
+        uint32_t num = lotm::core::to_big_endian(1u); out.write(reinterpret_cast<char*>(&num), 4);
+        uint32_t head = lotm::core::to_big_endian(24u); out.write(reinterpret_cast<char*>(&head), 4);
+        out.write("\0\0\0", 3); // 3 bytes out of 8 required for offset+size
+        out.close();
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
+
+    SECTION("Truncated string table (EOF before null terminator)") {
+        std::ofstream out(env.test_file, std::ios::binary);
+        out.write("BIG4", 4);
+        uint32_t total = lotm::core::to_little_endian(25u); out.write(reinterpret_cast<char*>(&total), 4);
+        uint32_t num = lotm::core::to_big_endian(1u); out.write(reinterpret_cast<char*>(&num), 4);
+        uint32_t head = lotm::core::to_big_endian(25u); out.write(reinterpret_cast<char*>(&head), 4);
+        uint32_t offset = lotm::core::to_big_endian(25u); out.write(reinterpret_cast<char*>(&offset), 4);
+        uint32_t size = lotm::core::to_big_endian(0u); out.write(reinterpret_cast<char*>(&size), 4);
+        out.write("A", 1); // No null terminator
+        out.close();
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
+}
+
+TEST_CASE("BigArchive Fast-Fail Logic Paths", "[big_unpack][malformed]") {
+    ScopedTempEnv env;
+
+    SECTION("Negative scenario: Alternate Data Stream (ADS) evasion detected") {
+        // Triggers the ':' check in is_unsafe_filename
+        env.write_big_file("BIG4", { { "data\\stream.txt:hidden", "payload" } });
+        BigArchive archive(env.test_file);
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
+    }
+
+    SECTION("Negative scenario: Truncated BIG4 file index") {
+        // Triggers the !file check inside the index reading loop
+        std::ofstream out(env.test_file, std::ios::binary);
+        out.write("BIG4", 4);
+
+        uint32_t total_size = lotm::core::to_little_endian(static_cast<uint32_t>(32));
+        out.write(reinterpret_cast<const char*>(&total_size), 4);
+
+        // Claim 2 files exist
+        uint32_t num_files = lotm::core::to_big_endian(static_cast<uint32_t>(2));
+        out.write(reinterpret_cast<const char*>(&num_files), 4);
+
+        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(64));
+        out.write(reinterpret_cast<const char*>(&header_size), 4);
+
+        // Write only ONE entry's offset and size, then abruptly end the file
+        uint32_t offset = lotm::core::to_big_endian(static_cast<uint32_t>(64));
+        uint32_t size = lotm::core::to_big_endian(static_cast<uint32_t>(100));
+        out.write(reinterpret_cast<const char*>(&offset), 4);
+        out.write(reinterpret_cast<const char*>(&size), 4);
+        out.close();
+
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
+
+    SECTION("Negative scenario: Truncated BIG4 string table") {
+        // Triggers the string table bounds check (current_pos >= header_size_)
+        std::ofstream out(env.test_file, std::ios::binary);
+        out.write("BIG4", 4);
+
+        uint32_t total_size = lotm::core::to_little_endian(static_cast<uint32_t>(32));
+        out.write(reinterpret_cast<const char*>(&total_size), 4);
+
+        uint32_t num_files = lotm::core::to_big_endian(static_cast<uint32_t>(1));
+        out.write(reinterpret_cast<const char*>(&num_files), 4);
+
+        // Set header size exactly to where the offset/size fields end (24 bytes total)
+        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(24));
+        out.write(reinterpret_cast<const char*>(&header_size), 4);
+
+        uint32_t offset = lotm::core::to_big_endian(static_cast<uint32_t>(32));
+        uint32_t size = lotm::core::to_big_endian(static_cast<uint32_t>(100));
+        out.write(reinterpret_cast<const char*>(&offset), 4);
+        out.write(reinterpret_cast<const char*>(&size), 4);
+        // End the file immediately. There is no string and no null terminator.
+        out.close();
+
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
+}
