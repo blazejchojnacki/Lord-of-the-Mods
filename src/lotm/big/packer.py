@@ -8,13 +8,14 @@ SPDX-License-Identifier: GPL-3.0-or-later
 """
 
 import logging
+import os
 from pathlib import Path
 from lotm._core import big
 
 logger = logging.getLogger("lotm.big.packer")
 
 
-def pack(source_dir: Path, output_file: Path) -> None:
+def pack(source_dir: str | os.PathLike[str], output_file: str | os.PathLike[str]) -> None:
     """
     Packs a directory into an EA BIG4 archive.
 
@@ -26,11 +27,14 @@ def pack(source_dir: Path, output_file: Path) -> None:
         NotADirectoryError: If the source directory is missing or invalid.
         RuntimeError/ValueError: Native C++ exceptions if packing fails.
     """
-    if not source_dir.is_dir():
-        raise NotADirectoryError(f"Source directory '{source_dir}' does not exist or is not a directory.")
+    source_path = Path(source_dir)
+    output_path = Path(output_file)
+
+    if not source_path.is_dir():
+        raise NotADirectoryError(f"Source directory '{source_path}' does not exist or is not a directory.")
 
     def on_progress(name: str) -> None:
         logger.debug("Packed: %s", name)
 
-    big.BigPacker.pack_from_directory(source_dir, output_file, progress_callback=on_progress)
-    logger.info("Finished packing into: %s", output_file.resolve())
+    big.BigPacker.pack_from_directory(source_path, output_path, progress_callback=on_progress)
+    logger.info("Finished packing into: %s", output_path.resolve())

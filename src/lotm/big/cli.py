@@ -15,8 +15,12 @@ from pathlib import Path
 from lotm.big.packer import pack
 from lotm.big.unpacker import unpack
 
-logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("lotm.big")
+
+
+def _setup_logging(verbose: bool) -> None:
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(level=level, format="%(message)s")
 
 
 def main_pack() -> None:
@@ -26,8 +30,7 @@ def main_pack() -> None:
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output logging individual files")
     args = parser.parse_args()
 
-    if args.verbose:
-        logger.setLevel(logging.DEBUG)
+    _setup_logging(args.verbose)
 
     try:
         pack(args.source_dir, args.output)
@@ -43,8 +46,7 @@ def main_unpack() -> None:
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output logging individual files")
     args = parser.parse_args()
 
-    if args.verbose:
-        logger.setLevel(logging.DEBUG)
+    _setup_logging(args.verbose)
 
     try:
         unpack(args.archive, args.output)
