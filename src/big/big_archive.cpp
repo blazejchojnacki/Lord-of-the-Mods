@@ -23,6 +23,11 @@
 namespace lotm::big {
 
     namespace {
+        inline std::string to_utf8(const std::filesystem::path& p) {
+            auto u8 = p.u8string();
+            return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
+        }
+
         constexpr std::size_t MAX_ENTRY_PATH_LENGTH = 4096;
         constexpr std::size_t EXTRACT_CHUNK_SIZE = 1024 * 1024;
         constexpr uintmax_t MAX_AMPLIFICATION_RATIO = 20;
@@ -79,7 +84,7 @@ namespace lotm::big {
 
         std::ifstream file(file_path_, std::ios::binary);
         if (!file.is_open()) {
-            throw BigArchiveError("Cannot open file: " + file_path_.string());
+            throw BigArchiveError("Cannot open file: " + to_utf8(file_path_));
         }
 
         // Header reading
@@ -91,6 +96,7 @@ namespace lotm::big {
 
         // Total size (Little Endian - '<I')
         file.read(reinterpret_cast<char*>(&total_size_), sizeof(total_size_));
+        total_size_ = lotm::core::from_little_endian(total_size_);
 
         // Number of files and header size (Big Endian - hence swapping)
         uint32_t num_files = 0;
@@ -108,7 +114,7 @@ namespace lotm::big {
         std::error_code ec;
         auto physical_size = std::filesystem::file_size(file_path_, ec);
         if (ec) {
-            throw BigArchiveError("Cannot read physical file size: " + file_path_.string());
+            throw BigArchiveError("Cannot read physical file size: " + to_utf8(file_path_));
         }
 
         if (header_size_ < HEADER_BASE_SIZE ||
@@ -167,7 +173,7 @@ namespace lotm::big {
         std::error_code ec;
         const auto physical_size = std::filesystem::file_size(file_path_, ec);
         if (ec) {
-            throw BigArchiveError("Cannot open file for extraction: " + file_path_.string());
+            throw BigArchiveError("Cannot open file for extraction: " + to_utf8(file_path_));
         }
 
         const uintmax_t max_extraction_quota = physical_size * MAX_AMPLIFICATION_RATIO;
@@ -244,7 +250,7 @@ namespace lotm::big {
 
             std::ofstream out_file(target_path, std::ios::binary);
             if (!out_file.is_open()) {
-                throw BigArchiveError("Cannot create output file: " + target_path.string());
+                throw BigArchiveError("Cannot create output file: " + to_utf8(target_path));
             }
 
             if (entry.size > 0) {
@@ -266,7 +272,7 @@ namespace lotm::big {
 
                     out_file.write(buffer.data(), chunk_size);
                     if (!out_file) {
-                        throw BigArchiveError("Failed to write extracted file: " + target_path.string());
+                        throw BigArchiveError("Failed to write extracted file: " + to_utf8(target_path));
                     }
 
                     remaining -= static_cast<uint32_t>(chunk_size);
@@ -275,7 +281,7 @@ namespace lotm::big {
 
             out_file.flush();
             if (!out_file) {
-                throw BigArchiveError("Failed to flush extracted file: " + target_path.string());
+                throw BigArchiveError("Failed to flush extracted file: " + to_utf8(target_path));
             }
 
             if (progress_callback) {

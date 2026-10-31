@@ -22,13 +22,18 @@
 
 namespace lotm::big {
 
+    inline std::string to_utf8(const std::filesystem::path& p) {
+        auto u8 = p.u8string();
+        return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
+    }
+
     void BigPacker::pack_from_directory(const std::filesystem::path& source_dir, const std::filesystem::path& output_file, std::function<void(std::string_view)> progress_callback) {
         if (!std::filesystem::exists(source_dir) || !std::filesystem::is_directory(source_dir)) {
             throw std::invalid_argument("Source directory does not exist or is not a directory.");
         }
 
         if (std::filesystem::is_directory(output_file)) {
-            throw std::invalid_argument("Target output path cannot be a directory: " + output_file.string());
+            throw std::invalid_argument("Target output path cannot be a directory: " + to_utf8(output_file));
         }
 
         if (auto parent = output_file.parent_path(); !parent.empty() && !std::filesystem::exists(parent)) {
@@ -43,7 +48,7 @@ namespace lotm::big {
             canonical_output.begin(), canonical_output.end());
         if (mismatch_pair.first == canonical_source.end()) {
             throw std::invalid_argument(
-                "Target output archive cannot reside inside the source directory: " + output_file.string());
+                "Target output archive cannot reside inside the source directory: " + to_utf8(output_file));
         }
 
         struct PackEntry {
@@ -86,6 +91,18 @@ namespace lotm::big {
             return a.rel_path < b.rel_path;
             });
 
+        // Prevent case-insensitive overwrites in SAGE engine
+        std::unordered_set<std::string> seen_paths;
+        for (const auto& f : file_list) {
+            std::string lower_path = f.rel_path;
+            std::transform(lower_path.begin(), lower_path.end(), lower_path.begin(),
+                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+            if (!seen_paths.insert(lower_path).second) {
+                throw std::invalid_argument("Duplicate case-insensitive path detected: " + f.rel_path);
+            }
+        }
+
         uint32_t num_files = static_cast<uint32_t>(file_list.size());
         uintmax_t header_size_calc = HEADER_BASE_SIZE;
         for (const auto& f : file_list) {
@@ -111,11 +128,13 @@ namespace lotm::big {
 
         std::ofstream out(output_file, std::ios::binary);
         if (!out.is_open()) {
-            throw BigArchiveError("Cannot create output file: " + output_file.string());
+            throw BigArchiveError("Cannot create output file: " + to_utf8(output_file));
         }
 
         out.write(BIG4_MAGIC.data(), 4);
-        out.write(reinterpret_cast<const char*>(&total_size), sizeof(total_size));
+
+        uint32_t le_total_size = lotm::core::to_little_endian(total_size);
+        out.write(reinterpret_cast<const char*>(&le_total_size), sizeof(le_total_size));
 
         uint32_t be_num_files = lotm::core::to_big_endian(num_files);
         out.write(reinterpret_cast<const char*>(&be_num_files), sizeof(be_num_files));
@@ -143,7 +162,7 @@ namespace lotm::big {
             if (!src.is_open()) {
                 out.close();
                 std::filesystem::remove(output_file);
-                throw BigArchiveError("Cannot read source file: " + f.full_path.string());
+                throw BigArchiveError("Cannot read source file: " + to_utf8(f.full_path));
             }
 
             uintmax_t bytes_copied = 0;
@@ -155,7 +174,7 @@ namespace lotm::big {
                     if (!out) {
                         out.close();
                         std::filesystem::remove(output_file);
-                        throw BigArchiveError("Failed writing data to archive: " + output_file.string());
+                        throw BigArchiveError("Failed writing data to archive: " + to_utf8(output_file));
                     }
                     bytes_copied += static_cast<uintmax_t>(bytes_read);
                 }
@@ -176,7 +195,7 @@ namespace lotm::big {
         if (!out.good()) {
             out.close();
             std::filesystem::remove(output_file);
-            throw BigArchiveError("Failed writing data to archive: " + output_file.string());
+            throw BigArchiveError("Failed writing data to archive: " + to_utf8(output_file));
         }
     }
 
