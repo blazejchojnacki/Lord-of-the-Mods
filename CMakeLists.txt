@@ -14,6 +14,22 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Require Python and nanobind before processing subdirectories
 find_package(Python 3.12 COMPONENTS Interpreter Development.Module REQUIRED)
+
+# Automatically resolve nanobind CMake directory if not explicitly provided
+if (NOT nanobind_DIR AND NOT DEFINED ENV{nanobind_DIR})
+    execute_process(
+        COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        OUTPUT_VARIABLE _nb_cmake_dir
+        RESULT_VARIABLE _nb_status
+    )
+    if (_nb_status EQUAL 0 AND EXISTS "${_nb_cmake_dir}")
+        set(nanobind_DIR "${_nb_cmake_dir}" CACHE PATH "Path to nanobind CMake config" FORCE)
+    else()
+        message(FATAL_ERROR "Failed to retrieve nanobind CMake directory from ${Python_EXECUTABLE}. Ensure nanobind is installed in the active environment.")
+    endif()
+endif()
+
 find_package(nanobind CONFIG REQUIRED)
 
 # # Modular targets: each folder handles its own sources and includes
