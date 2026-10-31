@@ -79,7 +79,8 @@ public:
         // Fix up total size (Little Endian)
         uint32_t total_size = current_offset;
         out.seekp(4, std::ios::beg);
-        out.write(reinterpret_cast<const char*>(&total_size), 4);
+        uint32_t le_total_size = lotm::core::to_little_endian(total_size);
+        out.write(reinterpret_cast<const char*>(&le_total_size), 4);
     }
 };
 
@@ -136,7 +137,9 @@ TEST_CASE("BigArchive Header Parsing", "[big_unpack][header]") {
         REQUIRE(entries[0].size == 11);
 
         // Validate second entry
-        REQUIRE(entries[1].name == "data/file2.ini");
+        char expected_sep = static_cast<char>(std::filesystem::path::preferred_separator);
+        std::string expected_nested = std::string("data") + expected_sep + "file2.ini";
+        REQUIRE(entries[1].name == expected_nested);
         REQUIRE(entries[1].size == 12);
 
         // Ensure sequential offsets without overlap
@@ -346,28 +349,36 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         // Create an archive where entries heavily overlap to claim massive extracted size
         std::ofstream out(env.test_file, std::ios::binary);
         out.write("BIG4", 4);
-        uint32_t total_size = 100;
-        out.write(reinterpret_cast<const char*>(&total_size), 4);
 
-        uint32_t num_files = lotm::core::to_big_endian(static_cast<uint32_t>(50));
+        constexpr uint32_t file_count = 50;
+        constexpr std::string_view entry_name = "A.txt"; // 5 chars + 1 null = 6 bytes
+        constexpr uint32_t entry_record_size = 4 + 4 + static_cast<uint32_t>(entry_name.size() + 1); // 14 bytes
+        constexpr uint32_t header_size = 16 + (file_count * entry_record_size);
+        constexpr uint32_t payload_size = 1024 * 1024;
+        constexpr uint32_t total_size = header_size + payload_size;
+
+        uint32_t le_total_size = lotm::core::to_little_endian(total_size);
+        out.write(reinterpret_cast<const char*>(&le_total_size), 4);
+
+        uint32_t num_files = lotm::core::to_big_endian(file_count);
         out.write(reinterpret_cast<const char*>(&num_files), 4);
 
-        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(16 + (50 * 13)));
-        out.write(reinterpret_cast<const char*>(&header_size), 4);
+        uint32_t be_header_size = lotm::core::to_big_endian(header_size);
+        out.write(reinterpret_cast<const char*>(&be_header_size), 4);
 
         // 50 files all pointing to the exact same 1MB byte range
-        uint32_t offset = lotm::core::to_big_endian(static_cast<uint32_t>(16 + (50 * 13)));
-        uint32_t size = lotm::core::to_big_endian(static_cast<uint32_t>(1024 * 1024));
+        uint32_t be_offset = lotm::core::to_big_endian(header_size);
+        uint32_t be_size = lotm::core::to_big_endian(payload_size);
 
-        for (int i = 0; i < 50; ++i) {
-            out.write(reinterpret_cast<const char*>(&offset), 4);
-            out.write(reinterpret_cast<const char*>(&size), 4);
-            out.write("A.txt", 6);
+        for (uint32_t i = 0; i < file_count; ++i) {
+            out.write(reinterpret_cast<const char*>(&be_offset), 4);
+            out.write(reinterpret_cast<const char*>(&be_size), 4);
+            out.write(entry_name.data(), static_cast<std::streamsize>(entry_name.size() + 1));
         }
 
         // Write 1MB of actual payload
-        std::vector<char> payload(1024 * 1024, 'X');
-        out.write(payload.data(), static_cast<std::streamsize>(payload.size()));
+        std::vector<char> test_payload(payload_size, 'X');
+        out.write(test_payload.data(), static_cast<std::streamsize>(test_payload.size()));
         out.close();
 
         // Total physical size is ~1MB. Claimed extracted size is 50MB.

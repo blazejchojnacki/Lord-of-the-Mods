@@ -99,7 +99,7 @@ def test_cpp_api_raises_big_security_error_on_zip_slip(tmp_path: Path):
     archive = big.BigArchive(bad_archive)
     out_dir = tmp_path / "out"
     
-    with pytest.raises(big.BigSecurityError, match="Path traversal attempt"):
+    with pytest.raises(big.BigSecurityError, match="Directory traversal"):
         archive.extract_all(out_dir)
 
 
@@ -142,7 +142,8 @@ def test_cpp_api_progress_callbacks_propagate(standard_mod_directory: Path, tmp_
     assert len(extracted) == 3
     assert any("texture.dds" in e for e in extracted)
 
-    def test_pack_exception_in_callback_cleans_up_partial_file(standard_mod_directory: Path, tmp_path: Path):
+
+def test_pack_exception_in_callback_cleans_up_partial_file(standard_mod_directory: Path, tmp_path: Path):
     """Verify that Python exceptions inside the C++ callback trigger RAII cleanup of the output file."""
     archive_path = tmp_path / "failed_pack.big"
     
@@ -168,17 +169,3 @@ def test_unpack_exception_in_callback_aborts_safely(standard_mod_directory: Path
     with pytest.raises(ValueError, match="Simulated extraction abort"):
         archive_obj = big.BigArchive(archive)
         archive_obj.extract_all(out_dir, progress_callback=raising_cb)
-
-
-def test_pack_case_insensitive_collision_raises_error(tmp_path: Path):
-    """Verify that packing directories with case-insensitive collisions raises an error."""
-    src_dir = tmp_path / "colliding_mod"
-    src_dir.mkdir()
-    (src_dir / "data").mkdir()
-    (src_dir / "data" / "unit.ini").write_text("Damage=10", encoding="utf-8")
-    (src_dir / "data" / "UNIT.INI").write_text("Damage=99", encoding="utf-8")
-    
-    out_file = tmp_path / "collision.big"
-    
-    with pytest.raises(ValueError, match="Duplicate case-insensitive path"):
-        big.pack(src_dir, out_file)

@@ -96,7 +96,7 @@ TEST_CASE("BigPacker Empty Directory Serialization", "[big_pack][empty]") {
         in.read(reinterpret_cast<char*>(&num_files), 4);
         in.read(reinterpret_cast<char*>(&header_size), 4);
 
-        REQUIRE(total_size == 24); // 16 bytes base + 8 bytes padding
+        REQUIRE(lotm::core::from_little_endian(total_size) == 24); // 16 bytes base + 8 bytes padding
         REQUIRE(lotm::core::from_big_endian(num_files) == 0);
         REQUIRE(lotm::core::from_big_endian(header_size) == 24);
 
@@ -232,5 +232,28 @@ TEST_CASE("BigPacker Progress Callback Integration", "[big_pack][callback]") {
         // SAGE sorting puts fileA before sub\fileB
         REQUIRE(reported_files[0] == "fileA.txt");
         REQUIRE(reported_files[1] == "sub\\fileB.txt");
+    }
+}
+
+TEST_CASE("BigPacker Case-Insensitive Deduplication", "[big_pack][dedup]") {
+    SECTION("Negative scenario: Duplicate paths differing only by case throw std::invalid_argument") {
+        std::vector<lotm::big::detail::PackSourceRecord> entries = {
+            { "fake/path/unit.ini", "data\\unit.ini", 100, 0 },
+            { "fake/path/UNIT.INI", "data\\UNIT.INI", 100, 0 }
+        };
+
+        REQUIRE_THROWS_AS(
+            lotm::big::detail::sort_and_validate_entries(entries),
+            std::invalid_argument
+        );
+    }
+
+    SECTION("Positive scenario: Case-distinct unique paths pass validation") {
+        std::vector<lotm::big::detail::PackSourceRecord> entries = {
+            { "fake/path/armor.ini", "data\\armor.ini", 100, 0 },
+            { "fake/path/weapon.ini", "data\\weapon.ini", 100, 0 }
+        };
+
+        REQUIRE_NOTHROW(lotm::big::detail::sort_and_validate_entries(entries));
     }
 }
