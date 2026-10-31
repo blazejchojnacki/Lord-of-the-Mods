@@ -126,6 +126,18 @@ namespace lotm::big {
 
         uint32_t total_size = current_offset;
 
+        bool pack_successful = false;
+        struct CleanupGuard {
+            std::filesystem::path path;
+            bool& success;
+            ~CleanupGuard() {
+                if (!success) {
+                    std::error_code ec;
+                    std::filesystem::remove(path, ec);
+                }
+            }
+        } guard{ output_file, pack_successful };
+
         std::ofstream out(output_file, std::ios::binary);
         if (!out.is_open()) {
             throw BigArchiveError("Cannot create output file: " + to_utf8(output_file));
@@ -160,8 +172,6 @@ namespace lotm::big {
         for (const auto& f : file_list) {
             std::ifstream src(f.full_path, std::ios::binary);
             if (!src.is_open()) {
-                out.close();
-                std::filesystem::remove(output_file);
                 throw BigArchiveError("Cannot read source file: " + to_utf8(f.full_path));
             }
 
@@ -172,8 +182,6 @@ namespace lotm::big {
                 if (bytes_read > 0) {
                     out.write(chunk.data(), bytes_read);
                     if (!out) {
-                        out.close();
-                        std::filesystem::remove(output_file);
                         throw BigArchiveError("Failed writing data to archive: " + to_utf8(output_file));
                     }
                     bytes_copied += static_cast<uintmax_t>(bytes_read);
@@ -181,8 +189,6 @@ namespace lotm::big {
             }
 
             if (src.bad() || bytes_copied != f.size) {
-                out.close();
-                std::filesystem::remove(output_file);
                 throw BigArchiveError("Byte count mismatch while packing file: " + f.rel_path);
             }
 
@@ -193,10 +199,9 @@ namespace lotm::big {
 
         out.flush();
         if (!out.good()) {
-            out.close();
-            std::filesystem::remove(output_file);
             throw BigArchiveError("Failed writing data to archive: " + to_utf8(output_file));
         }
+        pack_successful = true;
     }
 
 } // namespace lotm::big

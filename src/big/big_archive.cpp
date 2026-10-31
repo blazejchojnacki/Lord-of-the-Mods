@@ -200,7 +200,7 @@ namespace lotm::big {
 
         std::vector<char> buffer(EXTRACT_CHUNK_SIZE);
 
-        // File extraction
+        // PRE-FLIGHT VALIDATION LOOP
         for (const auto& entry : entries_) {
             // Check for malicious or corrupted bounds
             if (static_cast<uintmax_t>(entry.offset) + entry.size > physical_size) {
@@ -218,8 +218,9 @@ namespace lotm::big {
             // Verify path components against device names, alternate streams, and existing symlinks
             std::filesystem::path current_check = canonical_output_dir;
             for (const auto& part : entry_rel_path) {
-                if (part.empty() || part == "." || part == "..") {
-                    continue;
+                if (part.empty() || part == ".") continue;
+                if (part == "..") {
+                    throw BigSecurityError("Directory traversal (..) detected in entry: " + entry.name);
                 }
                 if (is_unsafe_filename(part.string())) {
                     throw BigSecurityError("Unsafe Windows device name or ADS stream in path: " + entry.name);
@@ -229,7 +230,7 @@ namespace lotm::big {
                 std::error_code check_ec;
                 auto st = std::filesystem::symlink_status(current_check, check_ec);
                 if (!check_ec && std::filesystem::is_symlink(st)) {
-                    throw BigSecurityError("Symlink traversal attempt detected for file: " + entry.name);
+                    throw BigSecurityError("Symlink detected in path (strict abort policy): " + entry.name);
                 }
             }
 
@@ -241,7 +242,12 @@ namespace lotm::big {
             if (mismatch_pair.first != canonical_output_dir.end() || target_path == canonical_output_dir) {
                 throw BigSecurityError("Path traversal attempt detected for file: " + entry.name);
             }
+        }
 
+        // SAFE EXTRACTION LOOP
+        for (const auto& entry : entries_) {
+            std::filesystem::path entry_rel_path(entry.name);
+            std::filesystem::path target_path = canonical_output_dir / entry_rel_path;
             std::filesystem::path target_subdir = target_path.parent_path();
 
             if (!std::filesystem::exists(target_subdir)) {

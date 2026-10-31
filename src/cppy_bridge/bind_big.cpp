@@ -51,7 +51,7 @@ namespace lotm::python {
             // Wrap the callback to securely reacquire the GIL when invoking Python code
             std::function<void(std::string_view)> safe_cb;
             if (cb) {
-                safe_cb = [cb](std::string_view sv) {
+                safe_cb = [&cb](std::string_view sv) {
                     nb::gil_scoped_acquire acquire;
                     cb(sv);
                     };
@@ -69,7 +69,7 @@ namespace lotm::python {
             // Wrap the callback to securely reacquire the GIL when invoking Python code
             std::function<void(std::string_view)> safe_cb;
             if (cb) {
-                safe_cb = [cb](std::string_view sv) {
+                safe_cb = [&cb](std::string_view sv) {
                     nb::gil_scoped_acquire acquire;
                     cb(sv);
                     };
