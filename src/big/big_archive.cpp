@@ -9,13 +9,16 @@
 
 #include <big/big_archive.hpp>
 #include <big/exceptions.hpp>
+#include <big/types.hpp>
 #include <core/endian.hpp>
+
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <string>
 #include <string_view>
 #include <system_error>
 #include <vector>
@@ -23,14 +26,14 @@
 namespace lotm::big {
 
     namespace {
+        constexpr std::size_t MAX_ENTRY_PATH_LENGTH = 4096;
+        constexpr std::size_t EXTRACT_CHUNK_SIZE = 1024 * 1024;
+        constexpr uintmax_t MAX_AMPLIFICATION_RATIO = 20;
+
         inline std::string to_utf8(const std::filesystem::path& p) {
             auto u8 = p.u8string();
             return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
         }
-
-        constexpr std::size_t MAX_ENTRY_PATH_LENGTH = 4096;
-        constexpr std::size_t EXTRACT_CHUNK_SIZE = 1024 * 1024;
-        constexpr uintmax_t MAX_AMPLIFICATION_RATIO = 20;
 
         // Internal helper for reading strings until null-terminator within a byte budget
         static std::string read_null_terminated_string(std::ifstream& stream, std::size_t max_bytes) {
@@ -62,9 +65,14 @@ namespace lotm::big {
             }
 
             auto dot_pos = upper_name.find('.');
-            std::string_view base = (dot_pos != std::string::npos)
+            std::string_view base = (dot_pos != std::string_view::npos)
                 ? std::string_view(upper_name).substr(0, dot_pos)
                 : upper_name;
+
+            // Strip trailing spaces and dots (Win32 path normalization trims them before device check)
+            while (!base.empty() && (base.back() == ' ' || base.back() == '.')) {
+                base.remove_suffix(1);
+            }
 
             if (base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" ||
                 base == "CONIN$" || base == "CONOUT$") {
@@ -154,9 +162,9 @@ namespace lotm::big {
                 throw BigFormatError("Truncated BIG4 string table.");
             }
 
-            // Replace backslashes with native directory separators
+            // Replace backslashes and forward slashes with native directory separators
             for (char& c : entry.name) {
-                if (c == '\\') {
+                if (c == '\\' || c == '/') {
                     c = static_cast<char>(std::filesystem::path::preferred_separator);
                 }
             }
@@ -193,13 +201,7 @@ namespace lotm::big {
 
         const std::filesystem::path canonical_output_dir = std::filesystem::weakly_canonical(output_dir);
 
-        std::ifstream file(file_path_, std::ios::binary);
-        if (!file.is_open()) {
-            throw BigArchiveError("Cannot open file for extraction.");
-        }
-
-        std::vector<char> buffer(EXTRACT_CHUNK_SIZE);
-
+        // Pre-flight security and bounds validation pass
         // PRE-FLIGHT VALIDATION LOOP
         for (const auto& entry : entries_) {
             // Check for malicious or corrupted bounds
@@ -243,6 +245,13 @@ namespace lotm::big {
                 throw BigSecurityError("Path traversal attempt detected for file: " + entry.name);
             }
         }
+
+        std::ifstream file(file_path_, std::ios::binary);
+        if (!file.is_open()) {
+            throw BigArchiveError("Cannot open file for extraction.");
+        }
+
+        std::vector<char> buffer(EXTRACT_CHUNK_SIZE);
 
         // SAFE EXTRACTION LOOP
         for (const auto& entry : entries_) {

@@ -11,23 +11,53 @@
 #include <big/exceptions.hpp>
 #include <big/types.hpp>
 #include <core/endian.hpp>
+
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
 #include <fstream>
 #include <functional>
+#include <limits>
 #include <stdexcept>
-#include <vector>
 #include <string>
 #include <string_view>
-#include <algorithm>
-#include <limits>
+#include <system_error>
+#include <unordered_set>
+#include <vector>
 
 namespace lotm::big {
 
-    inline std::string to_utf8(const std::filesystem::path& p) {
-        auto u8 = p.u8string();
-        return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
-    }
+    namespace {
+        inline std::string to_utf8(const std::filesystem::path& p) {
+            auto u8 = p.u8string();
+            return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
+        }
+    } // namespace
 
-    void BigPacker::pack_from_directory(const std::filesystem::path& source_dir, const std::filesystem::path& output_file, std::function<void(std::string_view)> progress_callback) {
+    namespace detail {
+        void sort_and_validate_entries(std::vector<PackSourceRecord>& entries) {
+            std::sort(entries.begin(), entries.end(), [](const PackSourceRecord& a, const PackSourceRecord& b) {
+                return a.rel_path < b.rel_path;
+                });
+
+            std::unordered_set<std::string> seen_paths;
+            for (const auto& f : entries) {
+                std::string lower_path = f.rel_path;
+                std::transform(lower_path.begin(), lower_path.end(), lower_path.begin(),
+                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+                if (!seen_paths.insert(lower_path).second) {
+                    throw std::invalid_argument("Duplicate case-insensitive path detected: " + f.rel_path);
+                }
+            }
+        }
+    } // namespace detail
+
+    void BigPacker::pack_from_directory(
+        const std::filesystem::path& source_dir,
+        const std::filesystem::path& output_file,
+        std::function<void(std::string_view)> progress_callback
+    ) {
         if (!std::filesystem::exists(source_dir) || !std::filesystem::is_directory(source_dir)) {
             throw std::invalid_argument("Source directory does not exist or is not a directory.");
         }
@@ -37,7 +67,7 @@ namespace lotm::big {
         }
 
         if (auto parent = output_file.parent_path(); !parent.empty() && !std::filesystem::exists(parent)) {
-            throw std::invalid_argument("Target output directory does not exist: " + parent.string());
+            throw std::invalid_argument("Target output directory does not exist: " + to_utf8(parent));
         }
 
         // Guard against output_file residing inside source_dir (self-inclusion)
@@ -51,23 +81,16 @@ namespace lotm::big {
                 "Target output archive cannot reside inside the source directory: " + to_utf8(output_file));
         }
 
-        struct PackEntry {
-            std::filesystem::path full_path;
-            std::string rel_path;
-            uint32_t size{ 0 };
-            uint32_t offset{ 0 };
-        };
-
-        std::vector<PackEntry> file_list;
+        std::vector<detail::PackSourceRecord> file_list;
         uintmax_t total_payload_size = 0;
 
         for (const auto& entry : std::filesystem::recursive_directory_iterator(source_dir)) {
             if (entry.is_regular_file()) {
-                PackEntry pack_entry;
+                detail::PackSourceRecord pack_entry;
                 pack_entry.full_path = entry.path();
 
                 auto rel_path = std::filesystem::relative(entry.path(), source_dir);
-                pack_entry.rel_path = rel_path.string();
+                pack_entry.rel_path = to_utf8(rel_path);
                 for (char& c : pack_entry.rel_path) {
                     if (c == '/') c = '\\';
                 }
@@ -85,23 +108,8 @@ namespace lotm::big {
             }
         }
 
-        // CRITICAL FIX: Sort the index alphabetically.
-        // SAGE engine uses bsearch on the archive index. An unsorted BIG file will crash the game.
-        std::sort(file_list.begin(), file_list.end(), [](const PackEntry& a, const PackEntry& b) {
-            return a.rel_path < b.rel_path;
-            });
-
-        // Prevent case-insensitive overwrites in SAGE engine
-        std::unordered_set<std::string> seen_paths;
-        for (const auto& f : file_list) {
-            std::string lower_path = f.rel_path;
-            std::transform(lower_path.begin(), lower_path.end(), lower_path.begin(),
-                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-
-            if (!seen_paths.insert(lower_path).second) {
-                throw std::invalid_argument("Duplicate case-insensitive path detected: " + f.rel_path);
-            }
-        }
+        // Prevent case-insensitive overwrites in SAGE engine.
+        detail::sort_and_validate_entries(file_list);
 
         uint32_t num_files = static_cast<uint32_t>(file_list.size());
         uintmax_t header_size_calc = HEADER_BASE_SIZE;
@@ -201,6 +209,7 @@ namespace lotm::big {
         if (!out.good()) {
             throw BigArchiveError("Failed writing data to archive: " + to_utf8(output_file));
         }
+
         pack_successful = true;
     }
 
