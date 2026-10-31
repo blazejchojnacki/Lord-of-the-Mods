@@ -3,6 +3,14 @@
 
 The `lotm` project provides programmatic access to its core operations, allowing integration into custom UI applications, modding tools, and automation scripts.
 
+## Installation
+
+Install the pre-compiled library via pip:
+
+```cmd
+pip install lord-of-the-mods
+```
+
 ## `lotm.big.pack`
 
 ### `pack(source_dir: Path, output_file: Path) -> None`
