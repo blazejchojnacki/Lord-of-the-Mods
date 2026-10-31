@@ -35,6 +35,9 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Set up MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -44,26 +47,45 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install nanobind
+          pip install nanobind ninja
           pip install -e ".[test]"
 
-      - name: Configure CMake
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(python -m nanobind --cmake_dir)"
+      - name: Install OpenCppCoverage
+        run: |
+          choco install opencppcoverage
+          echo "C:\Program Files\OpenCppCoverage" >> $env:GITHUB_PATH
 
-      - name: Build C++ Extension
-        # Compiles the C++ core and nanobind .pyd module.
-        run: cmake --build build --config Release -j 4
+      - name: Configure CMake
+        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
+
+      - name: Build C++ Extension and Tests
+        run: cmake --build build
 
       - name: Run C++ Native Tests (Catch2)
-        working-directory: ${{ github.workspace }}/build
-        # Executes the Catch2 suite targeting the Release build.
-        run: ctest --output-on-failure -C Release
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Run C++ Code Coverage (OpenCppCoverage)
+        run: |
+          & "C:\Program Files\OpenCppCoverage\OpenCppCoverage.exe" `
+            --sources "${{ github.workspace }}\src" `
+            --sources "${{ github.workspace }}\include" `
+            --excluded_sources "${{ github.workspace }}\tests" `
+            --export_type cobertura:cpp-coverage.xml `
+            --export_type html:coverage_cpp `
+            -- .\build\tests\lotm_cpp_tests.exe
+
+      - name: Upload C++ Coverage Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cpp-coverage-report
+          path: coverage_cpp/
 
       - name: Validate Type Stubs and Scripts (Mypy)
         run: python -m mypy src/lotm
 
       - name: Run Python Integration Tests (Pytest)
-        run: python -m pytest -o pythonpath="src build/src/cppy_bridge/Release" --cov=lotm --cov-report=xml tests/python -v
+        run: python -m pytest --cov=lotm --cov-report=xml tests/python -v
 
       - name: Build and Validate Wheel
         run: |
