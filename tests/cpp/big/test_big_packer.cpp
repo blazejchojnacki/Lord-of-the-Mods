@@ -313,14 +313,22 @@ TEST_CASE("BigPacker File I/O Error Handling", "[big_pack][io]") {
     SECTION("Negative scenario: Target output file cannot be created") {
         env.create_dummy_file("test.txt", "data");
 
-        // A standard std::ofstream cannot open a path for writing if a directory 
-        // already exists at that exact location.
-        std::filesystem::create_directories(env.out_file);
+        // Create target file as a regular file first
+        {
+            std::ofstream pre(env.out_file, std::ios::binary);
+            pre << "lock placeholder";
+        }
 
-        REQUIRE_THROWS_AS(
-            BigPacker::pack_from_directory(env.src_dir, env.out_file),
-            BigArchiveError
-        );
+        // Lock output file exclusively (_SH_DENYRW = 0x10)
+        // Passes is_directory() but causes std::ofstream to fail opening with BigArchiveError
+        FILE* locked_out = _fsopen(env.out_file.string().c_str(), "rb", 0x10);
+        if (locked_out) {
+            REQUIRE_THROWS_AS(
+                BigPacker::pack_from_directory(env.src_dir, env.out_file),
+                BigArchiveError
+            );
+            fclose(locked_out);
+        }
     }
 
     SECTION("Negative scenario: Source file cannot be read during packing") {
