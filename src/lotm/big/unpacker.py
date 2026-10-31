@@ -51,7 +51,3 @@ def unpack(big_path: str | os.PathLike[str], output_dir: str | os.PathLike[str])
     logger.info("Finished extracting into: %s", dest_path.resolve())
 
     return entries
-
-
-# Backward-compatible alias
-extract = unpack

@@ -17,7 +17,7 @@ BigFormatError = big.BigFormatError
 BigSecurityError = big.BigSecurityError
 
 from .packer import pack
-from .unpacker import unpack, extract
+from .unpacker import unpack
 
 __all__ = [
     "BigArchive",
@@ -28,5 +28,4 @@ __all__ = [
     "BigSecurityError",
     "pack",
     "unpack",
-    "extract",
 ]

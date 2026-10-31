@@ -27,7 +27,7 @@ Packs a directory structure into an EA BIG4 standard archive. Missing parent dir
 ## `lotm.big.unpack`
 
 ### `unpack(big_path: Path, output_dir: Path) -> list[big.BigEntry]`
-Extracts the contents of a BIG4 archive into a designated folder. Aliased as `extract()`. Exposed from `lotm.big.unpacker`.
+Extracts the contents of a BIG4 archive into a designated folder. Exposed from `lotm.big.unpacker`.
 
 * **big_path**: `pathlib.Path` pointing to the source `.big` file.
 * **output_dir**: `pathlib.Path` indicating the extraction destination.
