@@ -11,7 +11,7 @@
 A high-performance C++20 and Python toolkit designed for modding EA *The Battle for Middle-earth* games.
 
 ## Features
-- **Fast BIG4 Unpacking:** extract `.big` archives.
+- **Fast BIG4 Unpacking:** Extract `.big` archives with strict security validation.
 - **Byte-Fidelity Repacking:** Creates SAGE-compliant `.big` archives with alphabetical binary-search index ordering and EA build tag alignment.
 - **Python 3.12+ Bindings:** C++ performance accessible directly in Python via `nanobind`.
 
@@ -19,26 +19,32 @@ A high-performance C++20 and Python toolkit designed for modding EA *The Battle 
 - Windows 11 (x64)
 - Python 3.12+
 
+## Documentation
+The `lotm` project provides comprehensive documentation for contributors and users:
+* **[Python API Reference](docs/python-api.md)**: Programmatic extraction and packing APIs.
+* **[Command-Line Tools](docs/cli.md)**: Standalone terminal instructions for `lotm-big-pack` and `lotm-big-unpack`.
+* **[BIG4 Format Specs](docs/big4-format.md)**: Deep technical details regarding the BIG4 binary layout and SAGE engine alignment quirks.
+* **[Contributing Guide](docs/CONTRIBUTING.md)**: Development, compilation, and testing workflows for C++ and Python.
+* **[Coverage Log](docs/coverage-log.md)**: Current C++ Catch2 and Pytest coverage benchmarks.
+* **[Changelog](docs/CHANGELOG.md)**: Release history and feature notes.
+
 ## Installation and use
 
-To use the Python library in your project, see **[Python Library Guide](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/python-api.md)**
-
-To build the library from source or contribute to development, see **[Development Guide](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/CONTRIBUTING.md)**
+Install the pre-compiled library via pip:
+```cmd
+pip install lord-of-the-mods
+```
 
 ## Testing
 
-Install the test dependencies and run the pytest suite by pointing it to your compiled C++ extension directory:
+Install the test dependencies and run the pytest suite against the editable C++ extension:
 
 ```cmd
 pip install -e ".[test]"
 ```
 ```cmd
-pytest -o pythonpath=".;build/src/cppy_bridge" tests/python
+pytest tests/python -v
 ```
-
-## Additional documentation:
-
-For deep technical details regarding the BIG4 binary layout and alignment, see **[BIG4 Format Specs](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/big4-format.md)**.
 
 ## License
 

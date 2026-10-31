@@ -24,6 +24,20 @@ Packs a directory structure into an EA BIG4 standard archive. Missing parent dir
   * `lotm.big.BigFormatError` (Native): Raised if an individual file or cumulative archive size exceeds the 4GB (32-bit) format boundary.
   * `lotm.big.BigArchiveError` (Native): Raised if an I/O read/write error occurs during packing.
 
+**Usage Example:**
+```python
+from pathlib import Path
+from lotm.big import pack, BigFormatError, BigArchiveError
+
+try:
+    pack(Path("mod_workspace/data"), Path("build/my_mod.big"))
+    print("Archive packed successfully.")
+except ValueError as err:
+    print(f"Configuration Error: {err}")
+except (BigFormatError, BigArchiveError) as err:
+    print(f"Native serialization failed: {err}")
+```
+
 ---
 
 ## `lotm.big.unpack`
@@ -39,3 +53,17 @@ Extracts the contents of a BIG4 archive into a designated folder. Missing parent
   * `lotm.big.BigFormatError` (Native): Raised if the BIG4 magic header is missing, corrupted, or if physical archive bounds are breached.
   * `lotm.big.BigSecurityError` (Native): Raised if the archive contains directory traversals (Zip-Slip), Windows DOS device names, Alternate Data Streams (`:`), directory symlinks, or amplification (Zip-Bomb) structures.
   * `lotm.big.BigArchiveError` (Native): Raised if standard OS file stream operations fail.
+
+**Usage Example:**
+```python
+from pathlib import Path
+from lotm.big import unpack, BigSecurityError, BigFormatError
+
+try:
+    entries = unpack(Path("downloaded_mod.big"), Path("extracted/"))
+    print(f"Extracted {len(entries)} files successfully.")
+except BigSecurityError as err:
+    print(f"Security violation aborted extraction: {err}")
+except BigFormatError as err:
+    print(f"Corrupted or invalid BIG4 archive: {err}")
+```
