@@ -1,5 +1,5 @@
 /**
- * @file src/big/big_unpack.cpp
+ * @file src/big/big_archive.cpp
  * @brief Implementation of BIG unpacking object
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
@@ -7,7 +7,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#include <big/big_unpack.hpp>
+#include <big/big_archive.hpp>
 #include <big/exceptions.hpp>
 #include <core/endian.hpp>
 #include <algorithm>

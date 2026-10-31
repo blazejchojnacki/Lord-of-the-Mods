@@ -6,8 +6,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 add_library(lotm_big STATIC
-    big_unpack.cpp
-    big_pack.cpp
+    big_archive.cpp
+    big_packer.cpp
 )
 
 set_target_properties(lotm_big PROPERTIES

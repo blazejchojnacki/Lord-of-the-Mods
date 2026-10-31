@@ -1,5 +1,5 @@
 /**
- * @file tests/cpp/big/test_big_pack.cpp
+ * @file tests/cpp/big/test_big_packer.cpp
  * @brief Unit tests for the BigPacker serialization implementation.
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
@@ -8,7 +8,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include <big/big_pack.hpp>
+#include <big/big_packer.hpp>
 #include <big/exceptions.hpp>
 #include <core/endian.hpp>
 #include <filesystem>

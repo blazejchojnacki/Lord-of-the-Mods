@@ -1,5 +1,5 @@
 /**
- * @file src/big/big_pack.cpp
+ * @file src/big/big_packer.cpp
  * @brief Implementation of BIG packing object
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
@@ -7,7 +7,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#include <big/big_pack.hpp>
+#include <big/big_packer.hpp>
 #include <big/exceptions.hpp>
 #include <big/types.hpp>
 #include <core/endian.hpp>

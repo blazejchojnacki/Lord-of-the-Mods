@@ -1,5 +1,5 @@
 /**
- * @file tests/cpp/big/test_big_unpack.cpp
+ * @file tests/cpp/big/test_big_archive.cpp
  * @brief Unit tests for the BigArchive unpacking implementation.
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
@@ -8,7 +8,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include <big/big_unpack.hpp>
+#include <big/big_archive.hpp>
 #include <big/exceptions.hpp>
 #include <core/endian.hpp>
 #include <filesystem>
