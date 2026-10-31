@@ -23,7 +23,7 @@ Cpp coverage at 95%.
 Coverage    Total lines    Items
      95%            300    build\tests\lotm_cpp_tests.exe
      93%            161	   src\big\big_archive.cpp
-     96%            116	   src\big\big_packer.cpp
+     97%            116	   src\big\big_packer.cpp
     100%              2    include\big\big_archive.hpp
     100%             21	   include\core\endian.hpp
 
