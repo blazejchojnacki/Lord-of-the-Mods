@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Drive-Relative Traversal**: Blocked directory traversal attempts using Windows drive-relative paths (e.g., `C:file.txt`).
 - **Component Sanitization**: Added strict rejection of NTFS reserved characters (`<`, `>`, `:`, `"`, `|`, `?`, `*`), ASCII control characters, and trailing spaces/dots on individual path components.
 
+### Fixed
+- Corrected EA header padding tag to an 8-byte block consisting of `"L219"` followed by 4 null bytes (`\0\0\0\0`), replacing the inaccurate ASCII whitespace padding (`"L219    "`) to match official SAGE archives byte-for-byte.
+
 ## [0.1.0] - 2026-10-31
 
 ### Added

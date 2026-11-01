@@ -101,10 +101,10 @@ TEST_CASE("BigPacker Empty Directory Serialization", "[big_pack][empty]") {
         REQUIRE(lotm::core::from_big_endian(num_files) == 0);
         REQUIRE(lotm::core::from_big_endian(header_size) == 24);
 
-        // Verify EA padding tag L219 is present
-        char padding[9] = { 0 };
+        // Verify EA padding tag L219\0\0\0\0 is present
+        char padding[8] = { 0 };
         in.read(padding, 8);
-        REQUIRE(std::string_view(padding, 8) == "L219    ");
+        REQUIRE(std::string_view(padding, 8) == std::string_view("L219\0\0\0\0", 8));
     }
 }
 
