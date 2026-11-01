@@ -45,6 +45,15 @@ def load_delimiters():
             raise IniParseError(f"delimiters file not found: {delimiter_path}")
 
 
+def _read_file_lines(file_path: str) -> List[str]:
+    """Reads file contents into memory with an encoding fallback for legacy SAGE files."""
+    path = Path(file_path)
+    try:
+        return path.read_text(encoding='utf-8').splitlines()
+    except UnicodeDecodeError:
+        return path.read_text(encoding='windows-1252').splitlines()
+
+
 def recognize_structure(file_path: str) -> Tuple[List, int]:
     load_delimiters()
     if file_path.endswith('.str'):
@@ -52,18 +61,18 @@ def recognize_structure(file_path: str) -> Tuple[List, int]:
         delimiters.append([])
         return delimiters, 0
     elif file_path.endswith('.ini') or file_path.endswith('.inc'):
-        with open(file_path, 'r') as loaded_file:
-            for file_line in loaded_file.readlines():
-                words = file_line.split()
-                if len(words) > 0:
-                    for items_levels in INI_DELIMITERS:
-                        for item_level in items_levels:
-                            if file_path.endswith('.ini') and items_levels.index(item_level) > 0:
-                                break
-                            elif words[0] in item_level:
-                                delims = copy.deepcopy(items_levels)
-                                delims.append([])
-                                return delims, items_levels.index(item_level)
+        lines = _read_file_lines(file_path)
+        for file_line in lines:
+            words = file_line.split()
+            if len(words) > 0:
+                for items_levels in INI_DELIMITERS:
+                    for item_level in items_levels:
+                        if file_path.endswith('.ini') and items_levels.index(item_level) > 0:
+                            break
+                        elif words[0] in item_level:
+                            delims = copy.deepcopy(items_levels)
+                            delims.append([])
+                            return delims, items_levels.index(item_level)
     return [], 0
 
 
@@ -175,9 +184,9 @@ class ConstructFile(ConstructShared):
         if not (os.path.isfile(self.name) and self.name.endswith(('.ini', '.inc', '.str'))):
             raise IniParseError(f'file {self.name} invalid.')
 
-        with open(self.name, 'r') as file_pointer:
-            for raw_line in file_pointer:
-                self._parse_line(raw_line)
+        lines = _read_file_lines(self.name)
+        for raw_line in lines:
+            self._parse_line(raw_line)
 
     def _parse_line(self, raw_line: str):
         words, words_signs = self._extract_comments(raw_line)
@@ -311,5 +320,9 @@ def _load_structured_file(full_path: str) -> Tuple[str, List[List[str]]]:
 
 
 def _load_raw_text(full_path: str) -> Tuple[str, List[List[str]]]:
-    with open(full_path, 'r') as loaded_file:
-        return loaded_file.read(), []
+    path = Path(full_path)
+    try:
+        content = path.read_text(encoding='utf-8')
+    except UnicodeDecodeError:
+        content = path.read_text(encoding='windows-1252')
+    return content, []
