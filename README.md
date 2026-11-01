@@ -21,12 +21,12 @@ A high-performance C++20 and Python toolkit designed for modding EA *The Battle 
 
 ## Documentation
 The `lotm` project provides comprehensive documentation for contributors and users:
-* **[Python API Reference](docs/python-api.md)**: Programmatic extraction and packing APIs.
-* **[Command-Line Tools](docs/cli.md)**: Standalone terminal instructions for `lotm-big-pack` and `lotm-big-unpack`.
-* **[BIG4 Format Specs](docs/big4-format.md)**: Deep technical details regarding the BIG4 binary layout and SAGE engine alignment quirks.
-* **[Contributing Guide](docs/CONTRIBUTING.md)**: Development, compilation, and testing workflows for C++ and Python.
-* **[Coverage Log](docs/coverage-log.md)**: Current C++ Catch2 and Pytest coverage benchmarks.
-* **[Changelog](docs/CHANGELOG.md)**: Release history and feature notes.
+* **[Python API Reference](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/python-api.md)**: Programmatic extraction and packing APIs.
+* **[Command-Line Tools](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/cli.md)**: Standalone terminal instructions for `lotm-big-pack` and `lotm-big-unpack`.
+* **[BIG4 Format Specs](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/big4-format.md)**: Deep technical details regarding the BIG4 binary layout and SAGE engine alignment quirks.
+* **[Contributing Guide](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/CONTRIBUTING.md)**: Development, compilation, and testing workflows for C++ and Python.
+* **[Coverage Log](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/coverage-log.md)**: Current C++ Catch2 and Pytest coverage benchmarks.
+* **[Changelog](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/CHANGELOG.md)**: Release history and feature notes.
 
 ## Installation and use
 
