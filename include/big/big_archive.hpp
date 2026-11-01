@@ -1,5 +1,5 @@
 /**
- * @file include/big/big_unpack.hpp
+ * @file include/big/big_archive.hpp
  * @brief Declaration of BIG unpacking object
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
@@ -30,6 +30,17 @@ namespace lotm::big {
             std::function<void(std::string_view)> progress_callback = {}
         ) const;
 
+        // Reads a single archive entry into memory by its internal path
+        [[nodiscard]] std::vector<uint8_t> read_entry(std::string_view entry_name) const;
+
+        // Reads a single archive entry into memory using its metadata record
+        [[nodiscard]] std::vector<uint8_t> read_entry(const BigEntry& entry) const;
+
+        // Releases the in-memory index and marks the archive as closed
+        void close() noexcept;
+
+        [[nodiscard]] bool is_closed() const noexcept;
+
         [[nodiscard]] std::vector<BigEntry> get_entries() const;
 
     private:
@@ -37,6 +48,7 @@ namespace lotm::big {
         std::vector<BigEntry> entries_;
         uint32_t total_size_{ 0 };
         uint32_t header_size_{ 0 };
+        bool is_closed_{ false };
     };
 
 } // namespace lotm::big

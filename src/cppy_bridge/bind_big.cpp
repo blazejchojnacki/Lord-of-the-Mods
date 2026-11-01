@@ -18,7 +18,9 @@
 #include <big/big_archive.hpp>
 #include <big/big_packer.hpp>
 #include <big/exceptions.hpp>
+#include <cstdint>
 #include <functional>
+#include <vector>
 
 namespace nb = nanobind;
 
@@ -45,8 +47,48 @@ namespace lotm::python {
             .def(nb::init<std::filesystem::path>(), nb::arg("file_path"),
                 nb::call_guard<nb::gil_scoped_release>(),
                 "Open a BIG archive from disk and parses its header index")
+            .def_prop_ro("closed", &lotm::big::BigArchive::is_closed,
+                "True if the archive has been closed")
+            .def("close", &lotm::big::BigArchive::close,
+                "Closes the archive and releases its in-memory index")
+            .def("__enter__", [](nb::object self) {
+            if (nb::cast<const lotm::big::BigArchive&>(self).is_closed()) {
+                throw lotm::big::BigArchiveError("Cannot enter context with a closed archive.");
+            }
+            return self;
+                },
+                "Enters the runtime context related to this archive")
+            .def("__exit__", [](lotm::big::BigArchive& self, nb::handle, nb::handle, nb::handle) {
+            self.close();
+                },
+                nb::arg("exc_type") = nb::none(),
+                nb::arg("exc_val") = nb::none(),
+                nb::arg("exc_tb") = nb::none(),
+                "Exits the runtime context and closes the archive")
             .def("get_entries", &lotm::big::BigArchive::get_entries,
                 "Returns list of indexed file entries")
+            .def("read_entry", [](const lotm::big::BigArchive& self, std::string_view entry_name) {
+            std::vector<uint8_t> data;
+            {
+                // Release GIL for the duration of the C++ disk I/O
+                nb::gil_scoped_release release;
+                data = self.read_entry(entry_name);
+            }
+            return nb::bytes(reinterpret_cast<const char*>(data.data()), data.size());
+                },
+                nb::arg("entry"),
+                "Reads a single entry by path directly into memory as a buffer-protocol bytes object")
+            .def("read_entry", [](const lotm::big::BigArchive& self, const lotm::big::BigEntry& entry) {
+            std::vector<uint8_t> data;
+            {
+                // Release GIL for the duration of the C++ disk I/O
+                nb::gil_scoped_release release;
+                data = self.read_entry(entry);
+            }
+            return nb::bytes(reinterpret_cast<const char*>(data.data()), data.size());
+                },
+                nb::arg("entry"),
+                "Reads a single BigEntry record directly into memory as a buffer-protocol bytes object")
             .def("extract_all", [](const lotm::big::BigArchive& self, const std::filesystem::path& out_dir, std::function<void(std::string_view)> cb) {
             // Wrap the callback to securely reacquire the GIL when invoking Python code
             std::function<void(std::string_view)> safe_cb;

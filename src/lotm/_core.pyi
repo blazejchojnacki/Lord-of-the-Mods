@@ -1,11 +1,11 @@
-'''
+"""
 @file src/lotm/_core.pyi
 @brief Type stubs for the private C++ native extension core.
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
 Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
-'''
+"""
 
 from typing import Callable
 import os
@@ -17,6 +17,17 @@ class big:
 
     class BigArchive:
         def __init__(self, file_path: str | os.PathLike[str]) -> None: ...
+        @property
+        def closed(self) -> bool: ...
+        def close(self) -> None: ...
+        def __enter__(self) -> 'big.BigArchive': ...
+        def __exit__(
+            self,
+            exc_type: object = None,
+            exc_val: object = None,
+            exc_tb: object = None
+        ) -> None: ...
+        def read_entry(self, entry: str | 'big.BigEntry') -> bytes: ...
         def extract_all(
             self, 
             output_dir: str | os.PathLike[str], 

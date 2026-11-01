@@ -197,11 +197,96 @@ namespace lotm::big {
         }
     }
 
+    void BigArchive::close() noexcept {
+        is_closed_ = true;
+        entries_.clear();
+        entries_.shrink_to_fit();
+    }
+
+    bool BigArchive::is_closed() const noexcept {
+        return is_closed_;
+    }
+
     std::vector<BigEntry> BigArchive::get_entries() const {
+        if (is_closed_) {
+            throw BigArchiveError("Cannot access entries of a closed archive.");
+        }
         return entries_;
     }
 
+    std::vector<uint8_t> BigArchive::read_entry(std::string_view entry_name) const {
+        if (is_closed_) {
+            throw BigArchiveError("Cannot read from a closed archive.");
+        }
+
+        std::string normalized_name(entry_name);
+        for (char& c : normalized_name) {
+            if (c == '\\' || c == '/') {
+                c = static_cast<char>(std::filesystem::path::preferred_separator);
+            }
+        }
+
+        // Match normalized path case-insensitively to mirror SAGE engine lookup semantics
+        auto it = std::find_if(entries_.begin(), entries_.end(),
+            [&normalized_name](const BigEntry& entry) {
+                if (entry.name.size() != normalized_name.size()) {
+                    return false;
+                }
+                return std::equal(entry.name.begin(), entry.name.end(), normalized_name.begin(),
+                    [](unsigned char a, unsigned char b) {
+                        return std::tolower(a) == std::tolower(b);
+                    });
+            });
+
+        if (it == entries_.end()) {
+            throw BigArchiveError("Entry not found in archive: " + std::string(entry_name));
+        }
+
+        return read_entry(*it);
+    }
+
+    std::vector<uint8_t> BigArchive::read_entry(const BigEntry& entry) const {
+        if (is_closed_) {
+            throw BigArchiveError("Cannot read from a closed archive.");
+        }
+
+        std::error_code ec;
+        const auto physical_size = std::filesystem::file_size(file_path_, ec);
+        if (ec) {
+            throw BigArchiveError("Cannot open file for reading: " + to_utf8(file_path_));
+        }
+
+        // Validate payload bounds before allocating memory
+        if (static_cast<uintmax_t>(entry.offset) + entry.size > physical_size) {
+            throw BigFormatError("Extraction bounds exceeded for file: " + entry.name);
+        }
+
+        std::ifstream file(file_path_, std::ios::binary);
+        if (!file.is_open()) {
+            throw BigArchiveError("Cannot open file for reading: " + to_utf8(file_path_));
+        }
+
+        std::vector<uint8_t> buffer(entry.size);
+        if (entry.size > 0) {
+            file.seekg(entry.offset, std::ios::beg);
+            if (!file) {
+                throw BigArchiveError("Failed to seek to offset for file: " + entry.name);
+            }
+
+            file.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(entry.size));
+            if (!file || file.gcount() != static_cast<std::streamsize>(entry.size)) {
+                throw BigArchiveError("Failed to read payload for file: " + entry.name);
+            }
+        }
+
+        return buffer;
+    }
+
     void BigArchive::extract_all(const std::filesystem::path& output_dir, std::function<void(std::string_view)> progress_callback) const {
+        if (is_closed_) {
+            throw BigArchiveError("Cannot extract from a closed archive.");
+        }
+
         std::error_code ec;
         const auto physical_size = std::filesystem::file_size(file_path_, ec);
         if (ec) {
