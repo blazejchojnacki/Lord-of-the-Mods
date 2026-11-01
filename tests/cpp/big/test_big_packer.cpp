@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <stdio.h>
+#include <cstring>
 
 using namespace lotm::big;
 
@@ -346,5 +347,51 @@ TEST_CASE("BigPacker File I/O Error Handling", "[big_pack][io]") {
             );
             fclose(locked_file);
         }
+    }
+}
+
+TEST_CASE("BigPacker Golden Master Binary Invariants", "[big_pack][golden]") {
+    ScopedPackEnv env;
+
+    SECTION("Positive scenario: Serialized header matches authentic SAGE binary layout byte-for-byte") {
+        // Controlled single-file payload: 'a.txt' containing 'XYZ' (3 bytes)
+        // Header calculations:
+        //   Base header: 16 bytes
+        //   Entry: 4 (offset) + 4 (size) + 6 ('a.txt\0') = 14 bytes
+        //   Padding: 8 bytes ('L219\0\0\0\0')
+        //   Header size: 16 + 14 + 8 = 38 bytes (0x00000026)
+        //   Total size: 38 + 3 = 41 bytes (0x00000029)
+        env.create_dummy_file("a.txt", "XYZ");
+
+        REQUIRE_NOTHROW(BigPacker::pack_from_directory(env.src_dir, env.out_file));
+
+        std::ifstream in(env.out_file, std::ios::binary);
+        REQUIRE(in.is_open());
+
+        std::vector<uint8_t> actual_file((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+
+        // Ground-truth Golden Master byte array:
+        const std::vector<uint8_t> expected_golden = {
+            // 0x00 - Magic "BIG4"
+            'B', 'I', 'G', '4',
+            // 0x04 - Total size: 41 (0x29) Little-Endian
+            0x29, 0x00, 0x00, 0x00,
+            // 0x08 - File count: 1 Big-Endian
+            0x00, 0x00, 0x00, 0x01,
+            // 0x0C - Header size: 38 (0x26) Big-Endian
+            0x00, 0x00, 0x00, 0x26,
+            // 0x10 - Entry 1 offset: 38 (0x26) Big-Endian
+            0x00, 0x00, 0x00, 0x26,
+            // 0x14 - Entry 1 size: 3 Big-Endian
+            0x00, 0x00, 0x00, 0x03,
+            // 0x18 - Entry 1 name: "a.txt\0"
+            'a', '.', 't', 'x', 't', 0x00,
+            // 0x1E - EA padding: 'L', '2', '1', '9', 0x00, 0x00, 0x00, 0x00
+            0x4C, 0x32, 0x31, 0x39, 0x00, 0x00, 0x00, 0x00,
+            // 0x26 - Payload: "XYZ"
+            'X', 'Y', 'Z'
+        };
+
+        REQUIRE(actual_file == expected_golden);
     }
 }
