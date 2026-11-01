@@ -6,6 +6,19 @@ All notable changes to the Lord of the Mods (`lotm`) project will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-11-01
+
+### Added
+- **Core C++ Engine (`lotm_big`) & Python Bindings**:
+  - In-memory single-file extraction via `BigArchive::read_entry()` returning `std::vector<uint8_t>` / Python `bytes` (Buffer Protocol compatible).
+  - Python context manager support (`__enter__`, `__exit__`) for `BigArchive` to ensure deterministic lifecycle management and memory cleanup.
+  - `closed` property and `close()` method to explicitly release in-memory index structures.
+
+### Security & Hardening
+- **NTFS Path Validation**: Hardened extraction against extended Win32 and NT namespace prefixes (`\\?\`, `\\.\`, `\??\`).
+- **Drive-Relative Traversal**: Blocked directory traversal attempts using Windows drive-relative paths (e.g., `C:file.txt`).
+- **Component Sanitization**: Added strict rejection of NTFS reserved characters (`<`, `>`, `:`, `"`, `|`, `?`, `*`), ASCII control characters, and trailing spaces/dots on individual path components.
+
 ## [0.1.0] - 2026-10-31
 
 ### Added

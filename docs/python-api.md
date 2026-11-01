@@ -67,3 +67,48 @@ except BigSecurityError as err:
 except BigFormatError as err:
     print(f"Corrupted or invalid BIG4 archive: {err}")
 ```
+
+---
+
+## `lotm.big.BigArchive`
+
+For advanced use cases, the native `BigArchive` class provides object-oriented access to the archive, including in-memory single-file extraction and context management.
+
+### Context Manager & Lifecycle
+`BigArchive` implements the Python context manager protocol, ensuring that memory structures and the parsed index are deterministically released when the block exits.
+
+```python
+from lotm.big import BigArchive
+
+with BigArchive("my_mod.big") as arc:
+    entries = arc.get_entries()
+    print(f"Archive contains {len(entries)} files.")
+# arc is now closed, memory is freed, and further calls will raise BigArchiveError.
+```
+
+### `read_entry(entry: str | BigEntry) -> bytes`
+Reads a single archive entry directly into memory as a `bytes` object (fully supporting the Python Buffer Protocol) without unpacking the entire archive to disk. The GIL is safely released during physical I/O.
+
+* **`entry`**: A `str` (the internal path inside the archive, matched case-insensitively using standard SAGE rules) or a `BigEntry` object obtained from `get_entries()`.
+* **Returns**: A `bytes` object containing the binary file payload.
+* **Exceptions**:
+  * `lotm.big.BigArchiveError` (Native): Raised if the archive is closed, the file is unreadable, or the requested entry does not exist.
+  * `lotm.big.BigFormatError` (Native): Raised if the physical bounds of the archive are breached during the read.
+
+**Usage Example:**
+```python
+from lotm.big import BigArchive, BigArchiveError
+
+try:
+    with BigArchive("downloaded_mod.big") as arc:
+        # Read via case-insensitive path string
+        ini_data = arc.read_entry("data/weapon.ini")
+        
+        # Zero-copy memoryview parsing
+        with memoryview(ini_data) as mv:
+            header = mv[:10].tobytes()
+            print(f"Header: {header}")
+            
+except BigArchiveError as err:
+    print(f"Failed to read entry: {err}")
+```

@@ -14,6 +14,7 @@ A high-performance C++20 and Python toolkit designed for modding EA *The Battle 
 - **Fast BIG4 Unpacking:** Extract `.big` archives with strict security validation.
 - **Byte-Fidelity Repacking:** Creates SAGE-compliant `.big` archives with alphabetical binary-search index ordering and EA build tag alignment.
 - **Python 3.12+ Bindings:** C++ performance accessible directly in Python via `nanobind`.
+- **In-Memory Extraction:** Read specific entries directly into memory via the Python Buffer Protocol without disk I/O.
 
 ## Requirements
 - Windows 11 (x64)
