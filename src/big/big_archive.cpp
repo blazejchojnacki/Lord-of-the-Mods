@@ -52,16 +52,40 @@ namespace lotm::big {
             return result;
         }
 
+        // Checks for extended Win32 and NT namespace prefixes (\\?, \\., \?, \., \??)
+        bool has_win32_namespace_prefix(std::string_view path) {
+            constexpr char sep = static_cast<char>(std::filesystem::path::preferred_separator);
+            std::size_t pos = 0;
+            while (pos < path.size() && path[pos] == sep) {
+                ++pos;
+            }
+            return pos > 0 && pos < path.size() && (path[pos] == '?' || path[pos] == '.');
+        }
+
+        // Checks for Windows drive-relative paths (e.g., C:file.txt, D:..\escaped.txt)
+        bool is_drive_relative_path(std::string_view path) {
+            constexpr char sep = static_cast<char>(std::filesystem::path::preferred_separator);
+            return path.size() >= 2 &&
+                std::isalpha(static_cast<unsigned char>(path[0])) != 0 &&
+                path[1] == ':' &&
+                (path.size() == 2 || path[2] != sep);
+        }
+
         // Checks for Windows reserved device names and Alternate Data Streams (ADS)
         bool is_unsafe_filename(std::string_view name) {
-            if (name.find(':') != std::string_view::npos) {
+            if (name.empty() || name.back() == ' ' || name.back() == '.') {
                 return true;
             }
 
             std::string upper_name;
             upper_name.reserve(name.size());
             for (char c : name) {
-                upper_name.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+                const auto uc = static_cast<unsigned char>(c);
+                if (uc < 32 || c == ':' || c == '<' || c == '>' ||
+                    c == '"' || c == '|' || c == '?' || c == '*') {
+                    return true;
+                }
+                upper_name.push_back(static_cast<char>(std::toupper(uc)));
             }
 
             auto dot_pos = upper_name.find('.');
@@ -207,6 +231,14 @@ namespace lotm::big {
             // Check for malicious or corrupted bounds
             if (static_cast<uintmax_t>(entry.offset) + entry.size > physical_size) {
                 throw BigFormatError("Extraction bounds exceeded for file: " + entry.name);
+            }
+
+            if (has_win32_namespace_prefix(entry.name)) {
+                throw BigSecurityError("Extended Win32 namespace prefix detected in entry: " + entry.name);
+            }
+
+            if (is_drive_relative_path(entry.name)) {
+                throw BigSecurityError("Directory traversal via Windows drive-relative path detected in entry: " + entry.name);
             }
 
             std::filesystem::path entry_rel_path(entry.name);
