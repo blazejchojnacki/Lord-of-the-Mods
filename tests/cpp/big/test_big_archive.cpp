@@ -259,23 +259,6 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
     }
 
-    SECTION("Negative scenario: Zip-Slip relative path traversal is blocked during extraction") {
-        env.write_big_file("BIG4", { { "..\\escaped.txt", "malicious_payload" } });
-
-        BigArchive archive(env.test_file);
-
-        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
-        REQUIRE_FALSE(std::filesystem::exists(env.root_dir / "escaped.txt"));
-    }
-
-    SECTION("Negative scenario: Rooted path in entry is blocked during extraction") {
-        env.write_big_file("BIG4", { { "\\rooted_evil.txt", "malicious_payload" } });
-
-        BigArchive archive(env.test_file);
-
-        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
-    }
-
     SECTION("Negative scenario: Payload offset out of physical file bounds") {
         env.write_big_file("BIG4", { { "test.txt", "data" } });
 
@@ -312,6 +295,23 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         BigArchive archive(env.test_file);
         REQUIRE_NOTHROW(archive.extract_all(env.out_dir));
         REQUIRE(std::filesystem::exists(env.out_dir / "file.txt"));
+    }
+}
+
+TEST_CASE("BigArchive Windows Path Security and NTFS Evasions", "[big_unpack][security]") {
+    ScopedTempEnv env;
+
+    SECTION("Negative scenario: Zip-Slip relative path traversal is blocked") {
+        env.write_big_file("BIG4", { { "..\\escaped.txt", "malicious_payload" } });
+        BigArchive archive(env.test_file);
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
+        REQUIRE_FALSE(std::filesystem::exists(env.root_dir / "escaped.txt"));
+    }
+
+    SECTION("Negative scenario: Rooted paths in entry are blocked") {
+        env.write_big_file("BIG4", { { "\\rooted_evil.txt", "malicious_payload" } });
+        BigArchive archive(env.test_file);
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
     }
 
     SECTION("Negative scenario: Strict abort on symlink in extraction path") {
@@ -381,10 +381,44 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         out.write(test_payload.data(), static_cast<std::streamsize>(test_payload.size()));
         out.close();
 
-        // Total physical size is ~1MB. Claimed extracted size is 50MB.
-        // If MAX_AMPLIFICATION_RATIO is 20, this exceeds it (50 > 20).
         BigArchive archive(env.test_file);
         REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
+    }
+
+    SECTION("Negative scenario: Extended Win32 namespace prefixes are blocked") {
+        env.write_big_file("BIG4", { { "\\\\?\\C:\\Windows\\system32.dll", "payload" } });
+        BigArchive archive1(env.test_file);
+        REQUIRE_THROWS_AS(archive1.extract_all(env.out_dir), BigSecurityError);
+
+        env.write_big_file("BIG4", { { "\\??\\malicious.exe", "payload" } });
+        BigArchive archive2(env.test_file);
+        REQUIRE_THROWS_AS(archive2.extract_all(env.out_dir), BigSecurityError);
+    }
+
+    SECTION("Negative scenario: Windows drive-relative directory traversals are blocked") {
+        env.write_big_file("BIG4", { { "C:../escaped.txt", "payload" } });
+        BigArchive archive1(env.test_file);
+        REQUIRE_THROWS_AS(archive1.extract_all(env.out_dir), BigSecurityError);
+
+        env.write_big_file("BIG4", { { "D:file.txt", "payload" } });
+        BigArchive archive2(env.test_file);
+        REQUIRE_THROWS_AS(archive2.extract_all(env.out_dir), BigSecurityError);
+    }
+
+    SECTION("Negative scenario: NTFS reserved characters are blocked") {
+        env.write_big_file("BIG4", { { "data\\file<name>.txt", "payload" } });
+        BigArchive archive(env.test_file);
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
+    }
+
+    SECTION("Negative scenario: Trailing spaces and dots on path components are blocked") {
+        env.write_big_file("BIG4", { { "hidden_folder .\\file.txt", "payload" } });
+        BigArchive archive1(env.test_file);
+        REQUIRE_THROWS_AS(archive1.extract_all(env.out_dir), BigSecurityError);
+
+        env.write_big_file("BIG4", { { "data\\...\\file.txt", "payload" } });
+        BigArchive archive2(env.test_file);
+        REQUIRE_THROWS_AS(archive2.extract_all(env.out_dir), BigSecurityError);
     }
 }
 
@@ -430,12 +464,6 @@ TEST_CASE("BigArchive File I/O Error Handling", "[big_unpack][io]") {
 
 TEST_CASE("BigArchive Coverage Padding Edge Cases", "[big_unpack][coverage]") {
     ScopedTempEnv env;
-
-    SECTION("Path contains reserved colon") {
-        env.write_big_file("BIG4", { { "C:\\Windows\\system32.dll", "data" } });
-        BigArchive archive(env.test_file);
-        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
-    }
 
     SECTION("Truncated index (EOF during offset/size read)") {
         std::ofstream out(env.test_file, std::ios::binary);

@@ -103,6 +103,39 @@ def test_cpp_api_raises_big_security_error_on_zip_slip(tmp_path: Path):
         archive.extract_all(out_dir)
 
 
+@pytest.mark.parametrize("malicious_path", [
+    b"\\\\?\\C:\\Windows\\System32\\cmd.exe\x00",
+    b"\\??\\malicious.exe\x00",
+    b"C:../escaped.txt\x00",
+    b"folder .\\payload.txt\x00",
+    b"data\\file<invalid>.txt\x00"
+])
+def test_cpp_api_raises_big_security_error_on_ntfs_evasion(tmp_path: Path, malicious_path: bytes):
+    """Verify that the C++ bindings propagate BigSecurityError for extended NTFS path evasions."""
+    bad_archive = tmp_path / "ntfs_evasion.big"
+    
+    header_size = 16 + 8 + len(malicious_path)
+    payload_size = 4
+    offset = header_size
+    total_size = header_size + payload_size
+    
+    with open(bad_archive, "wb") as f:
+        f.write(b"BIG4")
+        f.write(struct.pack("<I", total_size))
+        f.write(struct.pack(">I", 1))
+        f.write(struct.pack(">I", header_size))
+        f.write(struct.pack(">I", offset))
+        f.write(struct.pack(">I", payload_size))
+        f.write(malicious_path)
+        f.write(b"DATA")
+        
+    archive = big.BigArchive(bad_archive)
+    out_dir = tmp_path / "out"
+    
+    with pytest.raises(big.BigSecurityError, match="prefix|drive-relative|Unsafe"):
+        archive.extract_all(out_dir)
+
+
 def test_concurrent_pack_and_unpack_releases_gil(standard_mod_directory: Path, tmp_path: Path):
     """Verify multi-threaded packing and extraction execute concurrently without GIL deadlocks."""
     def worker(worker_id: int) -> int:
