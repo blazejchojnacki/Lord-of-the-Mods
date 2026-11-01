@@ -17,12 +17,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
-permissions:
-  contents: write
-
 jobs:
-  build-and-release:
-    name: Build Distributions and Create Release
+  build-distributions:
+    name: Build Wheels and Source Distribution
     runs-on: windows-latest
 
     steps:
@@ -50,6 +47,37 @@ jobs:
 
       - name: Validate Package Metadata
         run: twine check dist/*
+
+      - name: Upload Distribution Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+          retention-days: 1
+
+  publish-release:
+    name: Publish to PyPI and Create GitHub Release
+    needs: build-distributions
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/lord-of-the-mods
+    permissions:
+      id-token: write  # Mandatory for PyPI Trusted Publishing OIDC
+      contents: write  # Mandatory for GitHub Release creation
+
+    steps:
+      - name: Download Distribution Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish Package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          attestations: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
