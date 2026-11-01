@@ -47,9 +47,15 @@ pip install nanobind scikit-build-core nanobind-stubgen build
 When modifying C++ or Python source files, execute the following from the **x64 Native Tools Command Prompt**. We enforce **Ninja** to ensure clean, single-configuration directories.
 
 1. Configure CMake
+Build in `Debug` mode for active development and coverage profiling so MSVC generates PDB debug symbols.
 ```cmd
-cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
 ```
+or use `Release` when benchmarking or building distribution wheels.
+```cmd
+cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
+```
+
 2. Compile the binary
 ```cmd
 cmake --build build
@@ -78,7 +84,7 @@ ctest --test-dir build --output-on-failure
 *(Note: To run specific tests or see detailed assertions, execute the binary directly: `.\build\tests\lotm_cpp_tests.exe`)*
 
 **C++ Coverage Generation:**
-To generate the line-by-line HTML coverage report (requires `winget install OpenCppCoverage.OpenCppCoverage`):
+To generate the line-by-line HTML coverage report (requires `winget install OpenCppCoverage.OpenCppCoverage`). Ensure the project was compiled with `-DCMAKE_BUILD_TYPE=Debug` so that MSVC outputs PDB symbols for OpenCppCoverage:
 ```cmd
 OpenCppCoverage.exe --sources "%CD%\src" --sources "%CD%\include" --excluded_sources "%CD%\tests" --export_type html:coverage_cpp -- "%CD%\build\tests\lotm_cpp_tests.exe"
 ```
