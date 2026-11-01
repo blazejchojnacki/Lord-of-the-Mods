@@ -15,6 +15,7 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include <stdio.h>
 
 using namespace lotm::big;
 
@@ -381,6 +382,8 @@ TEST_CASE("BigArchive Windows Path Security and NTFS Evasions", "[big_unpack][se
         out.write(test_payload.data(), static_cast<std::streamsize>(test_payload.size()));
         out.close();
 
+        // Total physical size is ~1MB. Claimed extracted size is 50MB.
+        // If MAX_AMPLIFICATION_RATIO is 20, this exceeds it (50 > 20).
         BigArchive archive(env.test_file);
         REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
     }
@@ -465,6 +468,12 @@ TEST_CASE("BigArchive File I/O Error Handling", "[big_unpack][io]") {
 TEST_CASE("BigArchive Coverage Padding Edge Cases", "[big_unpack][coverage]") {
     ScopedTempEnv env;
 
+    SECTION("Path contains reserved colon") {
+        env.write_big_file("BIG4", { { "C:\\Windows\\system32.dll", "data" } });
+        BigArchive archive(env.test_file);
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
+    }
+
     SECTION("Truncated index (EOF during offset/size read)") {
         std::ofstream out(env.test_file, std::ios::binary);
         out.write("BIG4", 4);
@@ -548,5 +557,89 @@ TEST_CASE("BigArchive Fast-Fail Logic Paths", "[big_unpack][malformed]") {
         out.close();
 
         REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
+}
+
+TEST_CASE("BigArchive In-Memory Single-File Extraction and Lifecycle", "[big_unpack][memory][lifecycle]") {
+    ScopedTempEnv env;
+
+    SECTION("Positive scenario: Read single entry by name and by BigEntry record") {
+        env.write_big_file("BIG4", {
+            { "root.txt", "RootPayload" },
+            { "data\\nested/weapon.ini", "Damage=50" }
+            });
+
+        BigArchive archive(env.test_file);
+
+        // Read using normalized forward-slash and case-insensitive path
+        auto buf_by_name = archive.read_entry("DATA/nested\\WEAPON.INI");
+        std::string str_by_name(reinterpret_cast<const char*>(buf_by_name.data()), buf_by_name.size());
+        REQUIRE(str_by_name == "Damage=50");
+
+        // Read directly using BigEntry struct
+        const auto entries = archive.get_entries();
+        REQUIRE(entries.size() == 2);
+        auto buf_by_entry = archive.read_entry(entries[0]);
+        std::string str_by_entry(reinterpret_cast<const char*>(buf_by_entry.data()), buf_by_entry.size());
+        REQUIRE(str_by_entry == "RootPayload");
+    }
+
+    SECTION("Positive scenario: Read zero-byte entry returns empty buffer safely") {
+        env.write_big_file("BIG4", { { "empty.txt", "" } });
+
+        BigArchive archive(env.test_file);
+        auto buf = archive.read_entry("empty.txt");
+        REQUIRE(buf.empty());
+    }
+
+    SECTION("Negative scenario: Reading non-existent entry throws BigArchiveError") {
+        env.write_big_file("BIG4", { { "fileA.txt", "data" } });
+
+        BigArchive archive(env.test_file);
+        // Different length mismatch and identical length mismatch
+        REQUIRE_THROWS_AS(archive.read_entry("missing.txt"), BigArchiveError);
+        REQUIRE_THROWS_AS(archive.read_entry("fileB.txt"), BigArchiveError);
+    }
+
+    SECTION("Negative scenario: Entry bounds exceeding physical file size throws BigFormatError") {
+        env.write_big_file("BIG4", { { "test.txt", "data" } });
+
+        BigArchive archive(env.test_file);
+        BigEntry out_of_bounds_entry{ 999999u, 10u, "test.txt" };
+        REQUIRE_THROWS_AS(archive.read_entry(out_of_bounds_entry), BigFormatError);
+    }
+
+    SECTION("Negative scenario: Missing or locked archive file during read_entry throws BigArchiveError") {
+        env.write_big_file("BIG4", { { "test.txt", "data" } });
+        BigArchive archive(env.test_file);
+        const auto entry = archive.get_entries().front();
+
+        // Exclusive lock (_SH_DENYRW = 0x10) allows file_size() metadata check but blocks ifstream::open()
+        FILE* locked_file = _fsopen(env.test_file.string().c_str(), "rb", 0x10);
+        if (locked_file) {
+            REQUIRE_THROWS_AS(archive.read_entry(entry), BigArchiveError);
+            fclose(locked_file);
+        }
+
+        // Removing the file triggers the file_size(ec) error branch
+        std::filesystem::remove(env.test_file);
+        REQUIRE_THROWS_AS(archive.read_entry(entry), BigArchiveError);
+    }
+
+    SECTION("Positive and negative scenarios: Archive close() lifecycle state and post-close guards") {
+        env.write_big_file("BIG4", { { "test.txt", "data" } });
+
+        BigArchive archive(env.test_file);
+        const auto entry = archive.get_entries().front();
+        REQUIRE_FALSE(archive.is_closed());
+
+        archive.close();
+        REQUIRE(archive.is_closed());
+
+        // All operations on a closed archive must throw BigArchiveError
+        REQUIRE_THROWS_AS(archive.get_entries(), BigArchiveError);
+        REQUIRE_THROWS_AS(archive.read_entry("test.txt"), BigArchiveError);
+        REQUIRE_THROWS_AS(archive.read_entry(entry), BigArchiveError);
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigArchiveError);
     }
 }

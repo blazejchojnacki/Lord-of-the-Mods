@@ -202,3 +202,67 @@ def test_unpack_exception_in_callback_aborts_safely(standard_mod_directory: Path
     with pytest.raises(ValueError, match="Simulated extraction abort"):
         archive_obj = big.BigArchive(archive)
         archive_obj.extract_all(out_dir, progress_callback=raising_cb)
+
+
+def test_in_memory_read_entry_and_buffer_protocol(standard_mod_directory: Path, tmp_path: Path):
+    """Verify single-file in-memory extraction via path string, BigEntry, and memoryview."""
+    archive_path = tmp_path / "in_memory.big"
+    big.pack(standard_mod_directory, archive_path)
+
+    with big.BigArchive(archive_path) as arc:
+        assert not arc.closed
+
+        # Read by normalized case-insensitive path string
+        raw_ini = arc.read_entry("DATA/weapon.ini")
+        assert isinstance(raw_ini, bytes)
+        assert raw_ini == b"Damage=50"
+
+        # Verify Python Buffer Protocol compatibility via memoryview
+        with memoryview(raw_ini) as mv:
+            assert mv[:6].tobytes() == b"Damage"
+
+        # Read by BigEntry metadata record
+        entries = arc.get_entries()
+        dds_entry = next(e for e in entries if "texture.dds" in e.name)
+        raw_dds = arc.read_entry(dds_entry)
+        assert raw_dds == b"DDS_HEADER_DATA"
+
+    assert arc.closed
+
+
+def test_read_entry_missing_file_raises_big_archive_error(standard_mod_directory: Path, tmp_path: Path):
+    """Verify that requesting a non-existent entry raises BigArchiveError."""
+    archive_path = tmp_path / "missing_entry.big"
+    big.pack(standard_mod_directory, archive_path)
+
+    with big.BigArchive(archive_path) as arc:
+        with pytest.raises(big.BigArchiveError, match="Entry not found"):
+            arc.read_entry("data/missing_unit.ini")
+
+
+def test_closed_archive_rejects_operations_and_context_reentry(standard_mod_directory: Path, tmp_path: Path):
+    """Verify that closing an archive blocks further operations and context manager re-entry."""
+    archive_path = tmp_path / "lifecycle.big"
+    big.pack(standard_mod_directory, archive_path)
+
+    arc = big.BigArchive(archive_path)
+    first_entry = arc.get_entries()[0]
+    arc.close()
+
+    assert arc.closed
+
+    with pytest.raises(big.BigArchiveError, match="closed archive"):
+        arc.get_entries()
+
+    with pytest.raises(big.BigArchiveError, match="closed archive"):
+        arc.read_entry("readme.txt")
+
+    with pytest.raises(big.BigArchiveError, match="closed archive"):
+        arc.read_entry(first_entry)
+
+    with pytest.raises(big.BigArchiveError, match="closed archive"):
+        arc.extract_all(tmp_path / "out")
+
+    with pytest.raises(big.BigArchiveError, match="closed archive"):
+        with arc:
+            pass
