@@ -54,6 +54,19 @@ def _read_file_lines(file_path: str) -> List[str]:
         return path.read_text(encoding='windows-1252').splitlines()
 
 
+def _find_matching_delimiter(line_tokens: List[str], delimiter_list: List[str]) -> str | None:
+    """
+    Matches the start of a tokenized line against a delimiter list, normalizing whitespace
+    and respecting '=' tokens. Longer and more specific delimiters are evaluated first.
+    """
+    for delim in sorted(delimiter_list, key=lambda d: len(d.replace('=', ' = ').split()), reverse=True):
+        delim_tokens = delim.replace('=', ' = ').split()
+        k = len(delim_tokens)
+        if k > 0 and len(line_tokens) >= k and line_tokens[:k] == delim_tokens:
+            return delim
+    return None
+
+
 def recognize_structure(file_path: str) -> Tuple[List, int]:
     load_delimiters()
     if file_path.endswith('.str'):
@@ -63,16 +76,28 @@ def recognize_structure(file_path: str) -> Tuple[List, int]:
     elif file_path.endswith('.ini') or file_path.endswith('.inc'):
         lines = _read_file_lines(file_path)
         for file_line in lines:
-            words = file_line.split()
-            if len(words) > 0:
-                for items_levels in INI_DELIMITERS:
-                    for item_level in items_levels:
-                        if file_path.endswith('.ini') and items_levels.index(item_level) > 0:
-                            break
-                        elif words[0] in item_level:
-                            delims = copy.deepcopy(items_levels)
-                            delims.append([])
-                            return delims, items_levels.index(item_level)
+            comment_index = -1
+            if ';' in file_line and '//' in file_line:
+                comment_index = min(file_line.index(';'), file_line.index('//'))
+            elif ';' in file_line:
+                comment_index = file_line.index(';')
+            elif '//' in file_line:
+                comment_index = file_line.index('//')
+
+            code_line = file_line[:comment_index] if comment_index >= 0 else file_line
+            line_tokens = code_line.replace('=', ' = ').split()
+            if not line_tokens:
+                continue
+
+            for items_levels in INI_DELIMITERS:
+                for item_level in items_levels:
+                    if file_path.endswith('.ini') and items_levels.index(item_level) > 0:
+                        break
+                    matched = _find_matching_delimiter(line_tokens, item_level)
+                    if matched is not None:
+                        delims = copy.deepcopy(items_levels)
+                        delims.append([])
+                        return delims, items_levels.index(item_level)
     return [], 0
 
 
@@ -192,13 +217,13 @@ class ConstructFile(ConstructShared):
             self._parse_line(raw_line, line_num)
 
     def _parse_line(self, raw_line: str, line_num: int = 0):
-        words, words_signs = self._extract_comments(raw_line)
+        words, words_signs, line_tokens = self._extract_comments(raw_line)
 
         if not words:
             self._handle_empty_line(raw_line)
             return
 
-        if self._handle_block_start(words):
+        if self._handle_block_start(words, line_tokens):
             return
 
         if self._handle_block_end(words, line_num, raw_line):
@@ -209,7 +234,7 @@ class ConstructFile(ConstructShared):
 
         self._handle_statement(words_signs)
 
-    def _extract_comments(self, raw_line: str) -> Tuple[list, list]:
+    def _extract_comments(self, raw_line: str) -> Tuple[list, list, list]:
         comment_index = -1
         if ';' in raw_line and '//' in raw_line:
             comment_index = min(raw_line.index(';'), raw_line.index('//'))
@@ -219,33 +244,42 @@ class ConstructFile(ConstructShared):
             comment_index = raw_line.index('//')
 
         if comment_index >= 0:
-            words_signs = raw_line[:comment_index].split()
-            words = raw_line[:comment_index].replace('=', ' ').replace(':', ' ').split()
+            code_part = raw_line[:comment_index]
             comment_text = ' '.join(raw_line[comment_index:].split())
             self.last_comment += ('\n' if self.last_comment else '') + comment_text
         else:
-            words_signs = raw_line.split()
-            words = raw_line.replace('=', ' ').replace(':', ' ').split()
+            code_part = raw_line
 
-        return words, words_signs
+        words_signs = code_part.split()
+        words = code_part.replace('=', ' ').replace(':', ' ').split()
+        line_tokens = code_part.replace('=', ' = ').split()
+
+        return words, words_signs, line_tokens
 
     def _handle_empty_line(self, raw_line: str):
         if self.last_comment and raw_line.strip() == '':
             self.last().append({'comment': self.last_comment})
             self.last_comment = ''
 
-    def _handle_block_start(self, words: list) -> bool:
-        if self.current_level < len(self.delimiters) and words[0] in self.delimiters[self.current_level]:
-            new_item = self.last().add(ConstructLevel(_class=words[0]))
+    def _handle_block_start(self, words: list, line_tokens: list) -> bool:
+        if self.current_level < len(self.delimiters):
+            matched_delim = _find_matching_delimiter(line_tokens, self.delimiters[self.current_level])
+            if matched_delim is not None:
+                new_item = self.last().add(ConstructLevel(_class=matched_delim))
 
-            if len(words) == 3 and self.name.endswith('.ini'):
-                new_item.assign(index=0, name=words[1], identifier=words[2], comment=self.last_comment)
-            else:
-                new_item.assign(index=0, name=' '.join(words[1:]), comment=self.last_comment)
+                delim_words = matched_delim.replace('=', ' ').replace(':', ' ').split()
+                remaining_words = words[len(delim_words):]
 
-            self.last_comment = ''
-            self.current_level += 1
-            return True
+                if len(remaining_words) == 2 and self.name.endswith('.ini'):
+                    new_item.assign(index=0, name=remaining_words[0], identifier=remaining_words[1], comment=self.last_comment)
+                elif remaining_words:
+                    new_item.assign(index=0, name=' '.join(remaining_words), comment=self.last_comment)
+                elif self.last_comment:
+                    new_item.assign(index=0, comment=self.last_comment)
+
+                self.last_comment = ''
+                self.current_level += 1
+                return True
         return False
 
     def _handle_block_end(self, words: list, line_num: int = 0, raw_line: str = "") -> bool:
