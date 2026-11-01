@@ -168,9 +168,11 @@ class ConstructFile(ConstructShared):
     defines: List[str] = field(default_factory=list)
     delimiters: List[List[str]] = field(default_factory=list)
     start_level: int = 0
+    strict: bool = False
 
     current_level: int = field(default=0, init=False)
     last_comment: str = field(default='', init=False)
+    errors: List[str] = field(default_factory=list, init=False)
 
     def __post_init__(self):
         if self.name:
@@ -180,15 +182,16 @@ class ConstructFile(ConstructShared):
         self.delimiters, self.start_level = recognize_structure(self.name)
         self.current_level = self.start_level
         self.last_comment = ''
+        self.errors = []
 
         if not (os.path.isfile(self.name) and self.name.endswith(('.ini', '.inc', '.str'))):
             raise IniParseError(f'file {self.name} invalid.')
 
         lines = _read_file_lines(self.name)
-        for raw_line in lines:
-            self._parse_line(raw_line)
+        for line_num, raw_line in enumerate(lines, start=1):
+            self._parse_line(raw_line, line_num)
 
-    def _parse_line(self, raw_line: str):
+    def _parse_line(self, raw_line: str, line_num: int = 0):
         words, words_signs = self._extract_comments(raw_line)
 
         if not words:
@@ -198,7 +201,7 @@ class ConstructFile(ConstructShared):
         if self._handle_block_start(words):
             return
 
-        if self._handle_block_end(words):
+        if self._handle_block_end(words, line_num, raw_line):
             return
 
         if self._handle_directives(words, words_signs):
@@ -245,9 +248,19 @@ class ConstructFile(ConstructShared):
             return True
         return False
 
-    def _handle_block_end(self, words: list) -> bool:
+    def _handle_block_end(self, words: list, line_num: int = 0, raw_line: str = "") -> bool:
         if words[0] in INI_ENDS:
             self.current_level -= 1
+            if self.current_level < 0:
+                err_msg = (
+                    f"Delimiter mismatch: negative level reached at {self.name}:{line_num} "
+                    f"on closing keyword '{words[0]}': {raw_line.strip()}"
+                )
+                self.errors.append(err_msg)
+                if self.strict:
+                    raise IniParseError(err_msg)
+                self.current_level = 0
+
             last = self.last()
 
             if self.last_comment:
@@ -255,7 +268,8 @@ class ConstructFile(ConstructShared):
                 self.last_comment = ''
 
             last.append({'end': ' '.join(words)})
-            last.is_open = False
+            if hasattr(last, 'is_open'):
+                last.is_open = False
             return True
         return False
 
@@ -307,7 +321,7 @@ def load_file(full_path: str) -> Tuple[str, List[List[str]]]:
 
 def _load_structured_file(full_path: str) -> Tuple[str, List[List[str]]]:
     try:
-        file_object = ConstructFile(name=full_path)
+        file_object = ConstructFile(name=full_path, strict=False)
         file_content = file_object.print()
 
         if not file_content:
@@ -326,3 +340,12 @@ def _load_raw_text(full_path: str) -> Tuple[str, List[List[str]]]:
     except UnicodeDecodeError:
         content = path.read_text(encoding='windows-1252')
     return content, []
+
+
+def scan_file_for_errors(file_path: str) -> List[str]:
+    """Parses a file in non-crashing mode and returns any delimiter or level mismatch errors."""
+    try:
+        file_object = ConstructFile(name=file_path, strict=False)
+        return file_object.errors
+    except Exception as exc:
+        return [f"Fatal error while processing {file_path}: {exc}"]
