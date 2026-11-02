@@ -232,6 +232,19 @@ class ConstructFile(ConstructShared):
         if self._handle_directives(words, words_signs):
             return
 
+        # If we are at the base level and didn't match a block start, end, or directive,
+        # it might be a new block from a different schema group. Scan for it.
+        if self.current_level == self.start_level and not self.name.endswith('.str'):
+            for items_levels in INI_DELIMITERS:
+                if len(items_levels) > 0:
+                    matched = _find_matching_delimiter(line_tokens, items_levels[0])
+                    if matched is not None:
+                        self.delimiters = copy.deepcopy(items_levels)
+                        self.delimiters.append([])
+                        # We found a new schema group, process it immediately as a block start
+                        if self._handle_block_start(words, line_tokens):
+                            return
+
         self._handle_statement(words_signs)
 
     def _extract_comments(self, raw_line: str) -> Tuple[list, list, list]:
