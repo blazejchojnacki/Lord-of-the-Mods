@@ -266,3 +266,50 @@ def test_closed_archive_rejects_operations_and_context_reentry(standard_mod_dire
     with pytest.raises(big.BigArchiveError, match="closed archive"):
         with arc:
             pass
+
+
+def test_pack_to_memory_from_directory_and_records(standard_mod_directory: Path, tmp_path: Path):
+    """Verify in-memory archive packing from a directory, a mapping, and a sequence of pairs."""
+    disk_archive = tmp_path / "disk_reference.big"
+    big.pack(standard_mod_directory, disk_archive)
+    expected_bytes = disk_archive.read_bytes()
+
+    # Pack from directory path
+    mem_from_dir = big.pack_to_memory(standard_mod_directory)
+    assert isinstance(mem_from_dir, bytes)
+    assert mem_from_dir == expected_bytes
+
+    # Pack from Mapping[str, bytes]
+    mapping_input = {
+        "data/weapon.ini": b"Damage=50",
+        "art/texture.dds": b"DDS_HEADER_DATA",
+        "readme.txt": b"Lord of the Mods",
+    }
+    mem_from_dict = big.pack_to_memory(mapping_input)
+    assert mem_from_dict == expected_bytes
+
+    # Pack from sequence of (path, bytes) tuples
+    sequence_input = list(mapping_input.items())
+    mem_from_seq = big.pack_to_memory(sequence_input)
+    assert mem_from_seq == expected_bytes
+
+
+def test_pack_to_memory_validation_and_callbacks(tmp_path: Path):
+    """Verify error propagation and progress callbacks for in-memory packing."""
+    missing_dir = tmp_path / "missing_source"
+    with pytest.raises(NotADirectoryError, match="does not exist"):
+        big.pack_to_memory(missing_dir)
+
+    with pytest.raises(ValueError, match="Duplicate case-insensitive path"):
+        big.pack_to_memory([("data/unit.ini", b"1"), ("DATA\\UNIT.INI", b"2")])
+
+    with pytest.raises(ValueError, match="Entry path cannot be empty"):
+        big.pack_to_memory([("", b"payload")])
+
+    reported: list[str] = []
+    raw_bytes = big.BigPacker.pack_to_memory(
+        [("b.txt", b"B"), ("a.txt", b"A")],
+        progress_callback=reported.append
+    )
+    assert len(raw_bytes) > 0
+    assert reported == ["a.txt", "b.txt"]

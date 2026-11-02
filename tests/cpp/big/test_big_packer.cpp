@@ -395,3 +395,116 @@ TEST_CASE("BigPacker Golden Master Binary Invariants", "[big_pack][golden]") {
         REQUIRE(actual_file == expected_golden);
     }
 }
+
+TEST_CASE("BigPacker In-Memory Serialization", "[big_pack][memory]") {
+    ScopedPackEnv env;
+
+    // Ground-truth Golden Master byte array for 'a.txt' -> 'XYZ':
+    const std::vector<uint8_t> expected_golden = {
+        'B', 'I', 'G', '4',
+        0x29, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x01,
+        0x00, 0x00, 0x00, 0x26,
+        0x00, 0x00, 0x00, 0x26,
+        0x00, 0x00, 0x00, 0x03,
+        'a', '.', 't', 'x', 't', 0x00,
+        0x4C, 0x32, 0x31, 0x39, 0x00, 0x00, 0x00, 0x00,
+        'X', 'Y', 'Z'
+    };
+
+    SECTION("Positive scenario: pack_to_memory from directory matches Golden Master and invokes callback") {
+        env.create_dummy_file("a.txt", "XYZ");
+
+        std::vector<std::string> reported;
+        auto cb = [&](std::string_view name) {
+            reported.emplace_back(name);
+            };
+
+        auto buf = BigPacker::pack_to_memory(env.src_dir, cb);
+        REQUIRE(buf == expected_golden);
+        REQUIRE(reported.size() == 1);
+        REQUIRE(reported[0] == "a.txt");
+    }
+
+    SECTION("Positive scenario: pack_to_memory from directory handles nested paths and zero-byte files") {
+        env.create_dummy_file("sub/empty.txt", "");
+        auto buf = BigPacker::pack_to_memory(env.src_dir);
+        REQUIRE(buf.size() == 16 + 8 + 14 + 8);
+    }
+
+    SECTION("Positive scenario: pack_to_memory from memory buffers sorts entries and matches Golden Master") {
+        std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
+            { "a.txt",{ 'X', 'Y', 'Z' } }
+        };
+
+        std::vector<std::string> reported;
+        auto cb = [&](std::string_view name) {
+            reported.emplace_back(name);
+            };
+
+        auto buf = BigPacker::pack_to_memory(files, cb);
+        REQUIRE(buf == expected_golden);
+        REQUIRE(reported.size() == 1);
+        REQUIRE(reported[0] == "a.txt");
+    }
+
+    SECTION("Positive scenario: pack_to_memory from memory buffers normalizes slashes and handles empty payloads") {
+        std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
+            { "z/empty.txt",{} },
+            { "a/first.txt",{ '1' } }
+        };
+
+        std::vector<std::string> reported;
+        auto buf = BigPacker::pack_to_memory(files, [&](std::string_view name) {
+            reported.emplace_back(name);
+            });
+
+        REQUIRE(!buf.empty());
+        REQUIRE(reported.size() == 2);
+        REQUIRE(reported[0] == "a\\first.txt");
+        REQUIRE(reported[1] == "z\\empty.txt");
+    }
+
+    SECTION("Negative scenario: pack_to_memory rejects empty path or duplicate case-insensitive paths") {
+        std::vector<std::pair<std::string, std::vector<uint8_t>>> empty_path_files = {
+            { "",{ 'A' } }
+        };
+        REQUIRE_THROWS_AS(BigPacker::pack_to_memory(empty_path_files), std::invalid_argument);
+
+        std::vector<std::pair<std::string, std::vector<uint8_t>>> dup_files = {
+            { "data/unit.ini",{ 'A' } },
+            { "DATA\\UNIT.INI",{ 'B' } }
+        };
+        REQUIRE_THROWS_AS(BigPacker::pack_to_memory(dup_files), std::invalid_argument);
+    }
+
+    SECTION("Negative scenario: pack_to_memory from directory validates missing directory, 4GB limits, and locked files") {
+        REQUIRE_THROWS_AS(BigPacker::pack_to_memory(env.root_dir / "non_existent"), std::invalid_argument);
+
+        // Locked file check
+        env.create_dummy_file("locked.txt", "data");
+        std::string locked_path = (env.src_dir / "locked.txt").string();
+        FILE* locked_file = _fsopen(locked_path.c_str(), "rb", 0x10);
+        if (locked_file) {
+            REQUIRE_THROWS_AS(BigPacker::pack_to_memory(env.src_dir), BigArchiveError);
+            fclose(locked_file);
+        }
+        std::filesystem::remove(env.src_dir / "locked.txt");
+
+        // Single-file 4GB overflow check
+        std::filesystem::path huge_file = env.src_dir / "huge.dat";
+        std::ofstream(huge_file).put('X');
+        std::filesystem::resize_file(huge_file, 4402341478ULL);
+        REQUIRE_THROWS_AS(BigPacker::pack_to_memory(env.src_dir), std::length_error);
+        std::filesystem::remove(huge_file);
+
+        // Cumulative 4GB overflow check inside allocate_and_write_header
+        std::filesystem::path huge1 = env.src_dir / "huge1.dat";
+        std::filesystem::path huge2 = env.src_dir / "huge2.dat";
+        std::ofstream(huge1).put('X');
+        std::ofstream(huge2).put('X');
+        std::filesystem::resize_file(huge1, 2200000000ULL);
+        std::filesystem::resize_file(huge2, 2200000000ULL);
+        REQUIRE_THROWS_AS(BigPacker::pack_to_memory(env.src_dir), std::length_error);
+    }
+}

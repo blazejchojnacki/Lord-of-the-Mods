@@ -34,8 +34,10 @@ def test_big_subpackage_exports():
 
     # Pure Python API helpers
     assert hasattr(big, "pack")
+    assert hasattr(big, "pack_to_memory")
     assert hasattr(big, "unpack")
     assert callable(big.pack)
+    assert callable(big.pack_to_memory)
     assert callable(big.unpack)
 
 
