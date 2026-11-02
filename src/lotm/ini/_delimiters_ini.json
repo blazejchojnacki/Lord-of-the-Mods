@@ -82,7 +82,12 @@
             "Weather",
             "WeatherData",
             "WebpageURL",
-            "LivingWorldRegionCampaign"
+            "AIBase",
+            "AIDozerAssignment",
+            "LoadSubsystem",
+            "SpawnArmy",
+            "ConcurrentRegionBonus",
+            "Credits"
         ]
     ],
     [
@@ -146,6 +151,7 @@
             "AutoResolveArmor",
             "AutoResolveWeapon",
             "ReplaceModule",
+            "InheritableModule",
             "FormationPreviewDecal",
             "FormationPreviewItemDecal",
             "UnitDefinition",
@@ -199,7 +205,8 @@
             "Body",
             "ClientBehavior",
             "ObjectStatusOfContained =",
-            "Rows"
+            "Rows",
+            "AddEmotion = OVERRIDE"
         ],
         [
             "Animation",
@@ -213,7 +220,16 @@
             "CreateAHeroSystem"
         ],
         [
-            "CreateAHeroBlingBinder"
+            "CreateAHeroBlingBinder",
+            "CreateAHeroBling",
+            "CreateAHeroClass"
+        ],
+        [
+            "SubClass"
+        ],
+        [
+            "Attribute",
+            "ViewInfo"
         ]
     ],
     [
@@ -229,7 +245,6 @@
     ],
     [
         [
-
             "AIData"
         ],
         [
@@ -375,14 +390,6 @@
     ],
     [
         [
-            "RegionCampain"
-        ],
-        [
-            "Region"
-        ]
-    ],
-    [
-        [
             "ObjectCreationList"
         ],
         [
@@ -462,6 +469,72 @@
         ],
         [
             "Transition"
+        ]
+    ],
+    [
+        [
+            "SkirmishAIData"
+        ],
+        [
+            "CombatChainDefinition",
+            "BrutalDifficultyCheats",
+            "DifficultyTuning"
+        ]
+    ],
+    [
+        [
+            "ArmyDefinition"
+        ],
+        [
+            "AIEconomyAssigment",
+            "AIWallNodeAssignment",
+            "ArmyMemberDefinition"
+        ]
+    ],
+    [
+        [
+            "LivingWorldRegionCampaign",
+            "RegionCampain"
+        ],
+        [
+            "Region",
+            "LivingWorldPlayerArmy"
+        ],
+        [
+            "Connection",
+            "RestrictBuildings",
+            "ArmyEntry"
+        ]
+    ],
+    [
+        [
+            "LivingWorldCampaign"
+        ],
+        [
+            "Scenario",
+            "Act",
+            "AddPlayer",
+            "Tutorial"
+        ],
+        [
+            "PlayerDefeatCondition",
+            "TeamDefeatCondition",
+            "TeamVictoryCondition",
+            "EyeTowerPoints",
+            "OwnershipSet",
+            "Turn",
+            "SpawnArmy"
+        ],
+        [
+            "SpawnBuildings",
+            "SpawnArmies",
+            "Phase"
+        ],
+        [
+            "Session"
+        ],
+        [
+            "TaskAfterAudio"
         ]
     ]
 ]
