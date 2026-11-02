@@ -146,27 +146,6 @@ class ConstructShared:
     def append(self, item: AstNode):
         self.items.append(item)
 
-    def add(self, level: 'ConstructLevel') -> 'ConstructLevel':
-        self.items.append(level)
-        self.items[-1].is_open = True
-        return self.items[-1]
-
-    def last(self) -> 'ConstructShared':
-        for item_index in range(1, len(self.items) + 1):
-            last_child = self.items[-item_index]
-            if isinstance(last_child, ConstructLevel):
-                if getattr(last_child, 'is_open', False):
-                    return last_child.last()
-        return self
-
-    def get_open_classes(self) -> List[str]:
-        """Traverses the active hierarchy and returns the names of all currently open blocks."""
-        for item_index in range(1, len(self.items) + 1):
-            last_child = self.items[-item_index]
-            if isinstance(last_child, ConstructLevel) and getattr(last_child, 'is_open', False):
-                return [last_child._class] + last_child.get_open_classes()
-        return []
-
 
 @dataclass
 class ConstructLevel(ConstructShared):
@@ -175,7 +154,6 @@ class ConstructLevel(ConstructShared):
     identifier: str = ""
     comment: str = ""
     end_token: str = ""
-    is_open: bool = False
 
     def print(self, level: int = 0, file_type: str = '.ini') -> str:
         output = ''
@@ -216,6 +194,7 @@ class ConstructFile(ConstructShared):
     current_level: int = field(default=0, init=False)
     last_comment: str = field(default='', init=False)
     errors: List[str] = field(default_factory=list, init=False)
+    context_stack: List[ConstructShared] = field(default_factory=list, init=False)
 
     def __post_init__(self):
         if self.name:
@@ -226,6 +205,7 @@ class ConstructFile(ConstructShared):
         self.current_level = self.start_level
         self.last_comment = ''
         self.errors = []
+        self.context_stack = [self]
 
         if not (os.path.isfile(self.name) and self.name.endswith(('.ini', '.inc', '.str'))):
             raise IniParseError(f'file {self.name} invalid.')
@@ -236,8 +216,10 @@ class ConstructFile(ConstructShared):
 
     def _get_lookup_level(self) -> int:
         """Calculates schema depth, shifting by 1 when inside a transparent ReplaceModule wrapper."""
-        open_classes = self.get_open_classes()
-        shift = open_classes.count('ReplaceModule')
+        shift = sum(
+            1 for node in self.context_stack
+            if isinstance(node, ConstructLevel) and node._class == 'ReplaceModule'
+        )
         return max(0, self.current_level - shift)
 
     def _parse_line(self, raw_line: str, line_num: int = 0):
@@ -297,7 +279,7 @@ class ConstructFile(ConstructShared):
 
     def _handle_empty_line(self, raw_line: str):
         if self.last_comment and raw_line.strip() == '':
-            self.last().append(CommentNode(text=self.last_comment))
+            self.context_stack[-1].append(CommentNode(text=self.last_comment))
             self.last_comment = ''
 
     def _handle_block_start(self, words: list, line_tokens: list) -> bool:
@@ -316,14 +298,14 @@ class ConstructFile(ConstructShared):
                 elif remaining_words:
                     block_name = ' '.join(remaining_words)
 
-                self.last().add(
-                    ConstructLevel(
-                        _class=matched_delim,
-                        name=block_name,
-                        identifier=block_identifier,
-                        comment=self.last_comment,
-                    )
+                new_block = ConstructLevel(
+                    _class=matched_delim,
+                    name=block_name,
+                    identifier=block_identifier,
+                    comment=self.last_comment,
                 )
+                self.context_stack[-1].append(new_block)
+                self.context_stack.append(new_block)
 
                 self.last_comment = ''
                 self.current_level += 1
@@ -343,18 +325,18 @@ class ConstructFile(ConstructShared):
                     raise IniParseError(err_msg)
                 self.current_level = 0
 
-            last = self.last()
+            active_container = self.context_stack[-1]
 
             if self.last_comment:
-                last.append(CommentNode(text=self.last_comment))
+                active_container.append(CommentNode(text=self.last_comment))
                 self.last_comment = ''
 
             end_str = ' '.join(words)
-            if isinstance(last, ConstructLevel):
-                last.end_token = end_str
-                last.is_open = False
+            if len(self.context_stack) > 1 and isinstance(active_container, ConstructLevel):
+                active_container.end_token = end_str
+                self.context_stack.pop()
             else:
-                last.append(StatementNode(text=end_str))
+                active_container.append(StatementNode(text=end_str))
             return True
         return False
 
@@ -363,12 +345,12 @@ class ConstructFile(ConstructShared):
             self.defines.append(' '.join(words_signs))
             return True
         if words[0] == '#include':
-            self.last().append(IncludeNode(text=' '.join(words_signs)))
+            self.context_stack[-1].append(IncludeNode(text=' '.join(words_signs)))
             return True
         return False
 
     def _handle_statement(self, words_signs: list):
-        self.last().append(StatementNode(text=' '.join(words_signs)))
+        self.context_stack[-1].append(StatementNode(text=' '.join(words_signs)))
 
     def print(self) -> str:
         output = ''
