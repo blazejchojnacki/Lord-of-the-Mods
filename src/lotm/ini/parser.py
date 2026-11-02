@@ -70,8 +70,7 @@ def _find_matching_delimiter(line_tokens: List[str], delimiter_list: List[str]) 
 def recognize_structure(file_path: str) -> Tuple[List, int]:
     load_delimiters()
     if file_path.endswith('.str'):
-        delimiters = copy.deepcopy(STR_DELIMITERS)
-        delimiters.append([])
+        delimiters = [copy.deepcopy(STR_DELIMITERS), []]
         return delimiters, 0
     elif file_path.endswith('.ini') or file_path.endswith('.inc'):
         lines = _read_file_lines(file_path)
@@ -265,7 +264,9 @@ class ConstructFile(ConstructShared):
 
         words_signs = code_part.split()
         words = code_part.replace('=', ' ').replace(':', ' ').split()
-        line_tokens = code_part.replace('=', ' = ').split()
+
+        # Tokenize both '=' and ':' with whitespace so delimiters like 'CONTROLBAR:' match cleanly
+        line_tokens = code_part.replace('=', ' = ').replace(':', ' : ').split()
 
         return words, words_signs, line_tokens
 
