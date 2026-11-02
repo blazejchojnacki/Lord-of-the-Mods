@@ -150,6 +150,7 @@
             "Behavior",
             "AutoResolveArmor",
             "AutoResolveWeapon",
+            "AddModule",
             "ReplaceModule",
             "InheritableModule",
             "FormationPreviewDecal",
@@ -514,7 +515,8 @@
             "Scenario",
             "Act",
             "AddPlayer",
-            "Tutorial"
+            "Tutorial",
+            "LivingWorldVictoryType"
         ],
         [
             "PlayerDefeatCondition",
@@ -523,7 +525,8 @@
             "EyeTowerPoints",
             "OwnershipSet",
             "Turn",
-            "SpawnArmy"
+            "SpawnArmy",
+            "StartingRestriction"
         ],
         [
             "SpawnBuildings",
