@@ -12,6 +12,7 @@
 #include <nanobind/stl/string_view.h>
 #include <nanobind/stl/filesystem.h>
 #include <nanobind/stl/vector.h>
+#include <nanobind/stl/pair.h>
 #include <nanobind/stl/function.h>
 
 #include "register.hpp"
@@ -20,6 +21,8 @@
 #include <big/exceptions.hpp>
 #include <cstdint>
 #include <functional>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace nb = nanobind;
@@ -122,7 +125,54 @@ namespace lotm::python {
             lotm::big::BigPacker::pack_from_directory(source_dir, output_file, safe_cb);
                 },
                 nb::arg("source_dir"), nb::arg("output_file"), nb::arg("progress_callback") = nb::none(),
-                "Packs a directory tree into a compliant BIG4 archive");
+                "Packs a directory tree into a compliant BIG4 archive")
+            .def_static("pack_to_memory", [](const std::filesystem::path& source_dir, std::function<void(std::string_view)> cb) {
+            // Wrap the callback to securely reacquire the GIL when invoking Python code
+            std::function<void(std::string_view)> safe_cb;
+            if (cb) {
+                safe_cb = [&cb](std::string_view sv) {
+                    nb::gil_scoped_acquire acquire;
+                    cb(sv);
+                    };
+            }
+
+            std::vector<uint8_t> data;
+            {
+                // Release GIL for the duration of the C++ disk I/O and serialization
+                nb::gil_scoped_release release;
+                data = lotm::big::BigPacker::pack_to_memory(source_dir, safe_cb);
+            }
+            return nb::bytes(reinterpret_cast<const char*>(data.data()), data.size());
+                },
+                nb::arg("source"), nb::arg("progress_callback") = nb::none(),
+                "Packs a directory tree directly into an in-memory BIG4 archive bytes object")
+            .def_static("pack_to_memory", [](const std::vector<std::pair<std::string, nb::bytes>>& files, std::function<void(std::string_view)> cb) {
+            // Wrap the callback to securely reacquire the GIL when invoking Python code
+            std::function<void(std::string_view)> safe_cb;
+            if (cb) {
+                safe_cb = [&cb](std::string_view sv) {
+                    nb::gil_scoped_acquire acquire;
+                    cb(sv);
+                    };
+            }
+
+            std::vector<std::pair<std::string, std::vector<uint8_t>>> cpp_files;
+            cpp_files.reserve(files.size());
+            for (const auto& [path, raw_bytes] : files) {
+                const auto* ptr = reinterpret_cast<const uint8_t*>(raw_bytes.c_str());
+                cpp_files.emplace_back(path, std::vector<uint8_t>(ptr, ptr + raw_bytes.size()));
+            }
+
+            std::vector<uint8_t> data;
+            {
+                // Release GIL for the duration of the C++ sorting and memory serialization
+                nb::gil_scoped_release release;
+                data = lotm::big::BigPacker::pack_to_memory(cpp_files, safe_cb);
+            }
+            return nb::bytes(reinterpret_cast<const char*>(data.data()), data.size());
+                },
+                nb::arg("source"), nb::arg("progress_callback") = nb::none(),
+                "Packs a sequence of (path, bytes) pairs directly into an in-memory BIG4 archive bytes object");
     }
 
     // Static instance registers this function before NB_MODULE executes

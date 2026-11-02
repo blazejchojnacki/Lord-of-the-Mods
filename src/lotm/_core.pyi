@@ -7,7 +7,7 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
-from typing import Callable
+from collections.abc import Callable, Sequence
 import os
 
 class big:
@@ -53,3 +53,8 @@ class big:
             output_file: str | os.PathLike[str], 
             progress_callback: Callable[[str], None] | None = None
         ) -> None: ...
+        @staticmethod
+        def pack_to_memory(
+            source: str | os.PathLike[str] | Sequence[tuple[str, bytes]],
+            progress_callback: Callable[[str], None] | None = None
+        ) -> bytes: ...

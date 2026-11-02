@@ -16,7 +16,7 @@ BigArchiveError = big.BigArchiveError
 BigFormatError = big.BigFormatError
 BigSecurityError = big.BigSecurityError
 
-from .packer import pack
+from .packer import pack, pack_to_memory
 from .unpacker import unpack
 
 __all__ = [
@@ -27,5 +27,6 @@ __all__ = [
     "BigFormatError",
     "BigSecurityError",
     "pack",
+    "pack_to_memory",
     "unpack",
 ]
