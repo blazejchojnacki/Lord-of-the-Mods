@@ -136,6 +136,14 @@ class ConstructShared:
                     return last_child.last()
         return self
 
+    def get_open_classes(self) -> List[str]:
+        """Traverses the active hierarchy and returns the names of all currently open blocks."""
+        for item_index in range(1, len(self.items) + 1):
+            last_child = self.items[-item_index]
+            if isinstance(last_child, ConstructLevel) and getattr(last_child, 'is_open', False):
+                return [last_child._class] + last_child.get_open_classes()
+        return []
+
 
 @dataclass
 class ConstructLevel(ConstructShared):
@@ -215,6 +223,12 @@ class ConstructFile(ConstructShared):
         for line_num, raw_line in enumerate(lines, start=1):
             self._parse_line(raw_line, line_num)
 
+    def _get_lookup_level(self) -> int:
+        """Calculates schema depth, shifting by 1 when inside a transparent ReplaceModule wrapper."""
+        open_classes = self.get_open_classes()
+        shift = open_classes.count('ReplaceModule')
+        return max(0, self.current_level - shift)
+
     def _parse_line(self, raw_line: str, line_num: int = 0):
         words, words_signs, line_tokens = self._extract_comments(raw_line)
 
@@ -276,8 +290,9 @@ class ConstructFile(ConstructShared):
             self.last_comment = ''
 
     def _handle_block_start(self, words: list, line_tokens: list) -> bool:
-        if self.current_level < len(self.delimiters):
-            matched_delim = _find_matching_delimiter(line_tokens, self.delimiters[self.current_level])
+        lookup_level = self._get_lookup_level()
+        if lookup_level < len(self.delimiters):
+            matched_delim = _find_matching_delimiter(line_tokens, self.delimiters[lookup_level])
             if matched_delim is not None:
                 new_item = self.last().add(ConstructLevel(_class=matched_delim))
 
