@@ -12,7 +12,7 @@ import json
 import copy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Any, Tuple
+from typing import List, Tuple, Union
 
 class IniParseError(ValueError):
     """Domain-specific exception for parsing errors."""
@@ -24,6 +24,36 @@ THIS_DIR = Path(__file__).parent.resolve()
 
 INI_DELIMITERS = []
 STR_DELIMITERS = []
+
+
+@dataclass
+class CommentNode:
+    """Represents a standalone or block-internal comment."""
+    text: str
+
+
+@dataclass
+class StatementNode:
+    """Represents a standard property assignment or value line."""
+    text: str
+
+
+@dataclass
+class IncludeNode:
+    """Represents a #include preprocessor directive."""
+    text: str
+
+
+AstNode = Union[CommentNode, StatementNode, IncludeNode, 'ConstructLevel']
+
+
+def _format_indented_text(text: str, level: int) -> str:
+    """Formats single-line or multi-line node text with consistent level indentation."""
+    indent = LEVEL_INDENT * level
+    if text.count('\n') > 0:
+        lines = [f"{indent}{line.lstrip()}" for line in text.split('\n')]
+        return '\n'.join(lines) + '\n'
+    return f"{indent}{text}\n"
 
 
 def load_delimiters():
@@ -102,7 +132,7 @@ def recognize_structure(file_path: str) -> Tuple[List, int]:
 
 @dataclass
 class ConstructShared:
-    items: List[Any] = field(default_factory=list, init=False)
+    items: List[AstNode] = field(default_factory=list, init=False)
 
     def __iter__(self):
         return iter(self.items)
@@ -113,22 +143,15 @@ class ConstructShared:
     def __getitem__(self, index):
         return self.items[index]
 
-    def append(self, item):
+    def append(self, item: AstNode):
         self.items.append(item)
 
-    def add(self, level):
+    def add(self, level: 'ConstructLevel') -> 'ConstructLevel':
         self.items.append(level)
         self.items[-1].is_open = True
         return self.items[-1]
 
-    def assign(self, index=None, **key_args):
-        filtered_dict = {key: key_args[key] for key in key_args if key_args[key]}
-        if index is None:
-            self.items.append(filtered_dict)
-        else:
-            self.items[index].update(filtered_dict)
-
-    def last(self):
+    def last(self) -> 'ConstructShared':
         for item_index in range(1, len(self.items) + 1):
             last_child = self.items[-item_index]
             if isinstance(last_child, ConstructLevel):
@@ -148,45 +171,33 @@ class ConstructShared:
 @dataclass
 class ConstructLevel(ConstructShared):
     _class: str = ""
+    name: str = ""
+    identifier: str = ""
+    comment: str = ""
+    end_token: str = ""
     is_open: bool = False
-
-    def __post_init__(self):
-        if self._class:
-            self.items.append({'class': self._class})
 
     def print(self, level: int = 0, file_type: str = '.ini') -> str:
         output = ''
-        for item in self.items:
-            if type(item) is dict:
-                values_order = []
-                for key in item:
-                    if 'comment' == key and 'class' in item:
-                        output += f"{LEVEL_INDENT * level}{item['comment']}\n"
-                    else:
-                        values_order.append(item[key])
-                if 'end' in item:
-                    level -= 1
-                line = f'{LEVEL_INDENT * level}'
-                for value in values_order:
-                    if line.strip():
-                        line += f"{' ' if file_type in ['.ini', '.inc'] else ':'}{value}"
-                    else:
-                        line += value
-                if line.count('\n') > 1:
-                    new_line = ''
-                    for _ in line.split('\n'):
-                        new_line += f'{"\n" if new_line else ""}{LEVEL_INDENT * level}{_.lstrip()}'
-                    line = new_line
+        if self.comment:
+            output += f"{LEVEL_INDENT * level}{self.comment}\n"
 
-                if line and line[-1] != '\n':
-                    line += '\n'
-                output += line
-                if 'class' in item:
-                    level += 1
-            elif isinstance(item, ConstructLevel):
-                output += item.print(level=level, file_type=file_type)
-            else:
-                output += str(item)
+        sep = ' ' if file_type in ['.ini', '.inc'] else ':'
+        header_parts = [part for part in (self._class, self.name, self.identifier) if part]
+        if header_parts:
+            header_line = f"{LEVEL_INDENT * level}{sep.join(header_parts)}"
+            output += _format_indented_text(header_line.lstrip(), level)
+
+        inner_level = level + 1
+        for item in self.items:
+            if isinstance(item, ConstructLevel):
+                output += item.print(level=inner_level, file_type=file_type)
+            elif isinstance(item, (CommentNode, StatementNode, IncludeNode)):
+                output += _format_indented_text(item.text, inner_level)
+
+        if self.end_token:
+            output += f"{LEVEL_INDENT * level}{self.end_token}\n"
+
         return output
 
     def construct(self):
@@ -286,7 +297,7 @@ class ConstructFile(ConstructShared):
 
     def _handle_empty_line(self, raw_line: str):
         if self.last_comment and raw_line.strip() == '':
-            self.last().append({'comment': self.last_comment})
+            self.last().append(CommentNode(text=self.last_comment))
             self.last_comment = ''
 
     def _handle_block_start(self, words: list, line_tokens: list) -> bool:
@@ -294,17 +305,25 @@ class ConstructFile(ConstructShared):
         if lookup_level < len(self.delimiters):
             matched_delim = _find_matching_delimiter(line_tokens, self.delimiters[lookup_level])
             if matched_delim is not None:
-                new_item = self.last().add(ConstructLevel(_class=matched_delim))
-
                 delim_words = matched_delim.replace('=', ' ').replace(':', ' ').split()
                 remaining_words = words[len(delim_words):]
 
+                block_name = ""
+                block_identifier = ""
                 if len(remaining_words) == 2 and self.name.endswith('.ini'):
-                    new_item.assign(index=0, name=remaining_words[0], identifier=remaining_words[1], comment=self.last_comment)
+                    block_name = remaining_words[0]
+                    block_identifier = remaining_words[1]
                 elif remaining_words:
-                    new_item.assign(index=0, name=' '.join(remaining_words), comment=self.last_comment)
-                elif self.last_comment:
-                    new_item.assign(index=0, comment=self.last_comment)
+                    block_name = ' '.join(remaining_words)
+
+                self.last().add(
+                    ConstructLevel(
+                        _class=matched_delim,
+                        name=block_name,
+                        identifier=block_identifier,
+                        comment=self.last_comment,
+                    )
+                )
 
                 self.last_comment = ''
                 self.current_level += 1
@@ -327,12 +346,15 @@ class ConstructFile(ConstructShared):
             last = self.last()
 
             if self.last_comment:
-                last.append({'comment': self.last_comment})
+                last.append(CommentNode(text=self.last_comment))
                 self.last_comment = ''
 
-            last.append({'end': ' '.join(words)})
-            if hasattr(last, 'is_open'):
+            end_str = ' '.join(words)
+            if isinstance(last, ConstructLevel):
+                last.end_token = end_str
                 last.is_open = False
+            else:
+                last.append(StatementNode(text=end_str))
             return True
         return False
 
@@ -341,12 +363,12 @@ class ConstructFile(ConstructShared):
             self.defines.append(' '.join(words_signs))
             return True
         if words[0] == '#include':
-            self.last().assign(include=' '.join(words_signs))
+            self.last().append(IncludeNode(text=' '.join(words_signs)))
             return True
         return False
 
     def _handle_statement(self, words_signs: list):
-        self.last().assign(statement=' '.join(words_signs))
+        self.last().append(StatementNode(text=' '.join(words_signs)))
 
     def print(self) -> str:
         output = ''
@@ -357,13 +379,8 @@ class ConstructFile(ConstructShared):
         for item in self.items:
             if isinstance(item, ConstructLevel):
                 output += item.print(self.start_level, self.name[-4:])
-            elif isinstance(item, dict):
-                line = LEVEL_INDENT * self.start_level
-                for key in item:
-                    if line.strip():
-                        line += item[key]
-                    else:
-                        line += f' {item[key]}'
+            elif isinstance(item, (CommentNode, StatementNode, IncludeNode)):
+                output += _format_indented_text(item.text, self.start_level)
             output += '\n'
         return output
 
