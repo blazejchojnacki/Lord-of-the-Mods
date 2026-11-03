@@ -24,6 +24,8 @@ def test_big_subpackage_exports():
     assert hasattr(big, "BigArchive")
     assert hasattr(big, "BigPacker")
     assert hasattr(big, "BigEntry")
+    assert hasattr(big, "BigDiff")
+    assert hasattr(big, "BigDiffResult")
 
     # Native exception hierarchy
     assert hasattr(big, "BigArchiveError")
@@ -33,9 +35,11 @@ def test_big_subpackage_exports():
     assert issubclass(big.BigSecurityError, big.BigArchiveError)
 
     # Pure Python API helpers
+    assert hasattr(big, "diff")
     assert hasattr(big, "pack")
     assert hasattr(big, "pack_to_memory")
     assert hasattr(big, "unpack")
+    assert callable(big.diff)
     assert callable(big.pack)
     assert callable(big.pack_to_memory)
     assert callable(big.unpack)
@@ -47,5 +51,7 @@ def test_cli_modules_import():
 
     assert hasattr(cli, "main_pack")
     assert hasattr(cli, "main_unpack")
+    assert hasattr(cli, "main_diff")
     assert callable(cli.main_pack)
     assert callable(cli.main_unpack)
+    assert callable(cli.main_diff)

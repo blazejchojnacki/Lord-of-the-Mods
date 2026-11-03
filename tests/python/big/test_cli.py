@@ -78,3 +78,32 @@ def test_cli_unpack_with_filter_pattern(standard_mod_directory: Path, tmp_path: 
     assert (extract_dir / "art" / "texture.dds").exists()
     assert not (extract_dir / "data" / "weapon.ini").exists()
     assert not (extract_dir / "readme.txt").exists()
+
+
+def test_cli_diff_successful_and_verbose_execution(tmp_path: Path, monkeypatch):
+    """Verify lotm-big-diff CLI command executes cleanly with verbose output."""
+    base_arc = tmp_path / "base.big"
+    target_arc = tmp_path / "target.big"
+
+    base_arc.write_bytes(big.pack_to_memory({"a.txt": b"1", "b.txt": b"2"}))
+    target_arc.write_bytes(big.pack_to_memory({"b.txt": b"3", "c.txt": b"4"}))
+
+    monkeypatch.setattr(
+        sys, "argv", ["lotm-big-diff", str(base_arc), str(target_arc), "-v"]
+    )
+    cli.main_diff()
+
+
+def test_cli_diff_missing_archive_exits_with_error(tmp_path: Path, monkeypatch, capsys):
+    """Verify comparing a missing archive exits non-zero and writes diagnostic output."""
+    missing_file = tmp_path / "void.big"
+    monkeypatch.setattr(
+        sys, "argv", ["lotm-big-diff", str(missing_file), str(missing_file)]
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main_diff()
+
+    assert exc.value.code != 0
+    _, stderr = capsys.readouterr()
+    assert len(stderr.strip()) > 0

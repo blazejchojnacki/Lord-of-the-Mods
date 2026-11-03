@@ -274,12 +274,12 @@ def test_pack_to_memory_from_directory_and_records(standard_mod_directory: Path,
     big.pack(standard_mod_directory, disk_archive)
     expected_bytes = disk_archive.read_bytes()
 
-    # Pack from directory path
+    # 1. Pack from directory path
     mem_from_dir = big.pack_to_memory(standard_mod_directory)
     assert isinstance(mem_from_dir, bytes)
     assert mem_from_dir == expected_bytes
 
-    # Pack from Mapping[str, bytes]
+    # 2. Pack from Mapping[str, bytes]
     mapping_input = {
         "data/weapon.ini": b"Damage=50",
         "art/texture.dds": b"DDS_HEADER_DATA",
@@ -288,7 +288,7 @@ def test_pack_to_memory_from_directory_and_records(standard_mod_directory: Path,
     mem_from_dict = big.pack_to_memory(mapping_input)
     assert mem_from_dict == expected_bytes
 
-    # Pack from sequence of (path, bytes) tuples
+    # 3. Pack from sequence of (path, bytes) tuples
     sequence_input = list(mapping_input.items())
     mem_from_seq = big.pack_to_memory(sequence_input)
     assert mem_from_seq == expected_bytes
@@ -328,3 +328,39 @@ def test_selective_unpack_with_glob_filter(standard_mod_directory: Path, tmp_pat
     assert (extract_dir / "data" / "weapon.ini").exists()
     assert not (extract_dir / "readme.txt").exists()
     assert not (extract_dir / "art" / "texture.dds").exists()
+
+
+def test_diff_archives_and_error_handling(tmp_path: Path):
+    """Verify diff() categorizes archive changes accurately and validates input paths."""
+    base_path = tmp_path / "base.big"
+    target_path = tmp_path / "target.big"
+
+    base_path.write_bytes(big.pack_to_memory({
+        "data/weapon.ini": b"Damage=50",
+        "data/armor.ini": b"Armor=100",
+        "readme.txt": b"v1.0",
+    }))
+    target_path.write_bytes(big.pack_to_memory({
+        "data/weapon.ini": b"Damage=75",
+        "data/armor.ini": b"Armor=100",
+        "data/new_unit.ini": b"Cost=200",
+    }))
+
+    result = big.diff(base_path, target_path)
+    assert result.has_differences
+    assert "added=1" in repr(result)
+    assert [e.name for e in result.added] == ["data\\new_unit.ini"]
+    assert [e.name for e in result.removed] == ["readme.txt"]
+    assert [e.name for e in result.modified] == ["data\\weapon.ini"]
+    assert [e.name for e in result.unchanged] == ["data\\armor.ini"]
+
+    # Compare open BigArchive instances directly
+    with big.BigArchive(base_path) as b_arc, big.BigArchive(target_path) as t_arc:
+        filtered_res = big.BigDiff.compare(b_arc, t_arc, filter_pattern="*armor.ini")
+        assert not filtered_res.has_differences
+
+    with pytest.raises(FileNotFoundError, match="Base archive not found"):
+        big.diff(tmp_path / "missing_base.big", target_path)
+
+    with pytest.raises(FileNotFoundError, match="Target archive not found"):
+        big.diff(base_path, tmp_path / "missing_target.big")
