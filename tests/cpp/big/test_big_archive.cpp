@@ -643,3 +643,50 @@ TEST_CASE("BigArchive In-Memory Single-File Extraction and Lifecycle", "[big_unp
         REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigArchiveError);
     }
 }
+
+TEST_CASE("BigArchive Selective Glob Extraction", "[big_unpack][filter]") {
+    ScopedTempEnv env;
+
+    env.write_big_file("BIG4", {
+        { "readme.txt", "ReadmeData" },
+        { "data\\ini\\weapon.ini", "WeaponData" },
+        { "data\\ini\\armor.ini", "ArmorData" },
+        { "art\\textures\\hero01.dds", "DDS1" },
+        { "art\\textures\\hero02.dds", "DDS2" }
+        });
+
+    BigArchive archive(env.test_file);
+
+    SECTION("Positive scenario: get_entries filters with '*', '?', trailing '*', and slash/case normalization") {
+        // Universal wildcard
+        REQUIRE(archive.get_entries("*").size() == 5);
+
+        // Multi-segment star backtracking and forward-slash normalization
+        auto ini_entries = archive.get_entries("DATA/ini/*.INI");
+        REQUIRE(ini_entries.size() == 2);
+
+        // Single-character '?' wildcard matching
+        auto dds_entries = archive.get_entries("art\\textures\\hero0?.dds");
+        REQUIRE(dds_entries.size() == 2);
+
+        // Trailing star after full match
+        auto readme_entries = archive.get_entries("readme.txt**");
+        REQUIRE(readme_entries.size() == 1);
+
+        // Non-matching pattern returns empty vector
+        REQUIRE(archive.get_entries("music/*.mp3").empty());
+    }
+
+    SECTION("Positive scenario: extract_all with filter_pattern extracts only matching entries") {
+        std::vector<std::string> extracted;
+        archive.extract_all(env.out_dir, [&](std::string_view name) {
+            extracted.emplace_back(name);
+            }, "data/ini/*.ini");
+
+        REQUIRE(extracted.size() == 2);
+        REQUIRE(std::filesystem::exists(env.out_dir / "data" / "ini" / "weapon.ini"));
+        REQUIRE(std::filesystem::exists(env.out_dir / "data" / "ini" / "armor.ini"));
+        REQUIRE_FALSE(std::filesystem::exists(env.out_dir / "readme.txt"));
+        REQUIRE_FALSE(std::filesystem::exists(env.out_dir / "art" / "textures" / "hero01.dds"));
+    }
+}

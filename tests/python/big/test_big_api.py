@@ -313,3 +313,18 @@ def test_pack_to_memory_validation_and_callbacks(tmp_path: Path):
     )
     assert len(raw_bytes) > 0
     assert reported == ["a.txt", "b.txt"]
+
+
+def test_selective_unpack_with_glob_filter(standard_mod_directory: Path, tmp_path: Path):
+    """Verify that unpack() with filter_pattern extracts and returns only matching entries."""
+    archive_path = tmp_path / "selective.big"
+    extract_dir = tmp_path / "selective_out"
+    big.pack(standard_mod_directory, archive_path)
+
+    entries = big.unpack(archive_path, extract_dir, filter_pattern="*.ini")
+
+    assert len(entries) == 1
+    assert entries[0].name == "data\\weapon.ini"
+    assert (extract_dir / "data" / "weapon.ini").exists()
+    assert not (extract_dir / "readme.txt").exists()
+    assert not (extract_dir / "art" / "texture.dds").exists()

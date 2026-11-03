@@ -62,3 +62,19 @@ def test_cli_unpack_missing_archive_exits_with_error(tmp_path: Path, monkeypatch
     assert exc.value.code != 0
     _, stderr = capsys.readouterr()
     assert len(stderr.strip()) > 0
+
+
+def test_cli_unpack_with_filter_pattern(standard_mod_directory: Path, tmp_path: Path, monkeypatch):
+    """Verify unpacking CLI command with -f/--filter extracts only matching files."""
+    archive = tmp_path / "filtered.big"
+    extract_dir = tmp_path / "extracted_filtered"
+
+    big.pack(standard_mod_directory, archive)
+    monkeypatch.setattr(
+        sys, "argv", ["lotm-big-unpack", str(archive), "-o", str(extract_dir), "-f", "art/*.dds"]
+    )
+
+    cli.main_unpack()
+    assert (extract_dir / "art" / "texture.dds").exists()
+    assert not (extract_dir / "data" / "weapon.ini").exists()
+    assert not (extract_dir / "readme.txt").exists()
