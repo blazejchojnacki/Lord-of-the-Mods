@@ -35,6 +35,51 @@ namespace lotm::big {
             return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
         }
 
+        // Case-insensitive glob matcher supporting '*' and '?' with normalized path separators
+        bool matches_glob(std::string_view text, std::string_view pattern) noexcept {
+            if (pattern.empty() || pattern == "*") {
+                return true;
+            }
+
+            auto norm = [](char c) noexcept -> char {
+                if (c == '\\' || c == '/') {
+                    return static_cast<char>(std::filesystem::path::preferred_separator);
+                }
+                return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                };
+
+            std::size_t t_idx = 0;
+            std::size_t p_idx = 0;
+            std::size_t star_idx = std::string_view::npos;
+            std::size_t match_idx = 0;
+
+            while (t_idx < text.size()) {
+                if (p_idx < pattern.size() && (pattern[p_idx] == '?' || norm(pattern[p_idx]) == norm(text[t_idx]))) {
+                    ++t_idx;
+                    ++p_idx;
+                }
+                else if (p_idx < pattern.size() && pattern[p_idx] == '*') {
+                    star_idx = p_idx;
+                    match_idx = t_idx;
+                    ++p_idx;
+                }
+                else if (star_idx != std::string_view::npos) {
+                    p_idx = star_idx + 1;
+                    ++match_idx;
+                    t_idx = match_idx;
+                }
+                else {
+                    return false;
+                }
+            }
+
+            while (p_idx < pattern.size() && pattern[p_idx] == '*') {
+                ++p_idx;
+            }
+
+            return p_idx == pattern.size();
+        }
+
         // Internal helper for reading strings until null-terminator within a byte budget
         static std::string read_null_terminated_string(std::ifstream& stream, std::size_t max_bytes) {
             std::string result;
@@ -207,11 +252,21 @@ namespace lotm::big {
         return is_closed_;
     }
 
-    std::vector<BigEntry> BigArchive::get_entries() const {
+    std::vector<BigEntry> BigArchive::get_entries(std::string_view filter_pattern) const {
         if (is_closed_) {
             throw BigArchiveError("Cannot access entries of a closed archive.");
         }
-        return entries_;
+        if (filter_pattern.empty()) {
+            return entries_;
+        }
+
+        std::vector<BigEntry> filtered;
+        for (const auto& entry : entries_) {
+            if (matches_glob(entry.name, filter_pattern)) {
+                filtered.push_back(entry);
+            }
+        }
+        return filtered;
     }
 
     std::vector<uint8_t> BigArchive::read_entry(std::string_view entry_name) const {
@@ -282,7 +337,11 @@ namespace lotm::big {
         return buffer;
     }
 
-    void BigArchive::extract_all(const std::filesystem::path& output_dir, std::function<void(std::string_view)> progress_callback) const {
+    void BigArchive::extract_all(
+        const std::filesystem::path& output_dir,
+        std::function<void(std::string_view)> progress_callback,
+        std::string_view filter_pattern
+    ) const {
         if (is_closed_) {
             throw BigArchiveError("Cannot extract from a closed archive.");
         }
@@ -298,6 +357,9 @@ namespace lotm::big {
         // Upfront quota evaluation across all entries to prevent amplification / zip-bomb attacks
         uintmax_t total_extracted_bytes = 0;
         for (const auto& entry : entries_) {
+            if (!matches_glob(entry.name, filter_pattern)) {
+                continue;
+            }
             if (max_extraction_quota - total_extracted_bytes < entry.size) {
                 throw BigSecurityError("Archive amplification (Zip Bomb) threshold exceeded.");
             }
@@ -313,6 +375,10 @@ namespace lotm::big {
         // Pre-flight security and bounds validation pass
         // PRE-FLIGHT VALIDATION LOOP
         for (const auto& entry : entries_) {
+            if (!matches_glob(entry.name, filter_pattern)) {
+                continue;
+            }
+
             // Check for malicious or corrupted bounds
             if (static_cast<uintmax_t>(entry.offset) + entry.size > physical_size) {
                 throw BigFormatError("Extraction bounds exceeded for file: " + entry.name);
@@ -372,6 +438,10 @@ namespace lotm::big {
 
         // SAFE EXTRACTION LOOP
         for (const auto& entry : entries_) {
+            if (!matches_glob(entry.name, filter_pattern)) {
+                continue;
+            }
+
             std::filesystem::path entry_rel_path(entry.name);
             std::filesystem::path target_path = canonical_output_dir / entry_rel_path;
             std::filesystem::path target_subdir = target_path.parent_path();
