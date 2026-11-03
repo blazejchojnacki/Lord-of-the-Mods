@@ -266,3 +266,196 @@ def test_closed_archive_rejects_operations_and_context_reentry(standard_mod_dire
     with pytest.raises(big.BigArchiveError, match="closed archive"):
         with arc:
             pass
+
+
+def test_pack_to_memory_from_directory_and_records(standard_mod_directory: Path, tmp_path: Path):
+    """Verify in-memory archive packing from a directory, a mapping, and a sequence of pairs."""
+    disk_archive = tmp_path / "disk_reference.big"
+    big.pack(standard_mod_directory, disk_archive)
+    expected_bytes = disk_archive.read_bytes()
+
+    # 1. Pack from directory path
+    mem_from_dir = big.pack_to_memory(standard_mod_directory)
+    assert isinstance(mem_from_dir, bytes)
+    assert mem_from_dir == expected_bytes
+
+    # 2. Pack from Mapping[str, bytes]
+    mapping_input = {
+        "data/weapon.ini": b"Damage=50",
+        "art/texture.dds": b"DDS_HEADER_DATA",
+        "readme.txt": b"Lord of the Mods",
+    }
+    mem_from_dict = big.pack_to_memory(mapping_input)
+    assert mem_from_dict == expected_bytes
+
+    # 3. Pack from sequence of (path, bytes) tuples
+    sequence_input = list(mapping_input.items())
+    mem_from_seq = big.pack_to_memory(sequence_input)
+    assert mem_from_seq == expected_bytes
+
+
+def test_pack_to_memory_validation_and_callbacks(tmp_path: Path):
+    """Verify error propagation and progress callbacks for in-memory packing."""
+    missing_dir = tmp_path / "missing_source"
+    with pytest.raises(NotADirectoryError, match="does not exist"):
+        big.pack_to_memory(missing_dir)
+
+    with pytest.raises(ValueError, match="Duplicate case-insensitive path"):
+        big.pack_to_memory([("data/unit.ini", b"1"), ("DATA\\UNIT.INI", b"2")])
+
+    with pytest.raises(ValueError, match="Entry path cannot be empty"):
+        big.pack_to_memory([("", b"payload")])
+
+    reported: list[str] = []
+    raw_bytes = big.BigPacker.pack_to_memory(
+        [("b.txt", b"B"), ("a.txt", b"A")],
+        progress_callback=reported.append
+    )
+    assert len(raw_bytes) > 0
+    assert reported == ["a.txt", "b.txt"]
+
+
+def test_selective_unpack_with_glob_filter(standard_mod_directory: Path, tmp_path: Path):
+    """Verify that unpack() with filter_pattern extracts and returns only matching entries."""
+    archive_path = tmp_path / "selective.big"
+    extract_dir = tmp_path / "selective_out"
+    big.pack(standard_mod_directory, archive_path)
+
+    entries = big.unpack(archive_path, extract_dir, filter_pattern="*.ini")
+
+    assert len(entries) == 1
+    assert entries[0].name == "data\\weapon.ini"
+    assert (extract_dir / "data" / "weapon.ini").exists()
+    assert not (extract_dir / "readme.txt").exists()
+    assert not (extract_dir / "art" / "texture.dds").exists()
+
+
+def test_diff_archives_and_error_handling(tmp_path: Path):
+    """Verify diff() categorizes archive changes accurately and validates input paths."""
+    base_path = tmp_path / "base.big"
+    target_path = tmp_path / "target.big"
+
+    base_path.write_bytes(big.pack_to_memory({
+        "data/weapon.ini": b"Damage=50",
+        "data/armor.ini": b"Armor=100",
+        "readme.txt": b"v1.0",
+    }))
+    target_path.write_bytes(big.pack_to_memory({
+        "data/weapon.ini": b"Damage=75",
+        "data/armor.ini": b"Armor=100",
+        "data/new_unit.ini": b"Cost=200",
+    }))
+
+    result = big.diff(base_path, target_path)
+    assert result.has_differences
+    assert "added=1" in repr(result)
+    assert [e.name for e in result.added] == ["data\\new_unit.ini"]
+    assert [e.name for e in result.removed] == ["readme.txt"]
+    assert [e.name for e in result.modified] == ["data\\weapon.ini"]
+    assert [e.name for e in result.unchanged] == ["data\\armor.ini"]
+
+    # Compare open BigArchive instances directly
+    with big.BigArchive(base_path) as b_arc, big.BigArchive(target_path) as t_arc:
+        filtered_res = big.BigDiff.compare(b_arc, t_arc, filter_pattern="*armor.ini")
+        assert not filtered_res.has_differences
+
+    with pytest.raises(FileNotFoundError, match="Base archive not found"):
+        big.diff(tmp_path / "missing_base.big", target_path)
+
+    with pytest.raises(FileNotFoundError, match="Target archive not found"):
+        big.diff(base_path, tmp_path / "missing_target.big")
+
+
+def test_create_patch_and_create_patch_to_memory(tmp_path: Path):
+    """Verify delta patch generation to disk and memory packs only added and modified files."""
+    base_path = tmp_path / "base.big"
+    target_path = tmp_path / "target.big"
+    patch_path = tmp_path / "delta_patch.big"
+
+    base_path.write_bytes(big.pack_to_memory({
+        "data/weapon.ini": b"Damage=50",
+        "data/armor.ini": b"Armor=100",
+    }))
+    target_path.write_bytes(big.pack_to_memory({
+        "data/weapon.ini": b"Damage=75",
+        "data/armor.ini": b"Armor=100",
+        "data/new_unit.ini": b"Cost=200",
+    }))
+
+    big.create_patch(base_path, target_path, patch_path)
+    assert patch_path.is_file()
+
+    mem_patch = big.create_patch_to_memory(base_path, target_path)
+    assert patch_path.read_bytes() == mem_patch
+
+    with big.BigArchive(patch_path) as patch_arc:
+        names = [e.name for e in patch_arc.get_entries()]
+        assert names == ["data\\new_unit.ini", "data\\weapon.ini"]
+        assert patch_arc.read_entry("data/weapon.ini") == b"Damage=75"
+
+    # Exercise BigArchive overloads and progress callbacks directly
+    cb_mem: list[str] = []
+    cb_disk: list[str] = []
+    direct_patch_path = tmp_path / "direct_patch.big"
+    with big.BigArchive(base_path) as b_arc, big.BigArchive(target_path) as t_arc:
+        raw = big.BigDiff.create_patch_to_memory(b_arc, t_arc, progress_callback=cb_mem.append)
+        assert raw == mem_patch
+        big.BigDiff.create_patch(b_arc, t_arc, direct_patch_path, progress_callback=cb_disk.append)
+
+    assert cb_mem == ["data\\new_unit.ini", "data\\weapon.ini"]
+    assert cb_disk == cb_mem
+
+    # Error handling for missing input archives
+    missing = tmp_path / "missing.big"
+    with pytest.raises(FileNotFoundError, match="Base archive not found"):
+        big.create_patch(missing, target_path, patch_path)
+
+    with pytest.raises(FileNotFoundError, match="Target archive not found"):
+        big.create_patch(base_path, missing, patch_path)
+
+    with pytest.raises(FileNotFoundError, match="Base archive not found"):
+        big.create_patch_to_memory(missing, target_path)
+
+    with pytest.raises(FileNotFoundError, match="Target archive not found"):
+        big.create_patch_to_memory(base_path, missing)
+
+
+def test_load_overlay_from_directory_and_archive_sequence(tmp_path: Path):
+    """Verify SAGE load-order emulation across directories and explicit archive sequences."""
+    arc1 = tmp_path / "01_ini.big"
+    arc2 = tmp_path / "02_patch.big"
+
+    arc1.write_bytes(big.pack_to_memory({
+        "data/weapon.ini": b"Damage=50",
+        "readme.txt": b"v1.0",
+    }))
+    arc2.write_bytes(big.pack_to_memory({
+        "data/weapon.ini": b"Damage=99",
+        "art/icon.dds": b"DDS_PAYLOAD",
+    }))
+
+    # 1. Load from directory (alphabetical order: 01_ini.big -> 02_patch.big)
+    overlay_dir = big.load_overlay(tmp_path)
+    assert len(overlay_dir.mounted_archives) == 2
+
+    resolved = overlay_dir.resolve("data/weapon.ini")
+    assert resolved.name == "data\\weapon.ini"
+    assert resolved.size == 9
+    assert resolved.offset > 0
+    assert resolved.entry.name == "data\\weapon.ini"
+    assert resolved.source_archive == arc2
+    assert resolved.override_count == 1
+    assert "overrides=1" in repr(resolved)
+    assert overlay_dir.read_entry("data/weapon.ini") == b"Damage=99"
+
+    # 2. Load from explicit sequence in reverse order (02_patch.big -> 01_ini.big)
+    overlay_seq = big.load_overlay([arc2, arc1])
+    assert overlay_seq.read_entry("data/weapon.ini") == b"Damage=50"
+    assert overlay_seq.resolve("data/weapon.ini").source_archive == arc1
+
+    # 3. Error handling
+    with pytest.raises(NotADirectoryError, match="does not exist"):
+        big.load_overlay(tmp_path / "missing_dir")
+
+    with pytest.raises(FileNotFoundError, match="Archive not found"):
+        big.load_overlay([arc1, tmp_path / "missing_arc.big"])

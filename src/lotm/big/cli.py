@@ -12,6 +12,8 @@ import logging
 import sys
 from pathlib import Path
 
+from lotm.big.differ import create_patch, diff
+from lotm.big.overlay import load_overlay
 from lotm.big.packer import pack
 from lotm.big.unpacker import unpack
 
@@ -43,13 +45,62 @@ def main_unpack() -> None:
     parser = argparse.ArgumentParser(description="Extract EA BIG4 archives using lotm.")
     parser.add_argument("archive", type=Path, help="Path to the .big file")
     parser.add_argument("-o", "--output", type=Path, default=Path("extracted_files"), help="Destination directory")
+    parser.add_argument("-f", "--filter", type=str, default=None, help="Optional glob pattern to filter extracted files")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output logging individual files")
     args = parser.parse_args()
 
     _setup_logging(args.verbose)
 
     try:
-        unpack(args.archive, args.output)
+        unpack(args.archive, args.output, filter_pattern=args.filter)
     except Exception as exc:
         print(f"Extraction failed: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+
+def main_diff() -> None:
+    parser = argparse.ArgumentParser(description="Compare two EA BIG4 archives or generate a delta patch using lotm.")
+    parser.add_argument("base_archive", type=Path, help="Path to the base .big file")
+    parser.add_argument("target_archive", type=Path, help="Path to the target .big file")
+    parser.add_argument("-o", "--output", type=Path, default=None, help="Optional destination .big file path to write a delta patch archive")
+    parser.add_argument("-f", "--filter", type=str, default=None, help="Optional glob pattern to filter compared files")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output logging individual changes")
+    args = parser.parse_args()
+
+    _setup_logging(args.verbose)
+
+    try:
+        result = diff(args.base_archive, args.target_archive, filter_pattern=args.filter)
+        for entry in result.added:
+            logger.debug("+ %s (%d B)", entry.name, entry.size)
+        for entry in result.removed:
+            logger.debug("- %s (%d B)", entry.name, entry.size)
+        for entry in result.modified:
+            logger.debug("~ %s (%d B)", entry.name, entry.size)
+
+        if args.output is not None:
+            create_patch(args.base_archive, args.target_archive, args.output, filter_pattern=args.filter)
+    except Exception as exc:
+        print(f"Comparison failed: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+
+def main_overlay() -> None:
+    parser = argparse.ArgumentParser(description="Inspect SAGE load-order resolution across .big archives using lotm.")
+    parser.add_argument("sources", type=Path, nargs="+", help="Directory containing .big files, or explicit .big archive paths in load order")
+    parser.add_argument("-f", "--filter", type=str, default=None, help="Optional glob pattern to filter resolved entries")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output logging winning archives and override counts")
+    args = parser.parse_args()
+
+    _setup_logging(args.verbose)
+
+    try:
+        target_source = args.sources[0] if len(args.sources) == 1 and args.sources[0].is_dir() else args.sources
+        overlay = load_overlay(target_source)
+        entries = overlay.get_entries(args.filter or "")
+        logger.info("Resolved %d effective entries across %d archives", len(entries), len(overlay.mounted_archives))
+        for item in entries:
+            logger.debug("%s -> %s (overrides=%d)", item.name, item.source_archive.name, item.override_count)
+    except Exception as exc:
+        print(f"Overlay resolution failed: {exc}", file=sys.stderr)
         sys.exit(1)

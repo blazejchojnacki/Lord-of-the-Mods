@@ -14,6 +14,7 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace lotm::big {
@@ -35,6 +36,16 @@ namespace lotm::big {
         static void pack_from_directory(
             const std::filesystem::path& source_dir,
             const std::filesystem::path& output_file,
+            std::function<void(std::string_view)> progress_callback = {}
+        );
+
+        [[nodiscard]] static std::vector<uint8_t> pack_to_memory(
+            const std::filesystem::path& source_dir,
+            std::function<void(std::string_view)> progress_callback = {}
+        );
+
+        [[nodiscard]] static std::vector<uint8_t> pack_to_memory(
+            const std::vector<std::pair<std::string, std::vector<uint8_t>>>& files,
             std::function<void(std::string_view)> progress_callback = {}
         );
     };

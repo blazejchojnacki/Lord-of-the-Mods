@@ -6,6 +6,20 @@ All notable changes to the Lord of the Mods (`lotm`) project will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-11-03
+
+### Added
+- **Core C++ Engine (`lotm_big`) & Python Bindings**:
+  - `BigPacker::pack_to_memory`: Serialize directories or in-memory file buffers (`std::vector<std::pair<std::string, std::vector<uint8_t>>>`) directly into a contiguous BIG4 payload byte array without touching the disk.
+  - Glob Filtering: Added `filter_pattern` parameter to `BigArchive::get_entries`, `BigArchive::extract_all`, and `lotm.big.unpack` (supporting `*` and `?` with slash normalization).
+  - `BigDiff`: Structural and byte-level comparison engine for `BigArchive` instances categorizing added, removed, modified, and unchanged entries.
+  - `BigDiff::create_patch`: Generate minimal, standalone SAGE delta patch `.big` archives directly to disk or memory containing only added and modified entries.
+  - `BigOverlay`: SAGE engine load-order emulator computing the effective ("last-wins") virtual file tree across multiple overriding archives.
+- **Command-Line Interface**:
+  - `lotm-big-unpack`: Added `-f` / `--filter` option for selective glob extraction.
+  - `lotm-big-diff`: New command evaluating differences between a base and target archive, with an `-o` / `--output` flag to automatically generate a standalone delta patch archive.
+  - `lotm-big-overlay`: New command calculating and visualizing the effective file tree and override history across a specified sequence of `.big` files.
+
 ## [0.2.0] - 2026-11-01
 
 ### Added
@@ -18,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **NTFS Path Validation**: Hardened extraction against extended Win32 and NT namespace prefixes (`\\?\`, `\\.\`, `\??\`).
 - **Drive-Relative Traversal**: Blocked directory traversal attempts using Windows drive-relative paths (e.g., `C:file.txt`).
 - **Component Sanitization**: Added strict rejection of NTFS reserved characters (`<`, `>`, `:`, `"`, `|`, `?`, `*`), ASCII control characters, and trailing spaces/dots on individual path components.
+- **Golden Master Hex Testing**: Hardened `BigPacker` regression checks with direct raw byte layout verification against authoritative SAGE binary signatures.
 
 ### Fixed
 - Corrected EA header padding tag to an 8-byte block consisting of `"L219"` followed by 4 null bytes (`\0\0\0\0`), replacing the inaccurate ASCII whitespace padding (`"L219    "`) to match official SAGE archives byte-for-byte.

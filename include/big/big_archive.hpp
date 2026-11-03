@@ -27,7 +27,8 @@ namespace lotm::big {
         // Extracts all files to the output directory
         void extract_all(
             const std::filesystem::path& output_dir,
-            std::function<void(std::string_view)> progress_callback = {}
+            std::function<void(std::string_view)> progress_callback = {},
+            std::string_view filter_pattern = {}
         ) const;
 
         // Reads a single archive entry into memory by its internal path
@@ -41,7 +42,7 @@ namespace lotm::big {
 
         [[nodiscard]] bool is_closed() const noexcept;
 
-        [[nodiscard]] std::vector<BigEntry> get_entries() const;
+        [[nodiscard]] std::vector<BigEntry> get_entries(std::string_view filter_pattern = {}) const;
 
     private:
         std::filesystem::path file_path_;

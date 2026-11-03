@@ -11,7 +11,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "lord-of-the-mods"
-version = "0.2.0"
+version = "0.3.0"
 description = "Modular Python library and modding toolkit for The Battle for Middle-earth game"
 readme = "README.md"
 license = { file = "LICENSE.md" }
@@ -50,6 +50,8 @@ test = [
 [project.scripts]
 lotm-big-pack = "lotm.big.cli:main_pack"
 lotm-big-unpack = "lotm.big.cli:main_unpack"
+lotm-big-diff = "lotm.big.cli:main_diff"
+lotm-big-overlay = "lotm.big.cli:main_overlay"
 
 [project.urls]
 Homepage = "https://github.com/blazejchojnacki/Lord-of-the-Mods"

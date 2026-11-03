@@ -22,6 +22,8 @@ add_executable(lotm_cpp_tests
     cpp/core/test_endian.cpp
     cpp/big/test_big_archive.cpp
     cpp/big/test_big_packer.cpp
+    cpp/big/test_big_diff.cpp
+    cpp/big/test_big_overlay.cpp
 )
 
 target_link_libraries(lotm_cpp_tests PRIVATE

@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -23,6 +24,7 @@
 #include <string_view>
 #include <system_error>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace lotm::big {
@@ -31,6 +33,78 @@ namespace lotm::big {
         inline std::string to_utf8(const std::filesystem::path& p) {
             auto u8 = p.u8string();
             return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
+        }
+
+        // Computes header size, validates 32-bit format bounds, and writes the BIG4 header into a pre-allocated buffer
+        std::vector<uint8_t> allocate_and_write_header(
+            std::vector<detail::PackSourceRecord>& file_list,
+            uintmax_t total_payload_size,
+            std::vector<std::size_t>* out_original_indices = nullptr
+        ) {
+            detail::sort_and_validate_entries(file_list);
+
+            uint32_t num_files = static_cast<uint32_t>(file_list.size());
+            uintmax_t header_size_calc = HEADER_BASE_SIZE;
+            for (const auto& f : file_list) {
+                header_size_calc += 4 + 4 + f.rel_path.length() + 1;
+            }
+
+            // + 8 for byte-for-byte alignment with the EA "L219" gap
+            header_size_calc += EA_PADDING_SIZE;
+
+            // Guard against total archive size exceeding 32-bit limits (4GB overflow)
+            if (header_size_calc + total_payload_size > std::numeric_limits<uint32_t>::max()) {
+                throw std::length_error("Total archive size exceeds the 32-bit (4GB) BIG4 format limit.");
+            }
+
+            if (out_original_indices) {
+                out_original_indices->reserve(file_list.size());
+            }
+
+            uint32_t header_size = static_cast<uint32_t>(header_size_calc);
+            uint32_t current_offset = header_size;
+            for (auto& f : file_list) {
+                if (out_original_indices) {
+                    out_original_indices->push_back(static_cast<std::size_t>(f.offset));
+                }
+                f.offset = current_offset;
+                current_offset += f.size;
+            }
+
+            uint32_t total_size = current_offset;
+            std::vector<uint8_t> buffer(total_size);
+            std::size_t write_pos = 0;
+
+            auto append_bytes = [&buffer, &write_pos](const void* data, std::size_t len) {
+                std::memcpy(buffer.data() + write_pos, data, len);
+                write_pos += len;
+                };
+
+            append_bytes(BIG4_MAGIC.data(), 4);
+
+            uint32_t le_total_size = lotm::core::to_little_endian(total_size);
+            append_bytes(&le_total_size, sizeof(le_total_size));
+
+            uint32_t be_num_files = lotm::core::to_big_endian(num_files);
+            append_bytes(&be_num_files, sizeof(be_num_files));
+
+            uint32_t be_header_size = lotm::core::to_big_endian(header_size);
+            append_bytes(&be_header_size, sizeof(be_header_size));
+
+            for (const auto& f : file_list) {
+                uint32_t be_offset = lotm::core::to_big_endian(f.offset);
+                append_bytes(&be_offset, sizeof(be_offset));
+
+                uint32_t be_size = lotm::core::to_big_endian(f.size);
+                append_bytes(&be_size, sizeof(be_size));
+
+                append_bytes(f.rel_path.c_str(), f.rel_path.length() + 1);
+            }
+
+            // for byte-for-byte alignment with the EA "L219" gap
+            append_bytes(EA_PADDING_TAG.data(), EA_PADDING_SIZE);
+
+            return buffer;
         }
     } // namespace
 
@@ -211,6 +285,110 @@ namespace lotm::big {
         }
 
         pack_successful = true;
+    }
+
+    std::vector<uint8_t> BigPacker::pack_to_memory(
+        const std::filesystem::path& source_dir,
+        std::function<void(std::string_view)> progress_callback
+    ) {
+        if (!std::filesystem::exists(source_dir) || !std::filesystem::is_directory(source_dir)) {
+            throw std::invalid_argument("Source directory does not exist or is not a directory.");
+        }
+
+        std::vector<detail::PackSourceRecord> file_list;
+        uintmax_t total_payload_size = 0;
+
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(source_dir)) {
+            if (entry.is_regular_file()) {
+                detail::PackSourceRecord pack_entry;
+                pack_entry.full_path = entry.path();
+
+                auto rel_path = std::filesystem::relative(entry.path(), source_dir);
+                pack_entry.rel_path = to_utf8(rel_path);
+                for (char& c : pack_entry.rel_path) {
+                    if (c == '/') c = '\\';
+                }
+
+                uintmax_t fsize = std::filesystem::file_size(entry.path());
+
+                // Guard against individual files exceeding 32-bit limits
+                if (fsize > std::numeric_limits<uint32_t>::max()) {
+                    throw std::length_error("File '" + pack_entry.rel_path + "' exceeds the 4GB format limit.");
+                }
+
+                pack_entry.size = static_cast<uint32_t>(fsize);
+                total_payload_size += fsize;
+                file_list.push_back(std::move(pack_entry));
+            }
+        }
+
+        std::vector<uint8_t> buffer = allocate_and_write_header(file_list, total_payload_size);
+
+        for (const auto& f : file_list) {
+            std::ifstream src(f.full_path, std::ios::binary);
+            if (!src.is_open()) {
+                throw BigArchiveError("Cannot read source file: " + to_utf8(f.full_path));
+            }
+
+            if (f.size > 0) {
+                src.read(reinterpret_cast<char*>(buffer.data() + f.offset), static_cast<std::streamsize>(f.size));
+                if (src.bad() || static_cast<uint32_t>(src.gcount()) != f.size) {
+                    throw BigArchiveError("Byte count mismatch while packing file: " + f.rel_path);
+                }
+            }
+
+            if (progress_callback) {
+                progress_callback(f.rel_path);
+            }
+        }
+
+        return buffer;
+    }
+
+    std::vector<uint8_t> BigPacker::pack_to_memory(
+        const std::vector<std::pair<std::string, std::vector<uint8_t>>>& files,
+        std::function<void(std::string_view)> progress_callback
+    ) {
+        std::vector<detail::PackSourceRecord> file_list;
+        file_list.reserve(files.size());
+        uintmax_t total_payload_size = 0;
+
+        for (std::size_t i = 0; i < files.size(); ++i) {
+            const auto& [raw_path, payload] = files[i];
+            if (raw_path.empty()) {
+                throw std::invalid_argument("Entry path cannot be empty.");
+            }
+
+            detail::PackSourceRecord pack_entry;
+            pack_entry.rel_path = raw_path;
+            for (char& c : pack_entry.rel_path) {
+                if (c == '/') c = '\\';
+            }
+
+            pack_entry.size = static_cast<uint32_t>(
+                std::min<std::size_t>(payload.size(), std::numeric_limits<uint32_t>::max()));
+            // Store original index temporarily in offset prior to alphabetical sorting
+            pack_entry.offset = static_cast<uint32_t>(i);
+            total_payload_size += payload.size();
+            file_list.push_back(std::move(pack_entry));
+        }
+
+        std::vector<std::size_t> sorted_indices;
+        std::vector<uint8_t> buffer = allocate_and_write_header(file_list, total_payload_size, &sorted_indices);
+
+        for (std::size_t i = 0; i < file_list.size(); ++i) {
+            const auto& f = file_list[i];
+            const auto& payload = files[sorted_indices[i]].second;
+            if (!payload.empty()) {
+                std::memcpy(buffer.data() + f.offset, payload.data(), payload.size());
+            }
+
+            if (progress_callback) {
+                progress_callback(f.rel_path);
+            }
+        }
+
+        return buffer;
     }
 
 } // namespace lotm::big

@@ -12,20 +12,35 @@ from lotm._core import big
 BigArchive = big.BigArchive
 BigPacker = big.BigPacker
 BigEntry = big.BigEntry
+BigDiff = big.BigDiff
+BigDiffResult = big.BigDiffResult
+BigOverlay = big.BigOverlay
+BigOverlayEntry = big.BigOverlayEntry
 BigArchiveError = big.BigArchiveError
 BigFormatError = big.BigFormatError
 BigSecurityError = big.BigSecurityError
 
-from .packer import pack
+from .differ import create_patch, create_patch_to_memory, diff
+from .overlay import load_overlay
+from .packer import pack, pack_to_memory
 from .unpacker import unpack
 
 __all__ = [
     "BigArchive",
     "BigPacker",
     "BigEntry",
+    "BigDiff",
+    "BigDiffResult",
+    "BigOverlay",
+    "BigOverlayEntry",
     "BigArchiveError",
     "BigFormatError",
     "BigSecurityError",
+    "create_patch",
+    "create_patch_to_memory",
+    "diff",
+    "load_overlay",
     "pack",
+    "pack_to_memory",
     "unpack",
 ]

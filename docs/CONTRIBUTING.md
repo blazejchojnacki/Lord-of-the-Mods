@@ -39,7 +39,7 @@ Install build dependencies:
 pip install --upgrade pip
 ```
 ```cmd
-pip install nanobind scikit-build-core nanobind-stubgen build
+pip install nanobind scikit-build-core mypy build
 ```
 
 ## 2. Development Workflow
@@ -53,7 +53,7 @@ cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
 ```
 or use `Release` when benchmarking or building distribution wheels.
 ```cmd
-cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
+cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 ```
 
 2. Compile the binary
@@ -92,18 +92,12 @@ OpenCppCoverage.exe --sources "%CD%\src" --sources "%CD%\include" --excluded_sou
 start .\coverage_cpp\index.html
 ```
 
-## 4. Generating Type Stubs (.pyi)
+## 4. Validating Type Stubs (.pyi)
 
-To provide autocomplete and parameter definitions for IDEs (like PyCharm and VS Code), generate the stubs using nanobind-stubgen:
+Type stubs for the native C++ extension (`src/lotm/_core.pyi`) are maintained directly in the repository to provide precise IDE autocomplete and strict typing. Validate them using Mypy:
 
-Install nanobind-stubgen:
 ```cmd
-pip install nanobind-stubgen
-```
-
-Run the generator against the installed module:
-```cmd
-python -m nanobind_stubgen -o src lotm
+python -m mypy src/lotm
 ```
 Ensure the marker file exists so Python recognizes the package as typed:
 ```cmd
@@ -122,5 +116,5 @@ The resulting package is stored inside the `dist/` directory.
 
 The build system is organized into decoupled CMake targets:
 - `lotm_core`: Header-only interface library containing endian-swapping utilities (`endian.hpp`).
-- `lotm_big`: Static C++ library implementing `BigArchive` (reading) and `BigPacker` (writing).
+- `lotm_big`: Static C++ library implementing `BigArchive`, `BigPacker`, `BigDiff`, and `BigOverlay`.
 - `lotm`: The native Python extension module (`.pyd`) exported via `nanobind`.
