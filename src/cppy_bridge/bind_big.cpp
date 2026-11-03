@@ -17,6 +17,7 @@
 
 #include "register.hpp"
 #include <big/big_archive.hpp>
+#include <big/big_diff.hpp>
 #include <big/big_packer.hpp>
 #include <big/exceptions.hpp>
 #include <cstdint>
@@ -174,6 +175,31 @@ namespace lotm::python {
                 },
                 nb::arg("source"), nb::arg("progress_callback") = nb::none(),
                 "Packs a sequence of (path, bytes) pairs directly into an in-memory BIG4 archive bytes object");
+
+        nb::class_<lotm::big::BigDiffResult>(sub, "BigDiffResult", "Comparison result categorizing entries between two BIG4 archives")
+            .def_ro("added", &lotm::big::BigDiffResult::added, "Entries present only in the target archive")
+            .def_ro("removed", &lotm::big::BigDiffResult::removed, "Entries present only in the base archive")
+            .def_ro("modified", &lotm::big::BigDiffResult::modified, "Entries present in both archives with differing content")
+            .def_ro("unchanged", &lotm::big::BigDiffResult::unchanged, "Entries present in both archives with identical content")
+            .def_prop_ro("has_differences", &lotm::big::BigDiffResult::has_differences, "True if any entries were added, removed, or modified")
+            .def("__repr__", [](const lotm::big::BigDiffResult& res) {
+            return "<BigDiffResult added=" + std::to_string(res.added.size()) +
+                " removed=" + std::to_string(res.removed.size()) +
+                " modified=" + std::to_string(res.modified.size()) +
+                " unchanged=" + std::to_string(res.unchanged.size()) + ">";
+                });
+
+        nb::class_<lotm::big::BigDiff>(sub, "BigDiff", "Comparison engine for BIG4 archives")
+            .def_static("compare",
+                nb::overload_cast<const lotm::big::BigArchive&, const lotm::big::BigArchive&, std::string_view>(&lotm::big::BigDiff::compare),
+                nb::arg("base"), nb::arg("target"), nb::arg("filter_pattern") = "",
+                nb::call_guard<nb::gil_scoped_release>(),
+                "Compares two open BigArchive instances")
+            .def_static("compare",
+                nb::overload_cast<const std::filesystem::path&, const std::filesystem::path&, std::string_view>(&lotm::big::BigDiff::compare),
+                nb::arg("base"), nb::arg("target"), nb::arg("filter_pattern") = "",
+                nb::call_guard<nb::gil_scoped_release>(),
+                "Compares two BIG4 archive files on disk");
     }
 
     // Static instance registers this function before NB_MODULE executes

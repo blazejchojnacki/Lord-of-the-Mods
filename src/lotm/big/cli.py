@@ -12,6 +12,7 @@ import logging
 import sys
 from pathlib import Path
 
+from lotm.big.differ import diff
 from lotm.big.packer import pack
 from lotm.big.unpacker import unpack
 
@@ -53,4 +54,27 @@ def main_unpack() -> None:
         unpack(args.archive, args.output, filter_pattern=args.filter)
     except Exception as exc:
         print(f"Extraction failed: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+
+def main_diff() -> None:
+    parser = argparse.ArgumentParser(description="Compare two EA BIG4 archives using lotm.")
+    parser.add_argument("base_archive", type=Path, help="Path to the base .big file")
+    parser.add_argument("target_archive", type=Path, help="Path to the target .big file")
+    parser.add_argument("-f", "--filter", type=str, default=None, help="Optional glob pattern to filter compared files")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output logging individual changes")
+    args = parser.parse_args()
+
+    _setup_logging(args.verbose)
+
+    try:
+        result = diff(args.base_archive, args.target_archive, filter_pattern=args.filter)
+        for entry in result.added:
+            logger.debug("+ %s (%d B)", entry.name, entry.size)
+        for entry in result.removed:
+            logger.debug("- %s (%d B)", entry.name, entry.size)
+        for entry in result.modified:
+            logger.debug("~ %s (%d B)", entry.name, entry.size)
+    except Exception as exc:
+        print(f"Comparison failed: {exc}", file=sys.stderr)
         sys.exit(1)
