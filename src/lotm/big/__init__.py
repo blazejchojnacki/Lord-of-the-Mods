@@ -12,10 +12,13 @@ from lotm._core import big
 BigArchive = big.BigArchive
 BigPacker = big.BigPacker
 BigEntry = big.BigEntry
+BigDiff = big.BigDiff
+BigDiffResult = big.BigDiffResult
 BigArchiveError = big.BigArchiveError
 BigFormatError = big.BigFormatError
 BigSecurityError = big.BigSecurityError
 
+from .differ import diff
 from .packer import pack, pack_to_memory
 from .unpacker import unpack
 
@@ -23,9 +26,12 @@ __all__ = [
     "BigArchive",
     "BigPacker",
     "BigEntry",
+    "BigDiff",
+    "BigDiffResult",
     "BigArchiveError",
     "BigFormatError",
     "BigSecurityError",
+    "diff",
     "pack",
     "pack_to_memory",
     "unpack",
