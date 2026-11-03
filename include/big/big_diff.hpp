@@ -11,7 +11,9 @@
 
 #include <big/big_archive.hpp>
 #include <big/types.hpp>
+#include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <string_view>
 #include <vector>
 
@@ -42,6 +44,40 @@ namespace lotm::big {
             const std::filesystem::path& base_path,
             const std::filesystem::path& target_path,
             std::string_view filter_pattern = {}
+        );
+
+        // Packs only added and modified entries from target_archive into an in-memory BIG4 buffer
+        [[nodiscard]] static std::vector<uint8_t> create_patch_to_memory(
+            const BigArchive& base_archive,
+            const BigArchive& target_archive,
+            std::string_view filter_pattern = {},
+            std::function<void(std::string_view)> progress_callback = {}
+        );
+
+        // Opens two BIG4 archives from disk and packs only added and modified entries into memory
+        [[nodiscard]] static std::vector<uint8_t> create_patch_to_memory(
+            const std::filesystem::path& base_path,
+            const std::filesystem::path& target_path,
+            std::string_view filter_pattern = {},
+            std::function<void(std::string_view)> progress_callback = {}
+        );
+
+        // Packs only added and modified entries from target_archive into a standalone patch archive on disk
+        static void create_patch(
+            const BigArchive& base_archive,
+            const BigArchive& target_archive,
+            const std::filesystem::path& output_file,
+            std::string_view filter_pattern = {},
+            std::function<void(std::string_view)> progress_callback = {}
+        );
+
+        // Opens two BIG4 archives from disk and writes a standalone delta patch archive to output_file
+        static void create_patch(
+            const std::filesystem::path& base_path,
+            const std::filesystem::path& target_path,
+            const std::filesystem::path& output_file,
+            std::string_view filter_pattern = {},
+            std::function<void(std::string_view)> progress_callback = {}
         );
     };
 

@@ -8,17 +8,27 @@
  */
 
 #include <big/big_diff.hpp>
+#include <big/big_packer.hpp>
+#include <big/exceptions.hpp>
 
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <fstream>
+#include <stdexcept>
 #include <string>
+#include <system_error>
 #include <utility>
 #include <vector>
 
 namespace lotm::big {
 
     namespace {
+        inline std::string to_utf8(const std::filesystem::path& p) {
+            auto u8 = p.u8string();
+            return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
+        }
+
         struct IndexedEntry {
             std::string lower_name;
             BigEntry entry;
@@ -112,6 +122,99 @@ namespace lotm::big {
         const BigArchive base_archive(base_path);
         const BigArchive target_archive(target_path);
         return compare(base_archive, target_archive, filter_pattern);
+    }
+
+    std::vector<uint8_t> BigDiff::create_patch_to_memory(
+        const BigArchive& base_archive,
+        const BigArchive& target_archive,
+        std::string_view filter_pattern,
+        std::function<void(std::string_view)> progress_callback
+    ) {
+        const BigDiffResult diff_result = compare(base_archive, target_archive, filter_pattern);
+
+        std::vector<std::pair<std::string, std::vector<uint8_t>>> patch_files;
+        patch_files.reserve(diff_result.added.size() + diff_result.modified.size());
+
+        for (const auto& entry : diff_result.added) {
+            patch_files.emplace_back(entry.name, target_archive.read_entry(entry));
+        }
+
+        for (const auto& entry : diff_result.modified) {
+            patch_files.emplace_back(entry.name, target_archive.read_entry(entry));
+        }
+
+        return BigPacker::pack_to_memory(patch_files, std::move(progress_callback));
+    }
+
+    std::vector<uint8_t> BigDiff::create_patch_to_memory(
+        const std::filesystem::path& base_path,
+        const std::filesystem::path& target_path,
+        std::string_view filter_pattern,
+        std::function<void(std::string_view)> progress_callback
+    ) {
+        const BigArchive base_archive(base_path);
+        const BigArchive target_archive(target_path);
+        return create_patch_to_memory(base_archive, target_archive, filter_pattern, std::move(progress_callback));
+    }
+
+    void BigDiff::create_patch(
+        const BigArchive& base_archive,
+        const BigArchive& target_archive,
+        const std::filesystem::path& output_file,
+        std::string_view filter_pattern,
+        std::function<void(std::string_view)> progress_callback
+    ) {
+        if (std::filesystem::is_directory(output_file)) {
+            throw std::invalid_argument("Target output path cannot be a directory: " + to_utf8(output_file));
+        }
+
+        if (auto parent = output_file.parent_path(); !parent.empty() && !std::filesystem::exists(parent)) {
+            throw std::invalid_argument("Target output directory does not exist: " + to_utf8(parent));
+        }
+
+        const std::vector<uint8_t> patch_bytes = create_patch_to_memory(
+            base_archive, target_archive, filter_pattern, std::move(progress_callback)
+        );
+
+        bool write_successful = false;
+        struct CleanupGuard {
+            std::filesystem::path path;
+            bool& success;
+            ~CleanupGuard() {
+                if (!success) {
+                    std::error_code ec;
+                    std::filesystem::remove(path, ec);
+                }
+            }
+        } guard{ output_file, write_successful };
+
+        std::ofstream out(output_file, std::ios::binary);
+        if (!out.is_open()) {
+            throw BigArchiveError("Cannot create output file: " + to_utf8(output_file));
+        }
+
+        out.write(
+            reinterpret_cast<const char*>(patch_bytes.data()),
+            static_cast<std::streamsize>(patch_bytes.size())
+        );
+        out.flush();
+        if (!out.good()) {
+            throw BigArchiveError("Failed writing patch data to archive: " + to_utf8(output_file));
+        }
+
+        write_successful = true;
+    }
+
+    void BigDiff::create_patch(
+        const std::filesystem::path& base_path,
+        const std::filesystem::path& target_path,
+        const std::filesystem::path& output_file,
+        std::string_view filter_pattern,
+        std::function<void(std::string_view)> progress_callback
+    ) {
+        const BigArchive base_archive(base_path);
+        const BigArchive target_archive(target_path);
+        create_patch(base_archive, target_archive, output_file, filter_pattern, std::move(progress_callback));
     }
 
 } // namespace lotm::big
