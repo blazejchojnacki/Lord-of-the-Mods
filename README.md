@@ -11,10 +11,11 @@
 A high-performance C++20 and Python toolkit designed for modding EA *The Battle for Middle-earth* games.
 
 ## Features
-- **Fast BIG4 Unpacking:** Extract `.big` archives with strict security validation.
-- **Byte-Fidelity Repacking:** Creates SAGE-compliant `.big` archives with alphabetical binary-search index ordering and EA build tag alignment.
+- **Fast BIG4 Unpacking:** Extract `.big` archives to disk or directly to memory buffers with strict security and Zip-Slip validation.
+- **Byte-Fidelity Repacking:** Creates SAGE-compliant `.big` archives on disk or directly to in-memory buffers with alphabetical binary-search index ordering and EA build tag alignment.
+- **Archive Diffing & Delta Patching:** Compare two archives byte-for-byte and automatically generate minimal, standalone patch archives containing only additions and modifications.
+- **Load-Order Emulation:** Emulate SAGE engine virtual file trees to resolve the effective "last-wins" entries across an entire load-order sequence of multiple archives.
 - **Python 3.12+ Bindings:** C++ performance accessible directly in Python via `nanobind`.
-- **In-Memory Extraction:** Read specific entries directly into memory via the Python Buffer Protocol without disk I/O.
 
 ## Requirements
 - Windows 11 (x64)
@@ -22,8 +23,8 @@ A high-performance C++20 and Python toolkit designed for modding EA *The Battle 
 
 ## Documentation
 The `lotm` project provides comprehensive documentation for contributors and users:
-* **[Python API Reference](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/python-api.md)**: Programmatic extraction and packing APIs.
-* **[Command-Line Tools](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/cli.md)**: Standalone terminal instructions for `lotm-big-pack` and `lotm-big-unpack`.
+* **[Python API Reference](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/python-api.md)**: Programmatic extraction, packing, diffing, and overlay APIs.
+* **[Command-Line Tools](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/cli.md)**: Standalone terminal instructions for packing, unpacking, patch generation, and overlay emulation.
 * **[BIG4 Format Specs](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/big4-format.md)**: Deep technical details regarding the BIG4 binary layout and SAGE engine alignment quirks.
 * **[Contributing Guide](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/CONTRIBUTING.md)**: Development, compilation, and testing workflows for C++ and Python.
 * **[Coverage Log](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/coverage-log.md)**: Current C++ Catch2 and Pytest coverage benchmarks.

@@ -38,15 +38,32 @@ except (BigFormatError, BigArchiveError) as err:
     print(f"Native serialization failed: {err}")
 ```
 
+### `pack_to_memory(source) -> bytes`
+Packs a directory or an in-memory collection of paths and payloads into a contiguous BIG4 byte buffer without touching the disk.
+
+* **`source`**: A directory path `str | os.PathLike`, a `Mapping[str, bytes]`, or an `Iterable[tuple[str, bytes]]`.
+* **Returns**: A `bytes` object representing the fully compliant archive.
+
+```python
+from lotm.big import pack_to_memory
+
+virtual_mod = {
+    "data/weapon.ini": b"Damage=50",
+    "readme.txt": b"Mod v1.0",
+}
+archive_bytes = pack_to_memory(virtual_mod)
+```
+
 ---
 
 ## `lotm.big.unpack`
 
-### `unpack(big_path: str | os.PathLike[str], output_dir: str | os.PathLike[str]) -> list[lotm.big.BigEntry]`
+### `unpack(big_path: str | os.PathLike[str], output_dir: str | os.PathLike[str], filter_pattern: str | None = None) -> list[lotm.big.BigEntry]`
 Extracts the contents of a BIG4 archive into a designated folder. Missing parent directories are created automatically. Exposed directly from `lotm.big` (implemented in `lotm.big.unpacker`).
 
 * **`big_path`**: `str | os.PathLike[str]` pointing to the source `.big` archive to read.
 * **`output_dir`**: `str | os.PathLike[str]` indicating the target extraction directory.
+* **`filter_pattern`**: Optional glob string (e.g. `"data/ini/*.ini"`) to extract only matching files.
 * **Returns**: A list of `BigEntry` objects containing `name`, `size`, and `offset` metadata for each extracted entry.
 * **Exceptions**:
   * `FileNotFoundError`: Raised if the source `.big` file cannot be found.
@@ -60,8 +77,8 @@ from pathlib import Path
 from lotm.big import unpack, BigSecurityError, BigFormatError
 
 try:
-    entries = unpack(Path("downloaded_mod.big"), Path("extracted/"))
-    print(f"Extracted {len(entries)} files successfully.")
+    entries = unpack(Path("downloaded_mod.big"), Path("extracted/"), filter_pattern="*.ini")
+    print(f"Extracted {len(entries)} ini files successfully.")
 except BigSecurityError as err:
     print(f"Security violation aborted extraction: {err}")
 except BigFormatError as err:
@@ -81,8 +98,8 @@ For advanced use cases, the native `BigArchive` class provides object-oriented a
 from lotm.big import BigArchive
 
 with BigArchive("my_mod.big") as arc:
-    entries = arc.get_entries()
-    print(f"Archive contains {len(entries)} files.")
+    entries = arc.get_entries("*.dds")
+    print(f"Archive contains {len(entries)} texture files.")
 # arc is now closed, memory is freed, and further calls will raise BigArchiveError.
 ```
 
@@ -111,4 +128,41 @@ try:
             
 except BigArchiveError as err:
     print(f"Failed to read entry: {err}")
+```
+
+---
+
+## `lotm.big.diff` & `create_patch`
+
+The `BigDiff` engine compares two archives structurally and byte-by-byte.
+
+### `diff(base_archive, target_archive, filter_pattern=None) -> BigDiffResult`
+Outputs a `BigDiffResult` categorizing files into `added`, `removed`, `modified`, and `unchanged`.
+```python
+from lotm.big import diff
+
+result = diff("vanilla.big", "modded.big")
+if result.has_differences:
+    print(f"Modified {len(result.modified)} files.")
+```
+
+### `create_patch(base_archive, target_archive, output_file, filter_pattern=None) -> None`
+Automatically packs only the added and modified entries into a minimal, standalone patch archive. An in-memory variant (`create_patch_to_memory`) is also available.
+
+---
+
+## `lotm.big.load_overlay`
+
+Simulates the SAGE engine's load-order to resolve the effective virtual file tree across multiple `.big` files.
+
+### `load_overlay(source: Path | Iterable[Path]) -> BigOverlay`
+```python
+from lotm.big import load_overlay
+
+# Pass a directory to load all enclosed archives alphabetically, or pass a specific sequence list.
+overlay = load_overlay(["base.big", "patch.big", "mod.big"])
+
+# Resolve the winning payload after all overrides are calculated
+resolved = overlay.resolve("data/weapon.ini")
+print(f"Weapon stats sourced from: {resolved.source_archive.name}")
 ```

@@ -11,7 +11,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "lord-of-the-mods"
-version = "0.2.0"
+version = "0.3.0"
 description = "Modular Python library and modding toolkit for The Battle for Middle-earth game"
 readme = "README.md"
 license = { file = "LICENSE.md" }
