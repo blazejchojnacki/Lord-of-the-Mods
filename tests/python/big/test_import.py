@@ -35,10 +35,14 @@ def test_big_subpackage_exports():
     assert issubclass(big.BigSecurityError, big.BigArchiveError)
 
     # Pure Python API helpers
+    assert hasattr(big, "create_patch")
+    assert hasattr(big, "create_patch_to_memory")
     assert hasattr(big, "diff")
     assert hasattr(big, "pack")
     assert hasattr(big, "pack_to_memory")
     assert hasattr(big, "unpack")
+    assert callable(big.create_patch)
+    assert callable(big.create_patch_to_memory)
     assert callable(big.diff)
     assert callable(big.pack)
     assert callable(big.pack_to_memory)

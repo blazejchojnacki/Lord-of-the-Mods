@@ -364,3 +364,57 @@ def test_diff_archives_and_error_handling(tmp_path: Path):
 
     with pytest.raises(FileNotFoundError, match="Target archive not found"):
         big.diff(base_path, tmp_path / "missing_target.big")
+
+
+def test_create_patch_and_create_patch_to_memory(tmp_path: Path):
+    """Verify delta patch generation to disk and memory packs only added and modified files."""
+    base_path = tmp_path / "base.big"
+    target_path = tmp_path / "target.big"
+    patch_path = tmp_path / "delta_patch.big"
+
+    base_path.write_bytes(big.pack_to_memory({
+        "data/weapon.ini": b"Damage=50",
+        "data/armor.ini": b"Armor=100",
+    }))
+    target_path.write_bytes(big.pack_to_memory({
+        "data/weapon.ini": b"Damage=75",
+        "data/armor.ini": b"Armor=100",
+        "data/new_unit.ini": b"Cost=200",
+    }))
+
+    big.create_patch(base_path, target_path, patch_path)
+    assert patch_path.is_file()
+
+    mem_patch = big.create_patch_to_memory(base_path, target_path)
+    assert patch_path.read_bytes() == mem_patch
+
+    with big.BigArchive(patch_path) as patch_arc:
+        names = [e.name for e in patch_arc.get_entries()]
+        assert names == ["data\\new_unit.ini", "data\\weapon.ini"]
+        assert patch_arc.read_entry("data/weapon.ini") == b"Damage=75"
+
+    # Exercise BigArchive overloads and progress callbacks directly
+    cb_mem: list[str] = []
+    cb_disk: list[str] = []
+    direct_patch_path = tmp_path / "direct_patch.big"
+    with big.BigArchive(base_path) as b_arc, big.BigArchive(target_path) as t_arc:
+        raw = big.BigDiff.create_patch_to_memory(b_arc, t_arc, progress_callback=cb_mem.append)
+        assert raw == mem_patch
+        big.BigDiff.create_patch(b_arc, t_arc, direct_patch_path, progress_callback=cb_disk.append)
+
+    assert cb_mem == ["data\\new_unit.ini", "data\\weapon.ini"]
+    assert cb_disk == cb_mem
+
+    # Error handling for missing input archives
+    missing = tmp_path / "missing.big"
+    with pytest.raises(FileNotFoundError, match="Base archive not found"):
+        big.create_patch(missing, target_path, patch_path)
+
+    with pytest.raises(FileNotFoundError, match="Target archive not found"):
+        big.create_patch(base_path, missing, patch_path)
+
+    with pytest.raises(FileNotFoundError, match="Base archive not found"):
+        big.create_patch_to_memory(missing, target_path)
+
+    with pytest.raises(FileNotFoundError, match="Target archive not found"):
+        big.create_patch_to_memory(base_path, missing)

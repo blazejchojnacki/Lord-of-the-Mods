@@ -15,6 +15,8 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <stdexcept>
+#include <stdio.h>
 #include <string>
 #include <utility>
 #include <vector>
@@ -26,12 +28,14 @@ public:
     std::filesystem::path root_dir;
     std::filesystem::path base_file;
     std::filesystem::path target_file;
+    std::filesystem::path patch_file;
 
     ScopedDiffEnv() {
         root_dir = std::filesystem::temp_directory_path() / "lotm_diff_test";
         std::filesystem::create_directories(root_dir);
         base_file = root_dir / "base.big";
         target_file = root_dir / "target.big";
+        patch_file = root_dir / "patch.big";
     }
 
     ~ScopedDiffEnv() {
@@ -156,5 +160,99 @@ TEST_CASE("BigDiff Comparison Scenarios", "[big_diff][compare]") {
         base_arc.close();
 
         REQUIRE_THROWS_AS(BigDiff::compare(base_arc, target_arc), BigArchiveError);
+    }
+}
+
+TEST_CASE("BigDiff Delta Patch Generation", "[big_diff][patch]") {
+    ScopedDiffEnv env;
+
+    env.write_archive(env.base_file, {
+        { "data/unchanged.ini", "Keep=1" },
+        { "data/removed.ini", "Old=1" },
+        { "data/modified.ini", "Damage=50" }
+        });
+
+    env.write_archive(env.target_file, {
+        { "data/unchanged.ini", "Keep=1" },
+        { "data/modified.ini", "Damage=99" },
+        { "art/added.dds", "NEW_DDS" }
+        });
+
+    SECTION("Positive scenario: create_patch and create_patch_to_memory pack only added and modified files") {
+        std::vector<std::string> reported_mem;
+        auto mem_patch = BigDiff::create_patch_to_memory(
+            env.base_file, env.target_file, "", [&](std::string_view name) {
+                reported_mem.emplace_back(name);
+            }
+        );
+
+        REQUIRE(reported_mem.size() == 2);
+        REQUIRE(reported_mem[0] == "art\\added.dds");
+        REQUIRE(reported_mem[1] == "data\\modified.ini");
+
+        std::vector<std::string> reported_disk;
+        BigDiff::create_patch(
+            env.base_file, env.target_file, env.patch_file, "", [&](std::string_view name) {
+                reported_disk.emplace_back(name);
+            }
+        );
+
+        REQUIRE(std::filesystem::exists(env.patch_file));
+        REQUIRE(reported_disk == reported_mem);
+
+        // Verify disk patch matches in-memory patch byte-for-byte
+        std::ifstream in(env.patch_file, std::ios::binary);
+        std::vector<uint8_t> disk_bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        REQUIRE(disk_bytes == mem_patch);
+
+        // Verify contents via BigArchive
+        BigArchive patch_arc(env.patch_file);
+        const auto entries = patch_arc.get_entries();
+        REQUIRE(entries.size() == 2);
+        REQUIRE(entries[0].name == "art\\added.dds");
+        REQUIRE(entries[1].name == "data\\modified.ini");
+
+        auto mod_payload = patch_arc.read_entry("data/modified.ini");
+        REQUIRE(std::string(mod_payload.begin(), mod_payload.end()) == "Damage=99");
+    }
+
+    SECTION("Positive scenario: create_patch with open BigArchive instances and filter_pattern") {
+        BigArchive base_arc(env.base_file);
+        BigArchive target_arc(env.target_file);
+
+        BigDiff::create_patch(base_arc, target_arc, env.patch_file, "*.ini");
+
+        BigArchive patch_arc(env.patch_file);
+        const auto entries = patch_arc.get_entries();
+        REQUIRE(entries.size() == 1);
+        REQUIRE(entries[0].name == "data\\modified.ini");
+    }
+
+    SECTION("Negative scenario: create_patch validates output directory, missing parent, and locked output file") {
+        BigArchive base_arc(env.base_file);
+        BigArchive target_arc(env.target_file);
+
+        // Output path is an existing directory
+        std::filesystem::path dir_out = env.root_dir / "existing_dir";
+        std::filesystem::create_directories(dir_out);
+        REQUIRE_THROWS_AS(BigDiff::create_patch(base_arc, target_arc, dir_out), std::invalid_argument);
+
+        // Output path parent directory does not exist
+        std::filesystem::path missing_parent_out = env.root_dir / "missing_folder" / "patch.big";
+        REQUIRE_THROWS_AS(BigDiff::create_patch(base_arc, target_arc, missing_parent_out), std::invalid_argument);
+
+        // Locked output file triggers BigArchiveError and CleanupGuard
+        {
+            std::ofstream pre(env.patch_file, std::ios::binary);
+            pre << "locked";
+        }
+        FILE* locked_out = _fsopen(env.patch_file.string().c_str(), "rb", 0x10);
+        if (locked_out) {
+            REQUIRE_THROWS_AS(
+                BigDiff::create_patch(base_arc, target_arc, env.patch_file),
+                BigArchiveError
+            );
+            fclose(locked_out);
+        }
     }
 }

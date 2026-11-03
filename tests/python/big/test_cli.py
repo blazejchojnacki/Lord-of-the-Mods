@@ -81,17 +81,19 @@ def test_cli_unpack_with_filter_pattern(standard_mod_directory: Path, tmp_path: 
 
 
 def test_cli_diff_successful_and_verbose_execution(tmp_path: Path, monkeypatch):
-    """Verify lotm-big-diff CLI command executes cleanly with verbose output."""
+    """Verify lotm-big-diff CLI command executes cleanly with verbose output and patch output."""
     base_arc = tmp_path / "base.big"
     target_arc = tmp_path / "target.big"
+    patch_arc = tmp_path / "patch.big"
 
     base_arc.write_bytes(big.pack_to_memory({"a.txt": b"1", "b.txt": b"2"}))
     target_arc.write_bytes(big.pack_to_memory({"b.txt": b"3", "c.txt": b"4"}))
 
     monkeypatch.setattr(
-        sys, "argv", ["lotm-big-diff", str(base_arc), str(target_arc), "-v"]
+        sys, "argv", ["lotm-big-diff", str(base_arc), str(target_arc), "-o", str(patch_arc), "-v"]
     )
     cli.main_diff()
+    assert patch_arc.is_file()
 
 
 def test_cli_diff_missing_archive_exits_with_error(tmp_path: Path, monkeypatch, capsys):
