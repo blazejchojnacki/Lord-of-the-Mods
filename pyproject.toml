@@ -51,6 +51,7 @@ test = [
 lotm-big-pack = "lotm.big.cli:main_pack"
 lotm-big-unpack = "lotm.big.cli:main_unpack"
 lotm-big-diff = "lotm.big.cli:main_diff"
+lotm-big-overlay = "lotm.big.cli:main_overlay"
 
 [project.urls]
 Homepage = "https://github.com/blazejchojnacki/Lord-of-the-Mods"

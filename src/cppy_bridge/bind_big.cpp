@@ -18,6 +18,7 @@
 #include "register.hpp"
 #include <big/big_archive.hpp>
 #include <big/big_diff.hpp>
+#include <big/big_overlay.hpp>
 #include <big/big_packer.hpp>
 #include <big/exceptions.hpp>
 #include <cstdint>
@@ -272,6 +273,56 @@ namespace lotm::python {
                 },
                 nb::arg("base"), nb::arg("target"), nb::arg("output_file"), nb::arg("filter_pattern") = "", nb::arg("progress_callback") = nb::none(),
                 "Packs only added and modified entries between two BIG4 files on disk into a patch file");
+
+        nb::class_<lotm::big::BigOverlayEntry>(sub, "BigOverlayEntry", "Effective entry record resolved across a SAGE archive load order")
+            .def_ro("entry", &lotm::big::BigOverlayEntry::entry, "Winning BigEntry metadata record")
+            .def_ro("source_archive", &lotm::big::BigOverlayEntry::source_archive, "Path to the archive providing the winning entry")
+            .def_ro("override_count", &lotm::big::BigOverlayEntry::override_count, "Number of earlier archives overridden by this entry")
+            .def_prop_ro("name", [](const lotm::big::BigOverlayEntry& self) { return self.entry.name; }, "Internal path of the entry")
+            .def_prop_ro("size", [](const lotm::big::BigOverlayEntry& self) { return self.entry.size; }, "Size of uncompressed data in bytes")
+            .def_prop_ro("offset", [](const lotm::big::BigOverlayEntry& self) { return self.entry.offset; }, "Byte offset within the winning archive")
+            .def("__repr__", [](const lotm::big::BigOverlayEntry& self) {
+            auto u8 = self.source_archive.filename().u8string();
+            std::string filename(reinterpret_cast<const char*>(u8.data()), u8.size());
+            return "<BigOverlayEntry name='" + self.entry.name + "' source='" + filename +
+                "' overrides=" + std::to_string(self.override_count) + ">";
+                });
+
+        nb::class_<lotm::big::BigOverlay>(sub, "BigOverlay", "SAGE engine load-order emulator and virtual archive overlay")
+            .def(nb::init<>(), "Initializes an empty SAGE archive overlay")
+            .def_static("from_directory", &lotm::big::BigOverlay::from_directory,
+                nb::arg("dir_path"),
+                nb::call_guard<nb::gil_scoped_release>(),
+                "Scans a directory for .big files, sorts them alphabetically, and mounts them")
+            .def_static("from_archives", &lotm::big::BigOverlay::from_archives,
+                nb::arg("archive_paths"),
+                nb::call_guard<nb::gil_scoped_release>(),
+                "Mounts a sequence of .big archive files in the specified load order")
+            .def("mount", &lotm::big::BigOverlay::mount,
+                nb::arg("archive_path"),
+                nb::call_guard<nb::gil_scoped_release>(),
+                "Mounts a single .big archive on top of the current overlay")
+            .def_prop_ro("mounted_archives", &lotm::big::BigOverlay::get_mounted_archives,
+                "List of mounted archive paths in load order")
+            .def("get_entries", &lotm::big::BigOverlay::get_entries,
+                nb::arg("filter_pattern") = "",
+                nb::call_guard<nb::gil_scoped_release>(),
+                "Returns all effective entries in the overlay sorted alphabetically")
+            .def("resolve", &lotm::big::BigOverlay::resolve,
+                nb::arg("entry_name"),
+                nb::call_guard<nb::gil_scoped_release>(),
+                "Resolves the winning BigOverlayEntry for a specific internal path")
+            .def("read_entry", [](const lotm::big::BigOverlay& self, std::string_view entry_name) {
+            std::vector<uint8_t> data;
+            {
+                // Release GIL for the duration of the C++ disk I/O
+                nb::gil_scoped_release release;
+                data = self.read_entry(entry_name);
+            }
+            return nb::bytes(reinterpret_cast<const char*>(data.data()), data.size());
+                },
+                nb::arg("entry_name"),
+                "Reads the effective winning entry payload directly into memory as bytes");
     }
 
     // Static instance registers this function before NB_MODULE executes
