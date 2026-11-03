@@ -69,6 +69,7 @@ namespace lotm::python {
                 nb::arg("exc_tb") = nb::none(),
                 "Exits the runtime context and closes the archive")
             .def("get_entries", &lotm::big::BigArchive::get_entries,
+                nb::arg("filter_pattern") = "",
                 "Returns list of indexed file entries")
             .def("read_entry", [](const lotm::big::BigArchive& self, std::string_view entry_name) {
             std::vector<uint8_t> data;
@@ -92,7 +93,7 @@ namespace lotm::python {
                 },
                 nb::arg("entry"),
                 "Reads a single BigEntry record directly into memory as a buffer-protocol bytes object")
-            .def("extract_all", [](const lotm::big::BigArchive& self, const std::filesystem::path& out_dir, std::function<void(std::string_view)> cb) {
+            .def("extract_all", [](const lotm::big::BigArchive& self, const std::filesystem::path& out_dir, std::function<void(std::string_view)> cb, std::string_view filter_pattern) {
             // Wrap the callback to securely reacquire the GIL when invoking Python code
             std::function<void(std::string_view)> safe_cb;
             if (cb) {
@@ -104,9 +105,9 @@ namespace lotm::python {
 
             // Release GIL for the duration of the C++ disk I/O
             nb::gil_scoped_release release;
-            self.extract_all(out_dir, safe_cb);
+            self.extract_all(out_dir, safe_cb, filter_pattern);
                 },
-                nb::arg("output_dir"), nb::arg("progress_callback") = nb::none(),
+                nb::arg("output_dir"), nb::arg("progress_callback") = nb::none(), nb::arg("filter_pattern") = "",
                 "Extracts all contained files into the specified directory");
 
         nb::class_<lotm::big::BigPacker>(sub, "BigPacker", "Packing engine for BIG4 archives")

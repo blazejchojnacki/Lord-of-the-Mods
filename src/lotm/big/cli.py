@@ -43,13 +43,14 @@ def main_unpack() -> None:
     parser = argparse.ArgumentParser(description="Extract EA BIG4 archives using lotm.")
     parser.add_argument("archive", type=Path, help="Path to the .big file")
     parser.add_argument("-o", "--output", type=Path, default=Path("extracted_files"), help="Destination directory")
+    parser.add_argument("-f", "--filter", type=str, default=None, help="Optional glob pattern to filter extracted files")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output logging individual files")
     args = parser.parse_args()
 
     _setup_logging(args.verbose)
 
     try:
-        unpack(args.archive, args.output)
+        unpack(args.archive, args.output, filter_pattern=args.filter)
     except Exception as exc:
         print(f"Extraction failed: {exc}", file=sys.stderr)
         sys.exit(1)
