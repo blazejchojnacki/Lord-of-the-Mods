@@ -189,7 +189,7 @@ namespace lotm::python {
                 " unchanged=" + std::to_string(res.unchanged.size()) + ">";
                 });
 
-        nb::class_<lotm::big::BigDiff>(sub, "BigDiff", "Comparison engine for BIG4 archives")
+        nb::class_<lotm::big::BigDiff>(sub, "BigDiff", "Comparison and delta patch engine for BIG4 archives")
             .def_static("compare",
                 nb::overload_cast<const lotm::big::BigArchive&, const lotm::big::BigArchive&, std::string_view>(&lotm::big::BigDiff::compare),
                 nb::arg("base"), nb::arg("target"), nb::arg("filter_pattern") = "",
@@ -199,7 +199,79 @@ namespace lotm::python {
                 nb::overload_cast<const std::filesystem::path&, const std::filesystem::path&, std::string_view>(&lotm::big::BigDiff::compare),
                 nb::arg("base"), nb::arg("target"), nb::arg("filter_pattern") = "",
                 nb::call_guard<nb::gil_scoped_release>(),
-                "Compares two BIG4 archive files on disk");
+                "Compares two BIG4 archive files on disk")
+            .def_static("create_patch_to_memory", [](const lotm::big::BigArchive& base, const lotm::big::BigArchive& target, std::string_view filter_pattern, std::function<void(std::string_view)> cb) {
+            // Wrap the callback to securely reacquire the GIL when invoking Python code
+            std::function<void(std::string_view)> safe_cb;
+            if (cb) {
+                safe_cb = [&cb](std::string_view sv) {
+                    nb::gil_scoped_acquire acquire;
+                    cb(sv);
+                    };
+            }
+
+            std::vector<uint8_t> data;
+            {
+                // Release GIL for the duration of the C++ diff and packing
+                nb::gil_scoped_release release;
+                data = lotm::big::BigDiff::create_patch_to_memory(base, target, filter_pattern, safe_cb);
+            }
+            return nb::bytes(reinterpret_cast<const char*>(data.data()), data.size());
+                },
+                nb::arg("base"), nb::arg("target"), nb::arg("filter_pattern") = "", nb::arg("progress_callback") = nb::none(),
+                "Packs only added and modified entries between two open BigArchive instances into memory")
+            .def_static("create_patch_to_memory", [](const std::filesystem::path& base, const std::filesystem::path& target, std::string_view filter_pattern, std::function<void(std::string_view)> cb) {
+            // Wrap the callback to securely reacquire the GIL when invoking Python code
+            std::function<void(std::string_view)> safe_cb;
+            if (cb) {
+                safe_cb = [&cb](std::string_view sv) {
+                    nb::gil_scoped_acquire acquire;
+                    cb(sv);
+                    };
+            }
+
+            std::vector<uint8_t> data;
+            {
+                // Release GIL for the duration of the C++ diff and packing
+                nb::gil_scoped_release release;
+                data = lotm::big::BigDiff::create_patch_to_memory(base, target, filter_pattern, safe_cb);
+            }
+            return nb::bytes(reinterpret_cast<const char*>(data.data()), data.size());
+                },
+                nb::arg("base"), nb::arg("target"), nb::arg("filter_pattern") = "", nb::arg("progress_callback") = nb::none(),
+                "Packs only added and modified entries between two BIG4 files on disk into memory")
+            .def_static("create_patch", [](const lotm::big::BigArchive& base, const lotm::big::BigArchive& target, const std::filesystem::path& output_file, std::string_view filter_pattern, std::function<void(std::string_view)> cb) {
+            // Wrap the callback to securely reacquire the GIL when invoking Python code
+            std::function<void(std::string_view)> safe_cb;
+            if (cb) {
+                safe_cb = [&cb](std::string_view sv) {
+                    nb::gil_scoped_acquire acquire;
+                    cb(sv);
+                    };
+            }
+
+            // Release GIL for the duration of the C++ diff and disk I/O
+            nb::gil_scoped_release release;
+            lotm::big::BigDiff::create_patch(base, target, output_file, filter_pattern, safe_cb);
+                },
+                nb::arg("base"), nb::arg("target"), nb::arg("output_file"), nb::arg("filter_pattern") = "", nb::arg("progress_callback") = nb::none(),
+                "Packs only added and modified entries between two open BigArchive instances into a patch file")
+            .def_static("create_patch", [](const std::filesystem::path& base, const std::filesystem::path& target, const std::filesystem::path& output_file, std::string_view filter_pattern, std::function<void(std::string_view)> cb) {
+            // Wrap the callback to securely reacquire the GIL when invoking Python code
+            std::function<void(std::string_view)> safe_cb;
+            if (cb) {
+                safe_cb = [&cb](std::string_view sv) {
+                    nb::gil_scoped_acquire acquire;
+                    cb(sv);
+                    };
+            }
+
+            // Release GIL for the duration of the C++ diff and disk I/O
+            nb::gil_scoped_release release;
+            lotm::big::BigDiff::create_patch(base, target, output_file, filter_pattern, safe_cb);
+                },
+                nb::arg("base"), nb::arg("target"), nb::arg("output_file"), nb::arg("filter_pattern") = "", nb::arg("progress_callback") = nb::none(),
+                "Packs only added and modified entries between two BIG4 files on disk into a patch file");
     }
 
     // Static instance registers this function before NB_MODULE executes

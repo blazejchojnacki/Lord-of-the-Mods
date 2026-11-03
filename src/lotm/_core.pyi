@@ -82,3 +82,18 @@ class big:
             target: str | os.PathLike[str] | 'big.BigArchive',
             filter_pattern: str = ""
         ) -> 'big.BigDiffResult': ...
+        @staticmethod
+        def create_patch_to_memory(
+            base: str | os.PathLike[str] | 'big.BigArchive',
+            target: str | os.PathLike[str] | 'big.BigArchive',
+            filter_pattern: str = "",
+            progress_callback: Callable[[str], None] | None = None
+        ) -> bytes: ...
+        @staticmethod
+        def create_patch(
+            base: str | os.PathLike[str] | 'big.BigArchive',
+            target: str | os.PathLike[str] | 'big.BigArchive',
+            output_file: str | os.PathLike[str],
+            filter_pattern: str = "",
+            progress_callback: Callable[[str], None] | None = None
+        ) -> None: ...

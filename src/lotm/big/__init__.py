@@ -18,7 +18,7 @@ BigArchiveError = big.BigArchiveError
 BigFormatError = big.BigFormatError
 BigSecurityError = big.BigSecurityError
 
-from .differ import diff
+from .differ import create_patch, create_patch_to_memory, diff
 from .packer import pack, pack_to_memory
 from .unpacker import unpack
 
@@ -31,6 +31,8 @@ __all__ = [
     "BigArchiveError",
     "BigFormatError",
     "BigSecurityError",
+    "create_patch",
+    "create_patch_to_memory",
     "diff",
     "pack",
     "pack_to_memory",
