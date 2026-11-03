@@ -418,3 +418,44 @@ def test_create_patch_and_create_patch_to_memory(tmp_path: Path):
 
     with pytest.raises(FileNotFoundError, match="Target archive not found"):
         big.create_patch_to_memory(base_path, missing)
+
+
+def test_load_overlay_from_directory_and_archive_sequence(tmp_path: Path):
+    """Verify SAGE load-order emulation across directories and explicit archive sequences."""
+    arc1 = tmp_path / "01_ini.big"
+    arc2 = tmp_path / "02_patch.big"
+
+    arc1.write_bytes(big.pack_to_memory({
+        "data/weapon.ini": b"Damage=50",
+        "readme.txt": b"v1.0",
+    }))
+    arc2.write_bytes(big.pack_to_memory({
+        "data/weapon.ini": b"Damage=99",
+        "art/icon.dds": b"DDS_PAYLOAD",
+    }))
+
+    # 1. Load from directory (alphabetical order: 01_ini.big -> 02_patch.big)
+    overlay_dir = big.load_overlay(tmp_path)
+    assert len(overlay_dir.mounted_archives) == 2
+
+    resolved = overlay_dir.resolve("data/weapon.ini")
+    assert resolved.name == "data\\weapon.ini"
+    assert resolved.size == 9
+    assert resolved.offset > 0
+    assert resolved.entry.name == "data\\weapon.ini"
+    assert resolved.source_archive == arc2
+    assert resolved.override_count == 1
+    assert "overrides=1" in repr(resolved)
+    assert overlay_dir.read_entry("data/weapon.ini") == b"Damage=99"
+
+    # 2. Load from explicit sequence in reverse order (02_patch.big -> 01_ini.big)
+    overlay_seq = big.load_overlay([arc2, arc1])
+    assert overlay_seq.read_entry("data/weapon.ini") == b"Damage=50"
+    assert overlay_seq.resolve("data/weapon.ini").source_archive == arc1
+
+    # 3. Error handling
+    with pytest.raises(NotADirectoryError, match="does not exist"):
+        big.load_overlay(tmp_path / "missing_dir")
+
+    with pytest.raises(FileNotFoundError, match="Archive not found"):
+        big.load_overlay([arc1, tmp_path / "missing_arc.big"])

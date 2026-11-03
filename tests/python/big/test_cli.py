@@ -109,3 +109,32 @@ def test_cli_diff_missing_archive_exits_with_error(tmp_path: Path, monkeypatch, 
     assert exc.value.code != 0
     _, stderr = capsys.readouterr()
     assert len(stderr.strip()) > 0
+
+
+def test_cli_overlay_successful_and_verbose_execution(tmp_path: Path, monkeypatch):
+    """Verify lotm-big-overlay CLI command executes cleanly for directory and file inputs."""
+    arc1 = tmp_path / "01_base.big"
+    arc2 = tmp_path / "02_patch.big"
+
+    arc1.write_bytes(big.pack_to_memory({"a.ini": b"1"}))
+    arc2.write_bytes(big.pack_to_memory({"a.ini": b"2", "b.ini": b"3"}))
+
+    monkeypatch.setattr(
+        sys, "argv", ["lotm-big-overlay", str(tmp_path), "-f", "*.ini", "-v"]
+    )
+    cli.main_overlay()
+
+
+def test_cli_overlay_missing_source_exits_with_error(tmp_path: Path, monkeypatch, capsys):
+    """Verify lotm-big-overlay exits non-zero when given a non-existent archive path."""
+    missing_file = tmp_path / "void.big"
+    monkeypatch.setattr(
+        sys, "argv", ["lotm-big-overlay", str(missing_file)]
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main_overlay()
+
+    assert exc.value.code != 0
+    _, stderr = capsys.readouterr()
+    assert len(stderr.strip()) > 0
