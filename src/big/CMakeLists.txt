@@ -8,6 +8,7 @@
 add_library(lotm_big STATIC
     big_archive.cpp
     big_packer.cpp
+    big_diff.cpp
 )
 
 set_target_properties(lotm_big PROPERTIES
