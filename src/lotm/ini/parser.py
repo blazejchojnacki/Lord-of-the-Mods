@@ -9,9 +9,10 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
 import json
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, cast
 
 class IniParseError(ValueError):
     """Domain-specific exception for parsing errors."""
@@ -102,9 +103,9 @@ def load_delimiters() -> None:
         if delimiter_path.is_file():
             with open(delimiter_path, 'r', encoding='utf-8') as delimiters_buffer:
                 if '_ini' in delimiter_path.name:
-                    INI_DELIMITERS = json.load(delimiters_buffer)
+                    INI_DELIMITERS = cast(List[List[List[str]]], json.load(delimiters_buffer))
                 elif '_str' in delimiter_path.name:
-                    STR_DELIMITERS = json.load(delimiters_buffer)
+                    STR_DELIMITERS = cast(List[str], json.load(delimiters_buffer))
         else:
             raise IniParseError(f"delimiters file not found: {delimiter_path}")
 
@@ -168,7 +169,8 @@ def _match_delimiter_rule(line_tokens: List[str], rules: List[DelimiterRule]) ->
 def recognize_structure(file_path: str) -> Tuple[List[List[str]], int]:
     load_delimiters()
     if file_path.endswith('.str'):
-        return [list(STR_DELIMITERS), []], 0
+        empty_tail: List[str] = []
+        return [list(STR_DELIMITERS), empty_tail], 0
     elif file_path.endswith('.ini') or file_path.endswith('.inc'):
         lines = _read_file_lines(file_path)
         for file_line in lines:
@@ -182,7 +184,8 @@ def recognize_structure(file_path: str) -> Tuple[List[List[str]], int]:
                         break
                     if _match_delimiter_rule(lexed.line_tokens, level_rules) is not None:
                         delims = [list(level) for level in INI_DELIMITERS[group_idx]]
-                        delims.append([])
+                        empty_level: List[str] = []
+                        delims.append(empty_level)
                         return delims, level_idx
     return [], 0
 
@@ -251,8 +254,10 @@ class StrParser:
 
             if not lexed.words:
                 if last_comment and raw_line.strip() == '':
-                    target = active_entry.items if active_entry is not None else doc.entries
-                    target.append(CommentNode(text=last_comment))
+                    if active_entry is not None:
+                        active_entry.items.append(CommentNode(text=last_comment))
+                    else:
+                        doc.entries.append(CommentNode(text=last_comment))
                     last_comment = ''
                 continue
 
@@ -312,13 +317,13 @@ class ConstructLevel:
     end_token: str = ""
     items: List[AstNode] = field(default_factory=list, init=False)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[AstNode]:
         return iter(self.items)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.items)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> AstNode:
         return self.items[index]
 
     def append(self, item: AstNode) -> None:
@@ -365,17 +370,17 @@ class ConstructFile:
     active_rules: List[List[DelimiterRule]] = field(default_factory=list, init=False)
     context_stack: List[Union['ConstructFile', ConstructLevel]] = field(default_factory=list, init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.name:
             self.construct()
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Union[AstNode, StrEntry]]:
         return iter(self.items)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.items)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> Union[AstNode, StrEntry]:
         return self.items[index]
 
     def append(self, item: Union[AstNode, StrEntry]) -> None:
@@ -388,9 +393,10 @@ class ConstructFile:
         if self.name.endswith('.str'):
             load_delimiters()
             str_doc = StrParser.parse_file(self.name, strict=self.strict)
-            self.delimiters = [list(STR_DELIMITERS), []]
+            empty_tail: List[str] = []
+            self.delimiters = [list(STR_DELIMITERS), empty_tail]
             self.start_level = 0
-            self.items = list(str_doc.entries)
+            self.items = cast(List[Union[AstNode, StrEntry]], list(str_doc.entries))
             self.errors = list(str_doc.errors)
             return
 
@@ -437,9 +443,12 @@ class ConstructFile:
             for group_idx, group_rules in enumerate(INI_DELIMITER_RULES):
                 if len(group_rules) > 0:
                     if _match_delimiter_rule(lexed.line_tokens, group_rules[0]) is not None:
-                        self.delimiters = [list(level) for level in INI_DELIMITERS[group_idx]]
-                        self.delimiters.append([])
-                        self.active_rules = list(group_rules) + [[]]
+                        delims = [list(level) for level in INI_DELIMITERS[group_idx]]
+                        empty_level: List[str] = []
+                        delims.append(empty_level)
+                        self.delimiters = delims
+                        empty_rule_list: List[DelimiterRule] = []
+                        self.active_rules = list(group_rules) + [empty_rule_list]
                         # We found a new schema group, process it immediately as a block start
                         if self._handle_block_start(lexed.words, lexed.line_tokens):
                             return
@@ -571,7 +580,8 @@ def _load_raw_text(full_path: str) -> Tuple[str, List[List[str]]]:
         content = path.read_text(encoding='utf-8')
     except UnicodeDecodeError:
         content = path.read_text(encoding='windows-1252')
-    return content, []
+    empty_delims: List[List[str]] = []
+    return content, empty_delims
 
 
 def scan_file_for_errors(file_path: str) -> List[str]:
