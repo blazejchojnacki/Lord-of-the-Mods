@@ -21,7 +21,7 @@ namespace lotm::ini {
     namespace detail {
 
         // Group 0
-        inline constexpr std::array<std::string_view, 88> G0_L0 = {
+        inline constexpr std::array<std::string_view, 87> G0_L0 = {
             "AudioEvent", "Multisound", "StreamedSound", "AmbientStream", "Animation", "Armor",
             "AudioSettings", "AnimationSoundClientBehaviorGlobalSetting", "ModifierList", "BannerType",
             "ButtonSet", "CommandButton", "CommandMap", "DebugCommandMap", "CommandSet",
@@ -69,7 +69,7 @@ namespace lotm::ini {
             "Object", "ChildObject", "ObjectReskin", "CrateData",
             "FormationAssistant", "FXParticleSystem", "FXList"
         };
-        inline constexpr std::array<std::string_view, 44> G5_L1 = {
+        inline constexpr std::array<std::string_view, 43> G5_L1 = {
             "Draw", "Body", "ArmorSet", "WeaponSet", "LocomotorSet", "UnitSpecificSounds",
             "Flammability", "ThreatBreakdown", "ClientUpdate", "ClientBehavior", "Behavior",
             "AutoResolveArmor", "AutoResolveWeapon", "AddModule", "ReplaceModule", "InheritableModule",
@@ -299,7 +299,7 @@ namespace lotm::ini {
         detail::GROUP_28, detail::GROUP_29, detail::GROUP_30
     };
 
-    inline constexpr std::array<std::string_view, 73> STR_DELIMITERS = {
+    inline constexpr std::array<std::string_view, 74> STR_DELIMITERS = {
         "LETTER", "NUMBER", "TIME", "Color", "Team", "MSG", "GUI", "APT", "Apt", "URL",
         "TOOLTIP", "ToolTip", "Tooltip", "MOTD", "ERROR", "Buddy", "QM", "FTP", "FtpError",
         "WOL", "CHAT", "Chat", "LAN", "Network", "INI", "SIDE", "KEYBOARD", "MapTransfer",

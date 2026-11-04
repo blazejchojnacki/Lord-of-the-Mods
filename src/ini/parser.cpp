@@ -699,7 +699,9 @@ namespace lotm::ini {
 
     void ConstructFile::construct() {
         if (file_path_.empty() && !name.empty()) {
-            file_path_ = std::filesystem::u8path(name);
+            file_path_ = std::filesystem::path(
+                std::u8string_view(reinterpret_cast<const char8_t*>(name.data()), name.size())
+            );
         }
         else if (!file_path_.empty()) {
             name = to_utf8(file_path_);
