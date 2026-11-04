@@ -24,11 +24,13 @@ add_executable(lotm_cpp_tests
     cpp/big/test_big_packer.cpp
     cpp/big/test_big_diff.cpp
     cpp/big/test_big_overlay.cpp
+    cpp/ini/test_ini_parser.cpp
 )
 
 target_link_libraries(lotm_cpp_tests PRIVATE
     lotm_core
     lotm_big
+    lotm_ini
     Catch2::Catch2
 )
 
