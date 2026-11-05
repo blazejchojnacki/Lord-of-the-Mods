@@ -9,6 +9,7 @@ nanobind_add_module(_core
     NB_STATIC
     main.cpp
     bind_big.cpp
+    bind_ini.cpp
 )
 
 target_include_directories(_core PRIVATE
