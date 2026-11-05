@@ -156,7 +156,8 @@ TEST_CASE("IniParser: Basic INI Block Parsing", "[ini][ConstructFile]") {
 
     std::string printed = file.print();
     REQUIRE(printed.find("Object GondorArcher") != std::string::npos);
-    REQUIRE(printed.find("Draw = W3DScriptedModelDraw ModuleTag_01") != std::string::npos);
+    REQUIRE(printed.find("SelectPortrait = UPGondor_Archer") != std::string::npos);
+    REQUIRE(printed.find("Draw W3DScriptedModelDraw ModuleTag_01") != std::string::npos);
 
     std::filesystem::remove(p);
 }
