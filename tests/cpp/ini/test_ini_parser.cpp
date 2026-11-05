@@ -64,6 +64,14 @@ TEST_CASE("IniParser: File loading and raw fallback", "[ini][load_file]") {
         REQUIRE(!content.empty());
         std::filesystem::remove(p);
     }
+
+    SECTION("Empty INI returns empty string") {
+        auto p = create_temp_file("empty.ini", "");
+        auto [content, delims] = load_file(p);
+        REQUIRE(content.empty());
+        REQUIRE(delims.empty());
+        std::filesystem::remove(p);
+    }
 }
 
 TEST_CASE("IniParser: Lexer and Delimiter Compilation", "[ini][lexer]") {
@@ -272,6 +280,10 @@ TEST_CASE("IniParser: Preprocessor Directives", "[ini][Directives]") {
     REQUIRE(inc != nullptr);
     REQUIRE(inc->text == "#include \"some_file.inc\"");
 
+    // Test print serialization of macros
+    std::string out = file.print();
+    REQUIRE(out.find("#define SOME_MACRO 1\n") != std::string::npos);
+
     std::filesystem::remove(p);
 }
 
@@ -308,6 +320,10 @@ TEST_CASE("IniParser: Error Handling and Strict Mode", "[ini][Errors]") {
         auto errors = scan_file_for_errors("completely_missing.ini");
         REQUIRE(errors.size() == 1);
         REQUIRE(errors[0].find("Fatal error") != std::string::npos);
+    }
+
+    SECTION("recognize_structure fails on invalid file") {
+        REQUIRE_THROWS_AS(recognize_structure("non_existent_structure.ini"), IniParseError);
     }
 
     std::filesystem::remove(p);
@@ -356,6 +372,13 @@ TEST_CASE("StrParser: Flat Localization Files", "[str][StrParser]") {
         REQUIRE(entry1->category == "CONTROLBAR");
     }
 
+    SECTION("recognize_structure returns expected array for STR") {
+        auto [delims, lvl] = recognize_structure(p);
+        REQUIRE(delims.size() == 2);
+        REQUIRE(!delims[0].empty());
+        REQUIRE(lvl == 0);
+    }
+
     SECTION("StrParser error handling") {
         REQUIRE_THROWS_AS(StrParser::parse_file("missing.str"), IniParseError);
 
@@ -365,6 +388,34 @@ TEST_CASE("StrParser: Flat Localization Files", "[str][StrParser]") {
         auto doc_lenient = StrParser::parse_file(bad_str, false);
         REQUIRE(doc_lenient.errors.size() == 1);
         std::filesystem::remove(bad_str);
+    }
+
+    SECTION("StrParser multi-line comments and orphaned End flush") {
+        std::string orp_content =
+            "// Line 1\n"
+            "// Line 2\n"
+            "End\n";
+        auto pop = create_temp_file("orphaned.str", orp_content);
+        auto doc = StrParser::parse_file(pop, false);
+        REQUIRE(doc.entries.size() == 2);
+        auto* comment = std::get_if<CommentNode>(&doc.entries[0]);
+        REQUIRE(comment != nullptr);
+        REQUIRE(comment->text == "// Line 1\n// Line 2");
+        auto* end_stmt = std::get_if<StatementNode>(&doc.entries[1]);
+        REQUIRE(end_stmt != nullptr);
+        REQUIRE(end_stmt->text == "End");
+        std::filesystem::remove(pop);
+    }
+
+    SECTION("StrParser root statement outside active entry") {
+        std::string stmt_content = "RootStatement = 123\n";
+        auto pst = create_temp_file("root_stmt.str", stmt_content);
+        auto doc = StrParser::parse_file(pst, false);
+        REQUIRE(doc.entries.size() == 1);
+        auto* stmt = std::get_if<StatementNode>(&doc.entries[0]);
+        REQUIRE(stmt != nullptr);
+        REQUIRE(stmt->text == "RootStatement = 123");
+        std::filesystem::remove(pst);
     }
 
     std::filesystem::remove(p);
@@ -386,6 +437,27 @@ TEST_CASE("IniParser: Windows-1252 Encoding Transcoding", "[ini][encoding]") {
     REQUIRE(stmt->text.find("Special") != std::string::npos);
 
     std::filesystem::remove(p);
+}
+
+TEST_CASE("IniParser: UTF-8 encoding fallbacks triggers", "[ini][encoding]") {
+    // Tests for invalid sequences triggering the is_valid_utf8 fallback
+    std::string data_ff = "Object GondorArcher\n Text = \"\xFF\"\nEnd\n";
+    auto p1 = create_temp_file("test_invalid_ff.ini", data_ff);
+    ConstructFile file1(p1, true);
+    REQUIRE(file1.errors.empty());
+    std::filesystem::remove(p1);
+
+    std::string data_f0 = "Object GondorArcher\n Text = \"\xF0\x80\x80\x80\"\nEnd\n";
+    auto p2 = create_temp_file("test_invalid_f0.ini", data_f0);
+    ConstructFile file2(p2, true);
+    REQUIRE(file2.errors.empty());
+    std::filesystem::remove(p2);
+
+    std::string data_f4 = "Object GondorArcher\n Text = \"\xF4\x90\x80\x80\"\nEnd\n";
+    auto p3 = create_temp_file("test_invalid_f4.ini", data_f4);
+    ConstructFile file3(p3, true);
+    REQUIRE(file3.errors.empty());
+    std::filesystem::remove(p3);
 }
 
 TEST_CASE("IniParser: .inc starting at non-zero level", "[ini][inc]") {
@@ -655,4 +727,34 @@ TEST_CASE("IniParser: Empty Lines and Comment Flushing Before End", "[ini][flush
     REQUIRE(comment->text.find("; Block comment") != std::string::npos);
 
     std::filesystem::remove(p);
+}
+
+TEST_CASE("IniParser: Read lines without trailing newline", "[ini][newlines]") {
+    auto p = create_temp_file("no_trailing_nl.ini", "Object GondorArcher\nEnd");
+    ConstructFile file(p, true);
+    REQUIRE(file.items.size() == 1);
+    std::filesystem::remove(p);
+}
+
+TEST_CASE("IniParser: ConstructLevel Print with Comments", "[ini][print]") {
+    ConstructLevel lvl("Object", "GondorArcher", "", "// Header comment", "End");
+    std::string out = lvl.print(0, ".ini");
+    REQUIRE(out.find("// Header comment\n") != std::string::npos);
+}
+
+TEST_CASE("IniParser: ConstructFile Append and Default Construct", "[ini][construct]") {
+    SECTION("ConstructFile::append adds item to AST") {
+        ConstructFile file;
+        file.append(StatementNode{ "Key = Val" });
+        REQUIRE(file.items.size() == 1);
+    }
+
+    SECTION("ConstructFile initialization from name directly") {
+        auto p = create_temp_file("name_construct.ini", "Object GondorArcher\nEnd\n");
+        ConstructFile file;
+        file.name = p.string();
+        file.construct();
+        REQUIRE(file.items.size() == 1);
+        std::filesystem::remove(p);
+    }
 }
