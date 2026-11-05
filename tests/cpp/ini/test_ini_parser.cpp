@@ -408,3 +408,251 @@ TEST_CASE("IniParser: .inc starting at non-zero level", "[ini][inc]") {
 
     std::filesystem::remove(p);
 }
+
+TEST_CASE("IniParser: Alternate Closing Keywords and Inner Scripts", "[ini][keywords]") {
+    std::string ini_content =
+        "Object GondorArcher\n"
+        "    Draw = W3DScriptedModelDraw ModuleTag_01\n"
+        "        AnimationState = IDLA\n"
+        "            BeginScript\n"
+        "                Prev = CurDrawablePrevAnimation()\n"
+        "            EndScript\n"
+        "        End\n"
+        "    END\n"
+        "End\n";
+
+    auto p = create_temp_file("test_keywords.ini", ini_content);
+    ConstructFile file(p, true);
+    REQUIRE(file.errors.empty());
+
+    auto* obj = std::get_if<ConstructLevel>(&file.items[0].value);
+    REQUIRE(obj != nullptr);
+    auto* draw = std::get_if<ConstructLevel>(&obj->items[0].value);
+    REQUIRE(draw != nullptr);
+    REQUIRE(draw->end_token == "END");
+
+    auto* anim_state = std::get_if<ConstructLevel>(&draw->items[0].value);
+    REQUIRE(anim_state != nullptr);
+    REQUIRE(anim_state->_class == "AnimationState");
+
+    auto* script = std::get_if<ConstructLevel>(&anim_state->items[0].value);
+    REQUIRE(script != nullptr);
+    REQUIRE(script->_class == "BeginScript");
+    REQUIRE(script->end_token == "EndScript");
+
+    std::filesystem::remove(p);
+}
+
+TEST_CASE("IniParser: UTF-8 Validation Boundaries and Newline Normalization", "[ini][encoding_edge]") {
+    SECTION("Valid multi-byte UTF-8 sequences (2-byte, 3-byte, 4-byte)") {
+        std::string utf8_content =
+            "Object GondorArcher\n"
+            "    DisplayName = \"2-byte: \xC3\xA9\"\n"
+            "    Description = \"3-byte: \xE2\x82\xAC\"\n"
+            "    Symbol      = \"4-byte: \xF0\x9F\x94\xA5\"\n"
+            "End\n";
+
+        auto p = create_temp_file("test_valid_utf8.ini", utf8_content);
+        ConstructFile file(p, true);
+        REQUIRE(file.errors.empty());
+
+        auto* obj = std::get_if<ConstructLevel>(&file.items[0].value);
+        REQUIRE(obj != nullptr);
+        REQUIRE(obj->items.size() == 3);
+
+        std::filesystem::remove(p);
+    }
+
+    SECTION("Windows-1252 high table >= 0x800 and < 0x800 branches") {
+        std::string win1252_data = "Object GondorArcher\n    Text = \"";
+        win1252_data.push_back(static_cast<char>(0x80)); // 0x80 maps to U+20AC (>= 0x800, 3-byte UTF-8)
+        win1252_data.push_back(static_cast<char>(0xE9)); // 0xE9 maps to U+00E9 (< 0x800, 2-byte UTF-8)
+        win1252_data += "\"\nEnd\n";
+
+        auto p = create_temp_file("test_cp1252_branches.ini", win1252_data);
+        ConstructFile file(p, true);
+        REQUIRE(file.errors.empty());
+
+        auto* obj = std::get_if<ConstructLevel>(&file.items[0].value);
+        REQUIRE(obj != nullptr);
+        auto* stmt = std::get_if<StatementNode>(&obj->items[0].value);
+        REQUIRE(stmt != nullptr);
+        REQUIRE(stmt->text.find("\xE2\x82\xAC") != std::string::npos);
+
+        std::filesystem::remove(p);
+    }
+
+    SECTION("Invalid UTF-8 sequences fallback to Windows-1252") {
+        std::vector<std::string> invalid_patterns = {
+            std::string("Object GondorArcher\n    Val = \"\xC2\x20\"\nEnd\n"),
+            std::string("Object GondorArcher\n    Val = \"\xC2\"\nEnd\n"),
+            std::string("Object GondorArcher\n    Val = \"\xE0\x80\x80\"\nEnd\n"),
+            std::string("Object GondorArcher\n    Val = \"\xED\xA0\x80\"\nEnd\n"),
+            std::string("Object GondorArcher\n    Val = \"\xE2\x82\"\nEnd\n"),
+            std::string("Object GondorArcher\n    Val = \"\xE2\x20\x80\"\nEnd\n"),
+            std::string("Object GondorArcher\n    Val = \"\xF5\x80\x80\x80\"\nEnd\n"),
+            std::string("Object GondorArcher\n    Val = \"\xF0\x80\x80\x80\"\nEnd\n"),
+            std::string("Object GondorArcher\n    Val = \"\xF4\x90\x80\x80\"\nEnd\n"),
+            std::string("Object GondorArcher\n    Val = \"\xF0\x9F\x94\"\nEnd\n"),
+            std::string("Object GondorArcher\n    Val = \"\xF0\x20\x80\x80\"\nEnd\n")
+        };
+
+        for (std::size_t i = 0; i < invalid_patterns.size(); ++i) {
+            auto p = create_temp_file("test_invalid_utf8_" + std::to_string(i) + ".ini", invalid_patterns[i]);
+            ConstructFile file(p, true);
+            REQUIRE(file.errors.empty());
+            std::filesystem::remove(p);
+        }
+    }
+
+    SECTION("Universal newline handling (CRLF, bare CR, bare LF)") {
+        std::string mixed_linebreaks = "Object GondorArcher\r\r    Prop1 = A\r\n    Prop2 = B\nEnd\r\n";
+        auto p = create_temp_file("test_newlines.ini", mixed_linebreaks);
+        ConstructFile file(p, true);
+        REQUIRE(file.errors.empty());
+
+        auto* obj = std::get_if<ConstructLevel>(&file.items[0].value);
+        REQUIRE(obj != nullptr);
+        REQUIRE(obj->items.size() == 2);
+
+        std::filesystem::remove(p);
+    }
+}
+
+TEST_CASE("StrParser: Advanced Branches and Unclosed Entries", "[str][edge]") {
+    std::string str_content =
+        "// Root comment\n"
+        "\n"
+        "CONTROLBAR:ConstructGondorArcher\n"
+        "    ; Entry comment\n"
+        "\n"
+        "    \"Train Gondor Archer\"\n"
+        "    // Trailing comment before End\n"
+        "End\n"
+        "TOOLTIP\n"
+        "    \"Value without identifier\"\n";
+
+    auto p = create_temp_file("test_advanced.str", str_content);
+    auto doc = StrParser::parse_file(p);
+    REQUIRE(doc.entries.size() == 3);
+
+    auto* comment = std::get_if<CommentNode>(&doc.entries[0]);
+    REQUIRE(comment != nullptr);
+    REQUIRE(comment->text == "// Root comment");
+
+    auto* entry1 = std::get_if<StrEntry>(&doc.entries[1]);
+    REQUIRE(entry1 != nullptr);
+    REQUIRE(entry1->category == "CONTROLBAR");
+    REQUIRE(entry1->identifier == "ConstructGondorArcher");
+    REQUIRE(entry1->items.size() == 3);
+
+    auto* entry2 = std::get_if<StrEntry>(&doc.entries[2]);
+    REQUIRE(entry2 != nullptr);
+    REQUIRE(entry2->category == "TOOLTIP");
+    REQUIRE(entry2->identifier.empty());
+    REQUIRE(entry2->items.size() == 1);
+
+    std::string printed = doc.print();
+    REQUIRE(printed.find("TOOLTIP\n") != std::string::npos);
+
+    auto [content, delims] = load_file(p);
+    REQUIRE(!content.empty());
+    REQUIRE(!delims.empty());
+
+    std::filesystem::remove(p);
+}
+
+TEST_CASE("IniParser: ConstructLevel and AstNode Semantics", "[ini][types]") {
+    ConstructLevel lvl1("Object", "GondorArcher", "Ident", "; Comment", "End");
+    lvl1.append(StatementNode{ "Prop = 1" });
+
+    SECTION("Copy constructor and assignment") {
+        ConstructLevel copied = lvl1;
+        REQUIRE(copied._class == "Object");
+        REQUIRE(copied.name == "GondorArcher");
+        REQUIRE(copied.items.size() == 1);
+
+        ConstructLevel assigned;
+        assigned = lvl1;
+        REQUIRE(assigned.identifier == "Ident");
+        REQUIRE(assigned.items.size() == 1);
+    }
+
+    SECTION("Move constructor and assignment") {
+        ConstructLevel moved = std::move(lvl1);
+        REQUIRE(moved._class == "Object");
+        REQUIRE(moved.items.size() == 1);
+
+        ConstructLevel move_assigned;
+        move_assigned = std::move(moved);
+        REQUIRE(move_assigned.name == "GondorArcher");
+    }
+
+    SECTION("AstNode variant wrapper accepts all node types") {
+        AstNode n1(CommentNode{ "; c" });
+        REQUIRE(std::holds_alternative<CommentNode>(n1.value));
+
+        AstNode n2(StatementNode{ "s" });
+        REQUIRE(std::holds_alternative<StatementNode>(n2.value));
+
+        AstNode n3(IncludeNode{ "#inc" });
+        REQUIRE(std::holds_alternative<IncludeNode>(n3.value));
+
+        AstNode n4(StrEntry{ "CAT", "ID" });
+        REQUIRE(std::holds_alternative<StrEntry>(n4.value));
+
+        AstNode n5(ConstructLevel{ "CLS" });
+        REQUIRE(std::holds_alternative<ConstructLevel>(n5.value));
+    }
+
+    SECTION("ConstructLevel print formatting variations") {
+        ConstructLevel str_lvl("CONTROLBAR", "Id");
+        std::string str_printed = str_lvl.print(0, ".str");
+        REQUIRE(str_printed.find("CONTROLBAR:Id") != std::string::npos);
+
+        ConstructLevel no_end("Object", "NoEnd");
+        std::string no_end_printed = no_end.print(0, ".ini");
+        REQUIRE(no_end_printed.find("Object NoEnd") != std::string::npos);
+
+        ConstructLevel nested_parent("Parent");
+        nested_parent.append(StrEntry{ "CAT", "ID", "; c", "End",{} });
+        std::string nested_printed = nested_parent.print(0, ".ini");
+        REQUIRE(nested_printed.find("CAT:ID") != std::string::npos);
+    }
+
+    SECTION("compile_delimiter_rules std::string overload") {
+        std::vector<std::string> str_rules = { "Object", "Draw" };
+        auto rules = compile_delimiter_rules(std::span<const std::string>(str_rules));
+        REQUIRE(rules.size() == 2);
+    }
+
+    SECTION("load_file on valid .inc file") {
+        std::string inc_content = "Draw = W3DScriptedModelDraw ModuleTag_01\nEnd\n";
+        auto p = create_temp_file("test_valid.inc", inc_content);
+        auto [content, delims] = load_file(p);
+        REQUIRE(!content.empty());
+        REQUIRE(!delims.empty());
+        std::filesystem::remove(p);
+    }
+}
+
+TEST_CASE("IniParser: Empty Lines and Comment Flushing Before End", "[ini][flushing]") {
+    std::string ini_content =
+        "Object GondorArcher\n"
+        "    ; Block comment\n"
+        "    // Another comment before end\n"
+        "End\n";
+
+    auto p = create_temp_file("test_flush.ini", ini_content);
+    ConstructFile file(p, true);
+    REQUIRE(file.errors.empty());
+
+    auto* obj = std::get_if<ConstructLevel>(&file.items[0].value);
+    REQUIRE(obj != nullptr);
+    REQUIRE(obj->items.size() == 1);
+    auto* comment = std::get_if<CommentNode>(&obj->items[0].value);
+    REQUIRE(comment != nullptr);
+    REQUIRE(comment->text.find("; Block comment") != std::string::npos);
+
+    std::filesystem::remove(p);
+}
