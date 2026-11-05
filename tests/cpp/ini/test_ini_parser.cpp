@@ -7,6 +7,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#include <ini/delimiters.hpp>
+#include <ini/exceptions.hpp>
 #include <ini/parser.hpp>
 #include <ini/types.hpp>
 
@@ -14,7 +16,9 @@
 
 #include <filesystem>
 #include <fstream>
+#include <span>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -25,7 +29,7 @@ namespace {
     std::filesystem::path create_temp_file(const std::string& name, const std::string& content) {
         auto path = std::filesystem::temp_directory_path() / name;
         std::ofstream out(path, std::ios::binary);
-        out << content;
+        out.write(content.data(), static_cast<std::streamsize>(content.size()));
         out.close();
         return path;
     }
@@ -47,11 +51,63 @@ TEST_CASE("IniParser: File loading and raw fallback", "[ini][load_file]") {
     }
 
     SECTION("Text file (.txt) falls back to raw text") {
-        auto p = create_temp_file("test.txt", "Some raw text");
+        auto p = create_temp_file("test.txt", "Some raw text\n");
         auto [content, delims] = load_file(p);
         REQUIRE(content == "Some raw text\n");
         REQUIRE(delims.empty());
         std::filesystem::remove(p);
+    }
+
+    SECTION("Malformed INI falls back to raw text in load_file") {
+        auto p = create_temp_file("unsupported.ini", "UnknownBlockWithNoDelimiters\n    Val = 1\n");
+        auto [content, delims] = load_file(p);
+        REQUIRE(!content.empty());
+        std::filesystem::remove(p);
+    }
+}
+
+TEST_CASE("IniParser: Lexer and Delimiter Compilation", "[ini][lexer]") {
+    SECTION("lex_line handles both ; and // comments") {
+        auto lexed1 = lex_line("Key = Value ; Semicolon comment");
+        REQUIRE(lexed1.words.size() == 2);
+        REQUIRE(lexed1.words[0] == "Key");
+        REQUIRE(lexed1.words[1] == "Value");
+        REQUIRE(lexed1.comment == "; Semicolon comment");
+
+        auto lexed2 = lex_line("Key = Value // Slash comment");
+        REQUIRE(lexed2.comment == "// Slash comment");
+
+        auto lexed3 = lex_line("Key = Value // First ; Second");
+        REQUIRE(lexed3.comment == "// First ; Second");
+
+        auto lexed4 = lex_line("Key = Value ; First // Second");
+        REQUIRE(lexed4.comment == "; First // Second");
+
+        auto lexed5 = lex_line("NoComment = 123");
+        REQUIRE(lexed5.comment.empty());
+    }
+
+    SECTION("compile_delimiter_rules and match_delimiter_rule") {
+        std::vector<std::string_view> raw_delims = { "Draw", "DefaultModelConditionState", "AddEmotion = OVERRIDE" };
+        auto rules = compile_delimiter_rules(std::span<const std::string_view>(raw_delims));
+        REQUIRE(rules.size() == 3);
+
+        std::vector<std::string> tokens1 = { "AddEmotion", "=", "OVERRIDE", "Extra" };
+        const auto* match1 = match_delimiter_rule(tokens1, rules);
+        REQUIRE(match1 != nullptr);
+        REQUIRE(match1->raw == "AddEmotion = OVERRIDE");
+
+        std::vector<std::string> tokens2 = { "Unrelated", "Token" };
+        const auto* match2 = match_delimiter_rule(tokens2, rules);
+        REQUIRE(match2 == nullptr);
+    }
+
+    SECTION("format_indented_text handles single and multi-line strings") {
+        auto single = format_indented_text("SingleLine", 2);
+        REQUIRE(single == "        SingleLine\n");
+
+        auto multi = format_indented_text("Line1\nLine2", 1);
+        REQUIRE(multi == "    Line1\n    Line2\n");
     }
 }
 
@@ -98,6 +154,10 @@ TEST_CASE("IniParser: Basic INI Block Parsing", "[ini][ConstructFile]") {
     REQUIRE(inner_stmt != nullptr);
     REQUIRE(inner_stmt->text == "OkToChangeModelColor = Yes");
 
+    std::string printed = file.print();
+    REQUIRE(printed.find("Object GondorArcher") != std::string::npos);
+    REQUIRE(printed.find("Draw = W3DScriptedModelDraw ModuleTag_01") != std::string::npos);
+
     std::filesystem::remove(p);
 }
 
@@ -124,7 +184,6 @@ TEST_CASE("IniParser: ReplaceModule Level Shifting", "[ini][ReplaceModule]") {
     REQUIRE(replace_mod->_class == "ReplaceModule");
     REQUIRE(replace_mod->name == "ModuleTag_01");
 
-    // Draw should be successfully nested inside ReplaceModule, despite both normally being Level 1
     auto* draw = std::get_if<ConstructLevel>(&replace_mod->items[0].value);
     REQUIRE(draw != nullptr);
     REQUIRE(draw->_class == "Draw");
@@ -163,7 +222,8 @@ TEST_CASE("IniParser: Comments and Empty Lines", "[ini][Comments]") {
         "\n"
         "Object GondorArcher // Inline comment\n"
         "    ; Block comment\n"
-        "    ArmorSet = GondorArcherArmor\n"
+        "\n"
+        "    SelectPortrait = UPGondor_Archer\n"
         "End\n";
 
     auto p = create_temp_file("test_comments.ini", ini_content);
@@ -183,6 +243,10 @@ TEST_CASE("IniParser: Comments and Empty Lines", "[ini][Comments]") {
     auto* block_comment = std::get_if<CommentNode>(&obj->items[0].value);
     REQUIRE(block_comment != nullptr);
     REQUIRE(block_comment->text == "; Block comment");
+
+    auto* stmt = std::get_if<StatementNode>(&obj->items[1].value);
+    REQUIRE(stmt != nullptr);
+    REQUIRE(stmt->text == "SelectPortrait = UPGondor_Archer");
 
     std::filesystem::remove(p);
 }
@@ -239,11 +303,18 @@ TEST_CASE("IniParser: Error Handling and Strict Mode", "[ini][Errors]") {
         REQUIRE(errors[0].find("negative level reached") != std::string::npos);
     }
 
+    SECTION("scan_file_for_errors handles non-existent file cleanly") {
+        auto errors = scan_file_for_errors("completely_missing.ini");
+        REQUIRE(errors.size() == 1);
+        REQUIRE(errors[0].find("Fatal error") != std::string::npos);
+    }
+
     std::filesystem::remove(p);
 }
 
 TEST_CASE("StrParser: Flat Localization Files", "[str][StrParser]") {
     std::string str_content =
+        "// File comment\n"
         "CONTROLBAR:ConstructGondorArcher\n"
         "    \"Train Gondor Archer\"\n"
         "End\n"
@@ -254,7 +325,7 @@ TEST_CASE("StrParser: Flat Localization Files", "[str][StrParser]") {
 
     auto p = create_temp_file("test.str", str_content);
 
-    SECTION("StrDocument parsing") {
+    SECTION("StrDocument parsing and printing") {
         auto doc = StrParser::parse_file(p);
         REQUIRE(doc.entries.size() == 2);
 
@@ -270,6 +341,10 @@ TEST_CASE("StrParser: Flat Localization Files", "[str][StrParser]") {
         REQUIRE(entry2 != nullptr);
         REQUIRE(entry2->category == "GUI");
         REQUIRE(entry2->identifier == "QuitGame");
+
+        std::string printed = doc.print();
+        REQUIRE(printed.find("CONTROLBAR:ConstructGondorArcher") != std::string::npos);
+        REQUIRE(printed.find("\"Train Gondor Archer\"") != std::string::npos);
     }
 
     SECTION("ConstructFile delegates to StrParser") {
@@ -279,6 +354,56 @@ TEST_CASE("StrParser: Flat Localization Files", "[str][StrParser]") {
         REQUIRE(entry1 != nullptr);
         REQUIRE(entry1->category == "CONTROLBAR");
     }
+
+    SECTION("StrParser error handling") {
+        REQUIRE_THROWS_AS(StrParser::parse_file("missing.str"), IniParseError);
+
+        auto bad_str = create_temp_file("bad.str", "End\n");
+        REQUIRE_THROWS_AS(StrParser::parse_file(bad_str, true), IniParseError);
+
+        auto doc_lenient = StrParser::parse_file(bad_str, false);
+        REQUIRE(doc_lenient.errors.size() == 1);
+        std::filesystem::remove(bad_str);
+    }
+
+    std::filesystem::remove(p);
+}
+
+TEST_CASE("IniParser: Windows-1252 Encoding Transcoding", "[ini][encoding]") {
+    std::string win1252_data = "Object GondorArcher\n    DisplayName = \"";
+    win1252_data.push_back(static_cast<char>(0x96)); // Windows-1252 en-dash (0x96)
+    win1252_data += " Special\"\nEnd\n";
+
+    auto p = create_temp_file("test_cp1252.ini", win1252_data);
+    ConstructFile file(p, true);
+    REQUIRE(file.errors.empty());
+
+    auto* obj = std::get_if<ConstructLevel>(&file.items[0].value);
+    REQUIRE(obj != nullptr);
+    auto* stmt = std::get_if<StatementNode>(&obj->items[0].value);
+    REQUIRE(stmt != nullptr);
+    REQUIRE(stmt->text.find("Special") != std::string::npos);
+
+    std::filesystem::remove(p);
+}
+
+TEST_CASE("IniParser: .inc starting at non-zero level", "[ini][inc]") {
+    std::string inc_content =
+        "Draw = W3DScriptedModelDraw ModuleTag_Draw\n"
+        "    OkToChangeModelColor = Yes\n"
+        "End\n";
+
+    auto p = create_temp_file("sub_module.inc", inc_content);
+    ConstructFile file(p, true);
+
+    REQUIRE(file.start_level == 1);
+    REQUIRE(file.errors.empty());
+    REQUIRE(file.items.size() == 1);
+
+    auto* draw = std::get_if<ConstructLevel>(&file.items[0].value);
+    REQUIRE(draw != nullptr);
+    REQUIRE(draw->_class == "Draw");
+    REQUIRE(draw->items.size() == 1);
 
     std::filesystem::remove(p);
 }
