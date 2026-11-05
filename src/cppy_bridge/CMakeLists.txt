@@ -17,7 +17,7 @@ target_include_directories(_core PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
 )
 
-target_link_libraries(_core PRIVATE lotm_big)
+target_link_libraries(_core PRIVATE lotm_big lotm_ini)
 
 install(TARGETS _core LIBRARY DESTINATION lotm)
 # Only install the compiled target; python files and stubs are handled by wheel.packages
