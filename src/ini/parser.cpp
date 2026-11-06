@@ -828,9 +828,10 @@ namespace lotm::ini {
             if (matched_rule != nullptr) {
                 auto remaining_words = words.subspan(std::min(matched_rule->word_count, words.size()));
 
+                const bool is_sage_config = name.ends_with(".ini") || name.ends_with(".inc");
                 std::string block_name;
                 std::string block_identifier;
-                if (remaining_words.size() == 2 && name.ends_with(".ini")) {
+                if (remaining_words.size() == 2 && is_sage_config) {
                     block_name = remaining_words[0];
                     block_identifier = remaining_words[1];
                 }
@@ -838,8 +839,15 @@ namespace lotm::ini {
                     block_name = join_tokens(remaining_words, " ");
                 }
 
+                // Preserve '=' assignment syntax for modules (e.g. "Body =", "Draw =")
+                std::string class_token = matched_rule->raw;
+                const std::size_t next_idx = matched_rule->match_tokens.size();
+                if (next_idx < line_tokens.size() && line_tokens[next_idx] == "=" && !class_token.ends_with("=")) {
+                    class_token.append(" =");
+                }
+
                 ConstructLevel new_block(
-                    matched_rule->raw,
+                    std::move(class_token),
                     std::move(block_name),
                     std::move(block_identifier),
                     last_comment
