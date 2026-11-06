@@ -55,6 +55,7 @@ namespace lotm::ini {
      */
     struct StatementNode {
         std::string text;
+        std::string comment;
     };
 
     /**

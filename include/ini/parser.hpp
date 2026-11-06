@@ -68,7 +68,6 @@ namespace lotm::ini {
     class ConstructFile {
     public:
         std::string name{};
-        std::string comment{};
         std::vector<std::string> defines{};
         std::vector<std::vector<std::string>> delimiters{};
         int start_level{ 0 };
@@ -108,7 +107,10 @@ namespace lotm::ini {
             std::span<const std::string> words,
             std::span<const std::string> words_signs
         );
-        void handle_statement(std::span<const std::string> words_signs);
+        void handle_statement(
+            std::span<const std::string> words_signs,
+            std::string inline_comment
+        );
     };
 
     /**
