@@ -1,5 +1,5 @@
 """
-@file tests/python/big/test_cli.py
+@file tests/python/big/test_big_cli.py
 @brief Tests for the command-line interface wrappers of the BIG archive tools.
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>

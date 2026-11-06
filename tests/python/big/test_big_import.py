@@ -1,5 +1,5 @@
 ﻿"""
-@file tests/python/big/test_import.py
+@file tests/python/big/test_big_import.py
 @brief Sanity checks for package imports and public symbol exports.
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
