@@ -6,6 +6,11 @@ All notable changes to the Lord of the Mods (`lotm`) project will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-06
+
+### Changed
+- **Command-Line Interface** (Breaking): Removed individual legacy script aliases (`lotm-big-pack`, `lotm-big-unpack`, `lotm-big-diff`, `lotm-big-overlay`) in favor of a centralized subparser architecture. All commands are now invoked through the unified `lotm-big` entry point (e.g., `lotm-big pack`, `lotm-big unpack`).
+
 ## [0.3.0] - 2026-11-03
 
 ### Added

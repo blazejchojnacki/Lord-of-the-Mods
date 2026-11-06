@@ -7,21 +7,21 @@
 
 | Command | Action |
 |---|---|
-| `lotm-big-pack <source_dir> [-o <out.big>]` | Pack a directory into a BIG4 archive |
-| `lotm-big-unpack <archive> [-o <out_dir>] [-f <pattern>]` | Extract an archive into a target directory |
-| `lotm-big-diff <base.big> <target.big> [-o <patch.big>]` | Compare two archives and generate a delta patch |
-| `lotm-big-overlay <archive1> <archive2> ...` | Emulate SAGE load-order and preview virtual file tree |
+| `lotm-big pack <source_dir> [-o <out.big>]` | Pack a directory into a BIG4 archive |
+| `lotm-big unpack <archive> [-o <out_dir>] [-f <pattern>]` | Extract an archive into a target directory |
+| `lotm-big diff <base.big> <target.big> [-o <patch.big>]` | Compare two archives and generate a delta patch |
+| `lotm-big overlay <archive1> <archive2> ...` | Emulate SAGE load-order and preview virtual file tree |
 | `python -m lotm.big pack ...` | Fallback module execution |
 | `python -m lotm.big unpack ...` | Fallback module execution |
 
 ---
 
-## 2. Packing Archives (`lotm-big-pack`)
+## 2. Packing Archives (`lotm-big pack`)
 
 Compresses a folder structure into a `.big` archive, automatically normalizing path separators, sorting the index table alphabetically for SAGE binary search compatibility, and applying EA `L219` header padding.
 
 ```cmd
-lotm-big-pack "mod_workspace/data" -o "my_mod.big"
+lotm-big pack "mod_workspace/data" -o "my_mod.big"
 ```
 
 **Options:**
@@ -31,12 +31,12 @@ lotm-big-pack "mod_workspace/data" -o "my_mod.big"
 
 ---
 
-## 3. Unpacking Archives (`lotm-big-unpack`)
+## 3. Unpacking Archives (`lotm-big unpack`)
 
 Extracts entries from a BIG4 container while enforcing path sanitization, amplification ratio quotas, and Win32 device checks.
 
 ```cmd
-lotm-big-unpack "my_mod.big" -o "workspace_dump" -f "data/ini/*.ini"
+lotm-big unpack "my_mod.big" -o "workspace_dump" -f "data/ini/*.ini"
 ```
 
 **Options:**
@@ -47,12 +47,12 @@ lotm-big-unpack "my_mod.big" -o "workspace_dump" -f "data/ini/*.ini"
 
 ---
 
-## 4. Archive Comparison & Delta Patching (`lotm-big-diff`)
+## 4. Archive Comparison & Delta Patching (`lotm-big diff`)
 
 Compares a base archive against a modified archive and outputs a summary of added, removed, and modified files. Can automatically pack these differences into a minimal delta patch archive.
 
 ```cmd
-lotm-big-diff "vanilla.big" "modded.big" -o "release_patch.big"
+lotm-big diff "vanilla.big" "modded.big" -o "release_patch.big"
 ```
 
 **Options:**
@@ -64,12 +64,12 @@ lotm-big-diff "vanilla.big" "modded.big" -o "release_patch.big"
 
 ---
 
-## 5. Load-Order Emulation (`lotm-big-overlay`)
+## 5. Load-Order Emulation (`lotm-big overlay`)
 
 Simulates the SAGE engine's alphabetical or explicit archive load-order priority, resolving the "last-wins" effective virtual file tree.
 
 ```cmd
-lotm-big-overlay "03_mod.big" "01_patch.big" -f "*.dds"
+lotm-big overlay "03_mod.big" "01_patch.big" -f "*.dds"
 ```
 
 **Options:**
