@@ -9,6 +9,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 from __future__ import annotations
 
+import runpy
 import sys
 from pathlib import Path
 
@@ -55,6 +56,23 @@ def test_cli_scan_file_and_directory(
     assert "I/O error" in capsys.readouterr().err
 
 
+def test_cli_scan_unsupported_filesystem_entry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Triggers line 131: target exists but is neither file nor directory
+    target = tmp_path / "special_entry"
+    target.touch()
+
+    monkeypatch.setattr(Path, "is_file", lambda self: False)
+    monkeypatch.setattr(Path, "is_dir", lambda self: False)
+
+    rc = cli_main(["scan", str(target)])
+    assert rc == EXIT_ERROR
+    assert "Unsupported filesystem entry" in capsys.readouterr().err
+
+
 def test_cli_format_ini_and_str(
     sample_ini_file: Path,
     sample_str_file: Path,
@@ -66,6 +84,10 @@ def test_cli_format_ini_and_str(
     rc = cli_main(["format", str(sample_ini_file)])
     assert rc == EXIT_SUCCESS
     assert "Object MordorFighter" in capsys.readouterr().out
+
+    # Format .ini with --strict on valid file returns EXIT_SUCCESS
+    rc_strict_clean = cli_main(["format", str(sample_ini_file), "--strict"])
+    assert rc_strict_clean == EXIT_SUCCESS
 
     # Format .str to output file
     formatted_str = tmp_path / "formatted.str"
@@ -81,6 +103,25 @@ def test_cli_format_ini_and_str(
     # Format missing file returns EXIT_ERROR
     rc_missing = cli_main(["format", str(tmp_path / "missing.ini")])
     assert rc_missing == EXIT_ERROR
+
+
+def test_cli_format_strict_with_collected_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Triggers line 174: formatted successfully but ast has errors under --strict
+    test_file = tmp_path / "mock.ini"
+    test_file.write_text("Object GondorArcher\nEnd\n", encoding="utf-8")
+
+    class MockAst:
+        errors = ["Non-fatal syntax irregularity"]
+
+        def print(self) -> str:
+            return "Object GondorArcher\nEnd\n"
+
+    monkeypatch.setattr("lotm.ini.ini_cli.parse_ini_file", lambda path, strict: MockAst())
+
+    rc = cli_main(["format", str(test_file), "--strict"])
+    assert rc == EXIT_PARSE_FAILURE
 
 
 def test_cli_inspect_and_entry_point(
@@ -109,4 +150,14 @@ def test_cli_inspect_and_entry_point(
     monkeypatch.setattr(sys, "argv", ["lotm-ini", "inspect", str(sample_ini_file)])
     with pytest.raises(SystemExit) as exc_info:
         cli_entry()
+    assert exc_info.value.code == EXIT_SUCCESS
+
+
+def test_cli_main_execution_via_runpy(
+    sample_ini_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Triggers line 241: executes the __main__ block directly
+    monkeypatch.setattr(sys, "argv", ["lotm-ini", "inspect", str(sample_ini_file)])
+    with pytest.raises(SystemExit) as exc_info:
+        runpy.run_module("lotm.ini.ini_cli", run_name="__main__")
     assert exc_info.value.code == EXIT_SUCCESS

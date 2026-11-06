@@ -237,5 +237,5 @@ def cli_entry() -> NoReturn:
     sys.exit(main())
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     cli_entry()
