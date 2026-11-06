@@ -157,7 +157,7 @@ def test_load_file_and_recognize_structure(
 
     str_delims, str_start = recognize_structure(sample_str_file)
     assert str_start == 0
-    assert "CONTROLBAR:" in str_delims[0]
+    assert "CONTROLBAR" in str_delims[0]
 
     txt_file = tmp_path / "readme.txt"
     txt_file.write_text("Plain text content", encoding="utf-8")

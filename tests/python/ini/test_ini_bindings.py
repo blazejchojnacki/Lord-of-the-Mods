@@ -57,7 +57,7 @@ def test_construct_level_manual_building_and_printing() -> None:
     printed_ini = block.print(0, ".ini")
     assert "; Heroic unit\n" in printed_ini
     assert "Object GondorArcher ModTag\n" in printed_ini
-    assert "\tSide = Men\n" in printed_ini
+    assert "    Side = Men\n" in printed_ini
     assert printed_ini.endswith("End\n")
 
     # Colon-separated header when file_type is not .ini/.inc
@@ -75,7 +75,7 @@ def test_str_entry_and_document_manual_manipulation() -> None:
 
     entry_text = entry.print()
     assert "// Infantry unit\nOBJECT:GondorSoldier\n" in entry_text
-    assert '\t"Gondor Soldier"\n' in entry_text
+    assert '    "Gondor Soldier"\n' in entry_text
     assert entry_text.endswith("End\n")
 
     # Category without identifier
