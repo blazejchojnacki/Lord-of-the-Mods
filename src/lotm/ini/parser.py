@@ -101,7 +101,7 @@ def parse_ini_file(file_path: str | Path, strict: bool = False) -> ConstructFile
     IniParseError
         If the file does not exist, has an unsupported extension, or fails strict parsing.
     """
-    return ConstructFile(Path(file_path), strict)
+    return ConstructFile(file_path, strict)
 
 
 def parse_str_file(file_path: str | Path, strict: bool = False) -> StrDocument:
@@ -125,7 +125,7 @@ def parse_str_file(file_path: str | Path, strict: bool = False) -> StrDocument:
     IniParseError
         If the file is invalid or fails strict delimiter checks.
     """
-    return StrParser.parse_file(Path(file_path), strict)
+    return StrParser.parse_file(file_path, strict)
 
 
 def load_file(file_path: str | Path) -> tuple[str, list[list[str]]]:
@@ -142,7 +142,7 @@ def load_file(file_path: str | Path) -> tuple[str, list[list[str]]]:
     tuple[str, list[list[str]]]
         A tuple of (formatted_content, delimiter_hierarchy).
     """
-    return _ini.load_file(Path(file_path))
+    return _ini.load_file(file_path)
 
 
 def recognize_structure(file_path: str | Path) -> tuple[list[list[str]], int]:
@@ -159,7 +159,7 @@ def recognize_structure(file_path: str | Path) -> tuple[list[list[str]], int]:
     tuple[list[list[str]], int]
         A tuple of (delimiters_by_level, start_level).
     """
-    return _ini.recognize_structure(Path(file_path))
+    return _ini.recognize_structure(file_path)
 
 
 def scan_file_for_errors(file_path: str | Path) -> list[str]:
@@ -176,7 +176,7 @@ def scan_file_for_errors(file_path: str | Path) -> list[str]:
     list[str]
         List of diagnostic error messages (empty if no errors were found).
     """
-    return _ini.scan_file_for_errors(Path(file_path))
+    return _ini.scan_file_for_errors(file_path)
 
 
 def scan_directory_for_errors(

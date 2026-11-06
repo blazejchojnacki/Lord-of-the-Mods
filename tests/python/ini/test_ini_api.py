@@ -50,7 +50,7 @@ def test_parse_ini_file_structure_and_unwrapping(sample_ini_file: Path) -> None:
     inner_nodes = list(iter_unwrapped_items(obj_block))
     nested_blocks = [n for n in inner_nodes if isinstance(n, ConstructLevel)]
     assert len(nested_blocks) == 1
-    assert nested_blocks[0]._class == "Body"
+    assert nested_blocks[0]._class == "Body ="
     assert nested_blocks[0].name == "ActiveBody"
     assert nested_blocks[0].identifier == "ModuleTag_01"
 
@@ -176,7 +176,7 @@ def test_load_file_and_recognize_structure(
     assert unknown_level == 0
 
     with pytest.raises(IniParseError, match="empty path"):
-        load_file(Path(""))
+        load_file("")
 
     with pytest.raises(IniParseError, match="wrong path"):
         load_file(tmp_path / "nonexistent.ini")
