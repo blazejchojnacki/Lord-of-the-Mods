@@ -1,5 +1,5 @@
 """
-@file tests/python/ini/test_api.py
+@file tests/python/ini/test_ini_api.py
 @brief Tests for lotm.ini Python library API functions and parser behavior.
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>

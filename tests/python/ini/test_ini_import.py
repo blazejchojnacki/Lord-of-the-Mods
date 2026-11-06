@@ -1,5 +1,5 @@
 """
-@file tests/python/ini/test_import.py
+@file tests/python/ini/test_ini_import.py
 @brief Module import and symbol availability tests for lotm.ini.
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>

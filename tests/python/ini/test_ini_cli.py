@@ -1,5 +1,5 @@
 """
-@file tests/python/ini/test_cli.py
+@file tests/python/ini/test_ini_cli.py
 @brief Command-line interface tests for lotm.ini.ini_cli.
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>

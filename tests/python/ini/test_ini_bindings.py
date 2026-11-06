@@ -1,5 +1,5 @@
 """
-@file tests/python/ini/test_bindings.py
+@file tests/python/ini/test_ini_bindings.py
 @brief Tests for native C++ AST nodes, unwrapping, and nanobind bindings.
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
