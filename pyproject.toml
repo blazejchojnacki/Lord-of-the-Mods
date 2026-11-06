@@ -55,7 +55,7 @@ Homepage = "https://github.com/blazejchojnacki/Lord-of-the-Mods"
 "Source Code" = "https://github.com/blazejchojnacki/Lord-of-the-Mods"
 "Issue Tracker" = "https://github.com/blazejchojnacki/Lord-of-the-Mods/issues"
 Changelog = "https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/CHANGELOG.md"
-Documentation = "https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/LIBRARY.md"
+Documentation = "https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/python-api.md"
 
 [tool.scikit-build]
 cmake.version = ">=3.20"

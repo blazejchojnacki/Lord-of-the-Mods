@@ -35,6 +35,82 @@ namespace lotm::big {
             return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
         }
 
+        bool is_unsafe_pack_component(std::string_view name) {
+            if (name.empty() || name == "." || name == ".." ||
+                name.back() == ' ' || name.back() == '.') {
+                return true;
+            }
+
+            std::string upper_name;
+            upper_name.reserve(name.size());
+            for (char c : name) {
+                const auto uc = static_cast<unsigned char>(c);
+                if (uc < 32 || c == ':' || c == '<' || c == '>' ||
+                    c == '"' || c == '|' || c == '?' || c == '*') {
+                    return true;
+                }
+                upper_name.push_back(static_cast<char>(std::toupper(uc)));
+            }
+
+            auto dot_pos = upper_name.find('.');
+            std::string_view base = (dot_pos != std::string_view::npos)
+                ? std::string_view(upper_name).substr(0, dot_pos)
+                : upper_name;
+
+            while (!base.empty() && (base.back() == ' ' || base.back() == '.')) {
+                base.remove_suffix(1);
+            }
+
+            if (base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" ||
+                base == "CONIN$" || base == "CONOUT$" || base == "CLOCK$") {
+                return true;
+            }
+            if (base.starts_with("COM") || base.starts_with("LPT")) {
+                if (base.size() == 4) {
+                    const auto digit = static_cast<unsigned char>(base[3]);
+                    if ((digit >= '0' && digit <= '9') ||
+                        digit == 0xB9 || digit == 0xB2 || digit == 0xB3) {
+                        return true;
+                    }
+                }
+                else if (base.size() == 5 && static_cast<unsigned char>(base[3]) == 0xC2) {
+                    const auto sup = static_cast<unsigned char>(base[4]);
+                    if (sup == 0xB9 || sup == 0xB2 || sup == 0xB3) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        void validate_pack_rel_path(std::string_view rel_path) {
+            if (rel_path.empty() ||
+                rel_path.find('\0') != std::string_view::npos ||
+                rel_path.front() == '\\' ||
+                rel_path.front() == '/' ||
+                rel_path.back() == '\\' ||
+                rel_path.back() == '/') {
+                throw std::invalid_argument("Invalid or unsafe archive entry path: " + std::string(rel_path));
+            }
+
+            std::size_t start = 0;
+            while (start < rel_path.size()) {
+                std::size_t end = rel_path.find_first_of("\\/", start);
+                std::string_view segment = (end == std::string_view::npos)
+                    ? rel_path.substr(start)
+                    : rel_path.substr(start, end - start);
+
+                if (is_unsafe_pack_component(segment)) {
+                    throw std::invalid_argument("Invalid or unsafe archive entry path: " + std::string(rel_path));
+                }
+
+                if (end == std::string_view::npos) {
+                    break;
+                }
+                start = end + 1;
+            }
+        }
+
         // Computes header size, validates 32-bit format bounds, and writes the BIG4 header into a pre-allocated buffer
         std::vector<uint8_t> allocate_and_write_header(
             std::vector<detail::PackSourceRecord>& file_list,
@@ -116,6 +192,8 @@ namespace lotm::big {
 
             std::unordered_set<std::string> seen_paths;
             for (const auto& f : entries) {
+                validate_pack_rel_path(f.rel_path);
+
                 std::string lower_path = f.rel_path;
                 std::transform(lower_path.begin(), lower_path.end(), lower_path.begin(),
                     [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -208,22 +286,24 @@ namespace lotm::big {
 
         uint32_t total_size = current_offset;
 
-        bool pack_successful = false;
-        struct CleanupGuard {
-            std::filesystem::path path;
-            bool& success;
-            ~CleanupGuard() {
-                if (!success) {
-                    std::error_code ec;
-                    std::filesystem::remove(path, ec);
-                }
-            }
-        } guard{ output_file, pack_successful };
-
         std::ofstream out(output_file, std::ios::binary);
         if (!out.is_open()) {
             throw BigArchiveError("Cannot create output file: " + to_utf8(output_file));
         }
+
+        bool pack_successful = false;
+        struct CleanupGuard {
+            std::ofstream& stream;
+            std::filesystem::path path;
+            bool& success;
+            ~CleanupGuard() {
+                if (!success) {
+                    stream.close();
+                    std::error_code ec;
+                    std::filesystem::remove(path, ec);
+                }
+            }
+        } guard{ out, output_file, pack_successful };
 
         out.write(BIG4_MAGIC.data(), 4);
 

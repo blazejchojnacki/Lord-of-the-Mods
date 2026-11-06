@@ -37,6 +37,12 @@ namespace lotm::big {
         // Reads a single archive entry into memory using its metadata record
         [[nodiscard]] std::vector<uint8_t> read_entry(const BigEntry& entry) const;
 
+        // Validates that the cumulative size of matching entries does not exceed the amplification ratio
+        uintmax_t validate_extraction_quota(std::string_view filter_pattern = {}) const;
+
+        // Returns the underlying archive file path
+        [[nodiscard]] const std::filesystem::path& file_path() const noexcept;
+
         // Releases the in-memory index and marks the archive as closed
         void close() noexcept;
 

@@ -59,8 +59,14 @@ namespace lotm::big {
         const BigArchive& target_archive,
         std::string_view filter_pattern
     ) {
-        const auto base_sorted = build_sorted_index(base_archive.get_entries(filter_pattern));
-        const auto target_sorted = build_sorted_index(target_archive.get_entries(filter_pattern));
+        const auto base_entries = base_archive.get_entries(filter_pattern);
+        const auto target_entries = target_archive.get_entries(filter_pattern);
+
+        base_archive.validate_extraction_quota(filter_pattern);
+        target_archive.validate_extraction_quota(filter_pattern);
+
+        const auto base_sorted = build_sorted_index(base_entries);
+        const auto target_sorted = build_sorted_index(target_entries);
 
         BigDiffResult result;
         std::size_t i = 0;
@@ -172,26 +178,34 @@ namespace lotm::big {
             throw std::invalid_argument("Target output directory does not exist: " + to_utf8(parent));
         }
 
+        const auto canonical_out = std::filesystem::weakly_canonical(output_file);
+        if (canonical_out == std::filesystem::weakly_canonical(base_archive.file_path()) ||
+            canonical_out == std::filesystem::weakly_canonical(target_archive.file_path())) {
+            throw std::invalid_argument("Target output path cannot overwrite an input archive: " + to_utf8(output_file));
+        }
+
         const std::vector<uint8_t> patch_bytes = create_patch_to_memory(
             base_archive, target_archive, filter_pattern, std::move(progress_callback)
         );
-
-        bool write_successful = false;
-        struct CleanupGuard {
-            std::filesystem::path path;
-            bool& success;
-            ~CleanupGuard() {
-                if (!success) {
-                    std::error_code ec;
-                    std::filesystem::remove(path, ec);
-                }
-            }
-        } guard{ output_file, write_successful };
 
         std::ofstream out(output_file, std::ios::binary);
         if (!out.is_open()) {
             throw BigArchiveError("Cannot create output file: " + to_utf8(output_file));
         }
+
+        bool write_successful = false;
+        struct CleanupGuard {
+            std::ofstream& stream;
+            std::filesystem::path path;
+            bool& success;
+            ~CleanupGuard() {
+                if (!success) {
+                    stream.close();
+                    std::error_code ec;
+                    std::filesystem::remove(path, ec);
+                }
+            }
+        } guard{ out, output_file, write_successful };
 
         out.write(
             reinterpret_cast<const char*>(patch_bytes.data()),
