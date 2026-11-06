@@ -1,7 +1,46 @@
 # Lord-of-the-Mods
 # coverage-log
 
-## v0.3.0 - 2026-11-03
+## 0.4.0 - 2026-11-05
+
+```text
+========================================================================= tests coverage =========================================================================
+________________________________________________________ coverage: platform win32, python 3.12.3-final-0 _________________________________________________________
+
+Name                       Stmts   Miss  Cover   Missing
+--------------------------------------------------------
+src\lotm\__init__.py           4      0   100%
+src\lotm\big\__init__.py      16      0   100%
+src\lotm\big\cli.py           76      0   100%
+src\lotm\big\differ.py        42      0   100%
+src\lotm\big\overlay.py       23      0   100%
+src\lotm\big\packer.py        29      0   100%
+src\lotm\big\unpacker.py      19      0   100%
+--------------------------------------------------------
+TOTAL                        209      0   100%
+```
+
+```text
+Cpp coverage at 98%.
+Name                              Total lines    Coverage
+build\tests\lotm_cpp_tests.exe           1470         98%
+src\big\big_archive.cpp                   282         95%
+src\big\big_diff.cpp                      112         96%
+src\big\big_packer.cpp                    226         98%
+src\ini\parser.cpp                        680         99%
+include\big\big_archive.hpp                 3        100%
+include\big\big_diff.hpp                    3        100%
+include\big\big_overlay.hpp                 1        100%
+include\core\endian.hpp                    21        100%
+include\ini\parser.hpp                     14        100%
+include\ini\types.hpp                      22        100%
+src\big\big_overlay.cpp                   106        100%
+
+Remaining 2% C++ consists of unmockable OS/hardware I/O faults (e.g., sudden disk space exhaustion during `out_file.write()`, physical read truncations) which are exempt from unit testing.
+```
+
+
+## 0.3.0 - 2026-11-03
 
 ```text
 ========================================================================= tests coverage =========================================================================
