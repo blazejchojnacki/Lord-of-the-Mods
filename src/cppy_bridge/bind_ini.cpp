@@ -42,8 +42,8 @@ namespace lotm::python {
             .def_rw("text", &ini::IncludeNode::text);
 
         // Bind AstNode as a transparent wrapper around the variant to unwrap natively to Python
+        // Parameterless init is omitted because AstNode requires a concrete variant alternative.
         nb::class_<ini::AstNode>(ini_m, "AstNode")
-            .def(nb::init<>())
             .def(nb::init<ini::StatementNode>(), "node"_a)
             .def(nb::init<ini::CommentNode>(), "node"_a)
             .def(nb::init<ini::IncludeNode>(), "node"_a)
