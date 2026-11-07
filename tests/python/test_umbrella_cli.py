@@ -7,11 +7,19 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
+import importlib
 import sys
 import pytest
 from pathlib import Path
 
 import lotm.cli as cli
+
+
+def test_umbrella_main_module_import() -> None:
+    """Verify that python -m lotm entry module is discoverable and exports cli_entry."""
+    main_mod = importlib.import_module("lotm.__main__")
+    assert hasattr(main_mod, "cli_entry")
+    assert callable(main_mod.cli_entry)
 
 
 def test_umbrella_cli_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
