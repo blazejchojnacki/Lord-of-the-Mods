@@ -8,8 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.0] - 2026-11-06
 
+### Added
+- **Granular Progress Telemetry & Cooperative Cancellation**:
+  - Introduced `ProgressReport` structure and `ProgressCallback` (`std::function<bool(const ProgressReport&)>`) across all extraction, packing, and delta patch operations in C++ and Python.
+  - Granular telemetry reports `entry_name`, `bytes_transferred`, `file_size`, `total_bytes_transferred`, and `total_archive_size` during multi-megabyte chunk streaming loops.
+  - Cooperative preemption: returning `false` (or `Python False`) from `progress_callback` immediately aborts operations with `BigArchiveError` and triggers RAII cleanup.
+- **Zero-Copy Buffer Protocol Integration**:
+  - `BigPacker.pack_to_memory` and high-level `pack_to_memory` now accept zero-copy Python Buffer Protocol objects (`bytes`, `bytearray`, `memoryview`) via RAII `Py_buffer` pinning.
+
+### Security & Hardening
+- **Atomic File Serialization**:
+  - Replaced direct in-place output truncation with atomic writes to temporary sibling files (`.lotm_tmp`) followed by `std::filesystem::rename` commits, ensuring pre-existing archives are never corrupted or destroyed on mid-stream exceptions.
+- **Header & 32-Bit Limit Hardening**:
+  - Enforced strict `total_size >= header_size` validation during archive construction.
+  - Upcasted bounds checks to `uintmax_t` to block 32-bit addition wrap-around exploits.
+
 ### Changed
-- **Command-Line Interface** (Breaking): Removed individual legacy script aliases (`lotm-big-pack`, `lotm-big-unpack`, `lotm-big-diff`, `lotm-big-overlay`) in favor of a centralized subparser architecture. All commands are now invoked through the unified `lotm-big` entry point (e.g., `lotm-big pack`, `lotm-big unpack`).
+- **Command-Line Interface** (Breaking): Removed individual legacy script aliases (`lotm-big-pack`, `lotm-big-unpack`, `lotm-big-diff`, `lotm-big-overlay`) in favor of a centralized subparser architecture. All commands are now invoked through the unified `lotm-big` entry point (`lotm-big pack`, `lotm-big unpack`).
+- **CLI Output Isolation**:
+  - Isolated CLI command results and summaries to `sys.stdout`, reserving logging handlers strictly for diagnostic telemetry.architecture. All commands are now invoked through the unified `lotm-big` entry point (e.g., `lotm-big pack`, `lotm-big unpack`).
 
 ## [0.3.0] - 2026-11-03
 

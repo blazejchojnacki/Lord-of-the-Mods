@@ -13,16 +13,18 @@ pip install lord-of-the-mods
 
 ## `lotm.big.pack`
 
-### `pack(source_dir: str | os.PathLike[str], output_file: str | os.PathLike[str]) -> None`
-Packs a directory structure into an EA BIG4 standard archive. Missing parent directories for the output destination are created automatically. Exposed directly from `lotm.big` (implemented in `lotm.big.packer`).
+### `pack(source_dir: str | os.PathLike[str], output_file: str | os.PathLike[str], progress_callback: Callable[[ProgressReport], bool | None] | None = None) -> None`
+Packs a directory structure into an EA BIG4 standard archive atomically via a temporary sibling file. Raises FileNotFoundError if the target output directory does not exist.
 
 * **`source_dir`**: `str | os.PathLike[str]` pointing to the directory to compress.
 * **`output_file`**: `str | os.PathLike[str]` indicating the target `.big` destination file.
+* **`progress_callback`**: Optional callable receiving a `ProgressReport` instance. Returning `False` cancels the operation and triggers cleanup.
 * **Exceptions**:
   * `NotADirectoryError`: Raised if the source directory does not exist or is not a directory.
   * `ValueError`: Raised if the output file path resolves inside the source directory (self-inclusion).
   * `lotm.big.BigFormatError` (Native): Raised if an individual file or cumulative archive size exceeds the 4GB (32-bit) format boundary.
   * `lotm.big.BigArchiveError` (Native): Raised if an I/O read/write error occurs during packing.
+  * `FileNotFoundError`: Raised if the target output directory does not exist.
 
 **Usage Example:**
 ```python
