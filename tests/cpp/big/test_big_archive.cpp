@@ -228,6 +228,13 @@ TEST_CASE("BigArchive Extraction", "[big_unpack][extraction]") {
 TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_cases]") {
     ScopedTempEnv env;
 
+    SECTION("Negative scenario: 0-byte .big file completely empty") {
+        std::ofstream out(env.test_file, std::ios::binary);
+        out.close();
+
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
+
     SECTION("Negative scenario: Truncated header (file too small for metadata)") {
         std::ofstream out(env.test_file, std::ios::binary);
         out.write("BIG4", 4);
@@ -255,6 +262,23 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         out.close();
 
         // Must throw instead of allocating a massive vector of garbage
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
+
+    SECTION("Negative scenario: Header size is smaller than HEADER_BASE_SIZE (16)") {
+        std::ofstream out(env.test_file, std::ios::binary);
+        out.write("BIG4", 4);
+        uint32_t total_size = lotm::core::to_little_endian(static_cast<uint32_t>(16));
+        out.write(reinterpret_cast<const char*>(&total_size), 4);
+
+        uint32_t num_files = lotm::core::to_big_endian(static_cast<uint32_t>(0));
+        out.write(reinterpret_cast<const char*>(&num_files), 4);
+
+        // Header size claimed is 12 (invalid, must be >= 16)
+        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(12));
+        out.write(reinterpret_cast<const char*>(&header_size), 4);
+        out.close();
+
         REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
     }
 
@@ -320,6 +344,36 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         BigArchive archive(env.test_file);
 
         // Extraction should fail upon detecting bad offset limits
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigFormatError);
+    }
+
+    SECTION("Negative scenario: 32-bit addition wrap-around in extraction bounds check") {
+        std::ofstream out(env.test_file, std::ios::binary);
+        out.write("BIG4", 4);
+
+        uint32_t total_size = lotm::core::to_little_endian(static_cast<uint32_t>(38));
+        out.write(reinterpret_cast<const char*>(&total_size), 4);
+
+        uint32_t num_files = lotm::core::to_big_endian(static_cast<uint32_t>(1));
+        out.write(reinterpret_cast<const char*>(&num_files), 4);
+
+        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(38));
+        out.write(reinterpret_cast<const char*>(&header_size), 4);
+
+        // offset + size = 0xFFFFFFF0 + 0x20 = 0x100000010.
+        // Cast to uint32_t = 0x10. If the engine didn't safely upcast to uintmax_t,
+        // 0x10 < 38, so it would pass bounds checking maliciously.
+        uint32_t offset = lotm::core::to_big_endian(static_cast<uint32_t>(0xFFFFFFF0));
+        uint32_t size = lotm::core::to_big_endian(static_cast<uint32_t>(0x20));
+        out.write(reinterpret_cast<const char*>(&offset), 4);
+        out.write(reinterpret_cast<const char*>(&size), 4);
+
+        out.write("A.txt", 5);
+        out.write("\0", 1);
+        out.write("L219\0\0\0\0", 8);
+        out.close();
+
+        BigArchive archive(env.test_file);
         REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigFormatError);
     }
 
