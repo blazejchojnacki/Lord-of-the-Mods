@@ -48,6 +48,7 @@ test = [
 ]
 
 [project.scripts]
+lotm = "lotm.cli:cli_entry"
 lotm-big = "lotm.big.cli:cli_entry"
 
 [project.urls]

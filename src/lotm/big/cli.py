@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import NoReturn
 
@@ -37,14 +37,10 @@ def _setup_logging(verbose: bool) -> None:
         pkg_logger.addHandler(handler)
 
 
-def build_parser() -> argparse.ArgumentParser:
-    """Construct and return the ArgumentParser for lotm-big."""
-    parser = argparse.ArgumentParser(
-        prog="lotm-big",
-        description="Command-line interface for EA BIG4 archive manipulation.",
-    )
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
+def _configure_subparsers(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Attach BIG4 subcommands and dispatch callbacks to a subparsers action."""
     # Subcommand: pack
     pack_parser = subparsers.add_parser(
         "pack",
@@ -53,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     pack_parser.add_argument("source_dir", type=Path, help="Path to the directory containing files to pack")
     pack_parser.add_argument("-o", "--output", type=Path, default=Path("packed_archive.big"), help="Destination .big file path")
     pack_parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output logging individual files")
+    pack_parser.set_defaults(handler=_handle_pack)
 
     # Subcommand: unpack
     unpack_parser = subparsers.add_parser(
@@ -63,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     unpack_parser.add_argument("-o", "--output", type=Path, default=Path("extracted_files"), help="Destination directory")
     unpack_parser.add_argument("-f", "--filter", type=str, default=None, help="Optional glob pattern to filter extracted files")
     unpack_parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output logging individual files")
+    unpack_parser.set_defaults(handler=_handle_unpack)
 
     # Subcommand: diff
     diff_parser = subparsers.add_parser(
@@ -74,6 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
     diff_parser.add_argument("-o", "--output", type=Path, default=None, help="Optional destination .big file path to write a delta patch archive")
     diff_parser.add_argument("-f", "--filter", type=str, default=None, help="Optional glob pattern to filter compared files")
     diff_parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output logging individual changes")
+    diff_parser.set_defaults(handler=_handle_diff)
 
     # Subcommand: overlay
     overlay_parser = subparsers.add_parser(
@@ -83,7 +82,31 @@ def build_parser() -> argparse.ArgumentParser:
     overlay_parser.add_argument("sources", type=Path, nargs="+", help="Directory containing .big files, or explicit .big archive paths in load order")
     overlay_parser.add_argument("-f", "--filter", type=str, default=None, help="Optional glob pattern to filter resolved entries")
     overlay_parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output logging winning archives and override counts")
+    overlay_parser.set_defaults(handler=_handle_overlay)
 
+
+def register_subparser(
+    parent_subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> argparse.ArgumentParser:
+    """Register the 'big' domain subparser onto the top-level lotm ArgumentParser."""
+    big_parser = parent_subparsers.add_parser(
+        "big",
+        help="EA BIG4 archive packing, extraction, diffing, and load-order overlay tools.",
+        description="Command-line interface for EA BIG4 archive manipulation.",
+    )
+    subparsers = big_parser.add_subparsers(dest="command", required=True)
+    _configure_subparsers(subparsers)
+    return big_parser
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Construct and return the ArgumentParser for lotm-big."""
+    parser = argparse.ArgumentParser(
+        prog="lotm-big",
+        description="Command-line interface for EA BIG4 archive manipulation.",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    _configure_subparsers(subparsers)
     return parser
 
 
@@ -153,19 +176,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        if args.command == "pack":
-            return _handle_pack(args)
-        if args.command == "unpack":
-            return _handle_unpack(args)
-        if args.command == "diff":
-            return _handle_diff(args)
-        if args.command == "overlay":
-            return _handle_overlay(args)
+        handler: Callable[[argparse.Namespace], int] = args.handler
+        return handler(args)
     except Exception as exc:
         print(f"Command '{args.command}' failed: {exc}", file=sys.stderr)
         return EXIT_ERROR
-
-    return EXIT_ERROR  # pragma: no cover
 
 
 def cli_entry() -> NoReturn:
