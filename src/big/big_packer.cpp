@@ -209,7 +209,7 @@ namespace lotm::big {
     void BigPacker::pack_from_directory(
         const std::filesystem::path& source_dir,
         const std::filesystem::path& output_file,
-        std::function<void(std::string_view)> progress_callback
+        ProgressCallback progress_callback
     ) {
         if (!std::filesystem::exists(source_dir) || !std::filesystem::is_directory(source_dir)) {
             throw std::invalid_argument("Source directory does not exist or is not a directory.");
@@ -342,6 +342,8 @@ namespace lotm::big {
         out.write(EA_PADDING_TAG.data(), EA_PADDING_SIZE);
 
         std::vector<char> chunk(1024 * 1024);
+        uint64_t total_bytes_transferred = 0;
+
         for (const auto& f : file_list) {
             std::ifstream src(f.full_path, std::ios::binary);
             if (!src.is_open()) {
@@ -358,6 +360,20 @@ namespace lotm::big {
                         throw BigArchiveError("Failed writing data to archive: " + to_utf8(output_file));
                     }
                     bytes_copied += static_cast<uintmax_t>(bytes_read);
+                    total_bytes_transferred += static_cast<uint64_t>(bytes_read);
+
+                    if (progress_callback) {
+                        const ProgressReport report{
+                            f.rel_path,
+                            static_cast<uint64_t>(bytes_copied),
+                            f.size,
+                            total_bytes_transferred,
+                            static_cast<uint64_t>(total_payload_size)
+                        };
+                        if (!progress_callback(report)) {
+                            throw BigArchiveError("Operation cancelled by progress callback.");
+                        }
+                    }
                 }
             }
 
@@ -365,8 +381,17 @@ namespace lotm::big {
                 throw BigArchiveError("Byte count mismatch while packing file: " + f.rel_path);
             }
 
-            if (progress_callback) {
-                progress_callback(f.rel_path);
+            if (f.size == 0 && progress_callback) {
+                const ProgressReport report{
+                    f.rel_path,
+                    0,
+                    0,
+                    total_bytes_transferred,
+                    static_cast<uint64_t>(total_payload_size)
+                };
+                if (!progress_callback(report)) {
+                    throw BigArchiveError("Operation cancelled by progress callback.");
+                }
             }
         }
 
@@ -387,7 +412,7 @@ namespace lotm::big {
 
     std::vector<uint8_t> BigPacker::pack_to_memory(
         const std::filesystem::path& source_dir,
-        std::function<void(std::string_view)> progress_callback
+        ProgressCallback progress_callback
     ) {
         if (!std::filesystem::exists(source_dir) || !std::filesystem::is_directory(source_dir)) {
             throw std::invalid_argument("Source directory does not exist or is not a directory.");
@@ -421,6 +446,7 @@ namespace lotm::big {
         }
 
         std::vector<uint8_t> buffer = allocate_and_write_header(file_list, total_payload_size);
+        uint64_t total_bytes_transferred = 0;
 
         for (const auto& f : file_list) {
             std::ifstream src(f.full_path, std::ios::binary);
@@ -435,8 +461,19 @@ namespace lotm::big {
                 }
             }
 
+            total_bytes_transferred += f.size;
+
             if (progress_callback) {
-                progress_callback(f.rel_path);
+                const ProgressReport report{
+                    f.rel_path,
+                    f.size,
+                    f.size,
+                    total_bytes_transferred,
+                    static_cast<uint64_t>(total_payload_size)
+                };
+                if (!progress_callback(report)) {
+                    throw BigArchiveError("Operation cancelled by progress callback.");
+                }
             }
         }
 
@@ -445,7 +482,7 @@ namespace lotm::big {
 
     std::vector<uint8_t> BigPacker::pack_to_memory(
         std::span<const std::pair<std::string, std::span<const uint8_t>>> files,
-        std::function<void(std::string_view)> progress_callback
+        ProgressCallback progress_callback
     ) {
         std::vector<detail::PackSourceRecord> file_list;
         file_list.reserve(files.size());
@@ -476,6 +513,7 @@ namespace lotm::big {
 
         std::vector<std::size_t> sorted_indices;
         std::vector<uint8_t> buffer = allocate_and_write_header(file_list, total_payload_size, &sorted_indices);
+        uint64_t total_bytes_transferred = 0;
 
         for (std::size_t i = 0; i < file_list.size(); ++i) {
             const auto& f = file_list[i];
@@ -484,8 +522,19 @@ namespace lotm::big {
                 std::memcpy(buffer.data() + f.offset, payload.data(), payload.size());
             }
 
+            total_bytes_transferred += f.size;
+
             if (progress_callback) {
-                progress_callback(f.rel_path);
+                const ProgressReport report{
+                    f.rel_path,
+                    f.size,
+                    f.size,
+                    total_bytes_transferred,
+                    static_cast<uint64_t>(total_payload_size)
+                };
+                if (!progress_callback(report)) {
+                    throw BigArchiveError("Operation cancelled by progress callback.");
+                }
             }
         }
 
@@ -494,7 +543,7 @@ namespace lotm::big {
 
     std::vector<uint8_t> BigPacker::pack_to_memory(
         const std::vector<std::pair<std::string, std::vector<uint8_t>>>& files,
-        std::function<void(std::string_view)> progress_callback
+        ProgressCallback progress_callback
     ) {
         std::vector<std::pair<std::string, std::span<const uint8_t>>> span_files;
         span_files.reserve(files.size());

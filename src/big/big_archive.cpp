@@ -388,7 +388,7 @@ namespace lotm::big {
 
     void BigArchive::extract_all(
         const std::filesystem::path& output_dir,
-        std::function<void(std::string_view)> progress_callback,
+        ProgressCallback progress_callback,
         std::string_view filter_pattern
     ) const {
         if (is_closed_) {
@@ -397,6 +397,7 @@ namespace lotm::big {
 
         const uintmax_t physical_size = validate_extraction_quota(filter_pattern);
         const std::filesystem::path canonical_output_dir = std::filesystem::weakly_canonical(output_dir);
+        uint64_t total_archive_size = 0;
 
         // Pre-flight security and bounds validation pass
         // PRE-FLIGHT VALIDATION LOOP
@@ -453,6 +454,8 @@ namespace lotm::big {
             if (mismatch_pair.first != canonical_output_dir.end() || target_path == canonical_output_dir) {
                 throw BigSecurityError("Path traversal attempt detected for file: " + entry.name);
             }
+
+            total_archive_size += entry.size;
         }
 
         if (!std::filesystem::exists(output_dir)) {
@@ -465,6 +468,7 @@ namespace lotm::big {
         }
 
         std::vector<char> buffer(EXTRACT_CHUNK_SIZE);
+        uint64_t total_bytes_transferred = 0;
 
         // SAFE EXTRACTION LOOP
         for (const auto& entry : entries_) {
@@ -493,6 +497,7 @@ namespace lotm::big {
 
                 // Stream payload through reusable chunk buffer
                 uint32_t remaining = entry.size;
+                uint64_t file_bytes_transferred = 0;
                 while (remaining > 0) {
                     const auto chunk_size = static_cast<std::streamsize>(
                         std::min<std::size_t>(remaining, buffer.size()));
@@ -508,6 +513,24 @@ namespace lotm::big {
                     }
 
                     remaining -= static_cast<uint32_t>(chunk_size);
+                    file_bytes_transferred += static_cast<uint64_t>(chunk_size);
+                    total_bytes_transferred += static_cast<uint64_t>(chunk_size);
+
+                    if (progress_callback) {
+                        const ProgressReport report{
+                            entry.name,
+                            file_bytes_transferred,
+                            entry.size,
+                            total_bytes_transferred,
+                            total_archive_size
+                        };
+                        if (!progress_callback(report)) {
+                            out_file.close();
+                            std::error_code rm_ec;
+                            std::filesystem::remove(target_path, rm_ec);
+                            throw BigArchiveError("Operation cancelled by progress callback.");
+                        }
+                    }
                 }
             }
 
@@ -516,8 +539,20 @@ namespace lotm::big {
                 throw BigArchiveError("Failed to flush extracted file: " + to_utf8(target_path));
             }
 
-            if (progress_callback) {
-                progress_callback(entry.name);
+            if (entry.size == 0 && progress_callback) {
+                const ProgressReport report{
+                    entry.name,
+                    0,
+                    0,
+                    total_bytes_transferred,
+                    total_archive_size
+                };
+                if (!progress_callback(report)) {
+                    out_file.close();
+                    std::error_code rm_ec;
+                    std::filesystem::remove(target_path, rm_ec);
+                    throw BigArchiveError("Operation cancelled by progress callback.");
+                }
             }
         }
     }

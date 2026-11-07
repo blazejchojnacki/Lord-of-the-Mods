@@ -21,6 +21,7 @@
 #include <big/big_overlay.hpp>
 #include <big/big_packer.hpp>
 #include <big/exceptions.hpp>
+#include <big/types.hpp>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
@@ -79,6 +80,21 @@ namespace lotm::python {
                 );
             }
         };
+
+        // Wraps a Python callable by reference to avoid Py_DECREF while the GIL is released
+        lotm::big::ProgressCallback make_safe_progress_cb(const nb::object& cb) {
+            if (cb.is_none()) {
+                return {};
+            }
+            return [&cb](const lotm::big::ProgressReport& report) -> bool {
+                nb::gil_scoped_acquire acquire;
+                nb::object res = cb(report);
+                if (res.is_none()) {
+                    return true;
+                }
+                return nb::cast<bool>(res);
+                };
+        }
     } // namespace
 
     void register_big_bindings(nb::module_& m) {
@@ -108,6 +124,18 @@ namespace lotm::python {
             .def("__repr__", [](const lotm::big::BigEntry& entry) {
             return "<BigEntry name='" + entry.name + "' size=" + std::to_string(entry.size) +
                 " offset=" + std::to_string(entry.offset) + ">";
+                });
+
+        nb::class_<lotm::big::ProgressReport>(sub, "ProgressReport", "Granular byte and file telemetry report for BIG4 operations")
+            .def_prop_ro("entry_name", [](const lotm::big::ProgressReport& r) { return std::string(r.entry_name); }, "Internal path of the active entry")
+            .def_ro("bytes_transferred", &lotm::big::ProgressReport::bytes_transferred, "Bytes processed for the current entry")
+            .def_ro("file_size", &lotm::big::ProgressReport::file_size, "Total uncompressed size of the current entry in bytes")
+            .def_ro("total_bytes_transferred", &lotm::big::ProgressReport::total_bytes_transferred, "Cumulative payload bytes processed across the operation")
+            .def_ro("total_archive_size", &lotm::big::ProgressReport::total_archive_size, "Total payload bytes scheduled for the operation")
+            .def("__repr__", [](const lotm::big::ProgressReport& r) {
+            return "<ProgressReport entry_name='" + std::string(r.entry_name) +
+                "' bytes=" + std::to_string(r.bytes_transferred) + "/" + std::to_string(r.file_size) +
+                " total=" + std::to_string(r.total_bytes_transferred) + "/" + std::to_string(r.total_archive_size) + ">";
                 });
 
         nb::class_<lotm::big::BigArchive>(sub, "BigArchive", "Parser and extractor for BIG4 archives")
@@ -157,15 +185,8 @@ namespace lotm::python {
                 },
                 nb::arg("entry"),
                 "Reads a single BigEntry record directly into memory as a buffer-protocol bytes object")
-            .def("extract_all", [](const lotm::big::BigArchive& self, const std::filesystem::path& out_dir, std::function<void(std::string_view)> cb, std::string_view filter_pattern) {
-            // Wrap the callback to securely reacquire the GIL when invoking Python code
-            std::function<void(std::string_view)> safe_cb;
-            if (cb) {
-                safe_cb = [&cb](std::string_view sv) {
-                    nb::gil_scoped_acquire acquire;
-                    cb(sv);
-                    };
-            }
+            .def("extract_all", [](const lotm::big::BigArchive& self, const std::filesystem::path& out_dir, nb::object cb, std::string_view filter_pattern) {
+            auto safe_cb = make_safe_progress_cb(cb);
 
             // Release GIL for the duration of the C++ disk I/O
             nb::gil_scoped_release release;
@@ -175,15 +196,8 @@ namespace lotm::python {
                 "Extracts all contained files into the specified directory");
 
         nb::class_<lotm::big::BigPacker>(sub, "BigPacker", "Packing engine for BIG4 archives")
-            .def_static("pack_from_directory", [](const std::filesystem::path& source_dir, const std::filesystem::path& output_file, std::function<void(std::string_view)> cb) {
-            // Wrap the callback to securely reacquire the GIL when invoking Python code
-            std::function<void(std::string_view)> safe_cb;
-            if (cb) {
-                safe_cb = [&cb](std::string_view sv) {
-                    nb::gil_scoped_acquire acquire;
-                    cb(sv);
-                    };
-            }
+            .def_static("pack_from_directory", [](const std::filesystem::path& source_dir, const std::filesystem::path& output_file, nb::object cb) {
+            auto safe_cb = make_safe_progress_cb(cb);
 
             // Release GIL for the duration of the C++ disk I/O
             nb::gil_scoped_release release;
@@ -191,15 +205,8 @@ namespace lotm::python {
                 },
                 nb::arg("source_dir"), nb::arg("output_file"), nb::arg("progress_callback") = nb::none(),
                 "Packs a directory tree into a compliant BIG4 archive")
-            .def_static("pack_to_memory", [](const std::filesystem::path& source_dir, std::function<void(std::string_view)> cb) {
-            // Wrap the callback to securely reacquire the GIL when invoking Python code
-            std::function<void(std::string_view)> safe_cb;
-            if (cb) {
-                safe_cb = [&cb](std::string_view sv) {
-                    nb::gil_scoped_acquire acquire;
-                    cb(sv);
-                    };
-            }
+            .def_static("pack_to_memory", [](const std::filesystem::path& source_dir, nb::object cb) {
+            auto safe_cb = make_safe_progress_cb(cb);
 
             std::vector<uint8_t> data;
             {
@@ -211,15 +218,8 @@ namespace lotm::python {
                 },
                 nb::arg("source"), nb::arg("progress_callback") = nb::none(),
                 "Packs a directory tree directly into an in-memory BIG4 archive bytes object")
-            .def_static("pack_to_memory", [](const std::vector<std::pair<std::string, nb::object>>& files, std::function<void(std::string_view)> cb) {
-            // Wrap the callback to securely reacquire the GIL when invoking Python code
-            std::function<void(std::string_view)> safe_cb;
-            if (cb) {
-                safe_cb = [&cb](std::string_view sv) {
-                    nb::gil_scoped_acquire acquire;
-                    cb(sv);
-                    };
-            }
+            .def_static("pack_to_memory", [](const std::vector<std::pair<std::string, nb::object>>& files, nb::object cb) {
+            auto safe_cb = make_safe_progress_cb(cb);
 
             std::vector<ScopedPyBuffer> pinned_buffers;
             pinned_buffers.reserve(files.size());
@@ -269,15 +269,8 @@ namespace lotm::python {
                 nb::arg("base"), nb::arg("target"), nb::arg("filter_pattern") = "",
                 nb::call_guard<nb::gil_scoped_release>(),
                 "Compares two BIG4 archive files on disk")
-            .def_static("create_patch_to_memory", [](const lotm::big::BigArchive& base, const lotm::big::BigArchive& target, std::string_view filter_pattern, std::function<void(std::string_view)> cb) {
-            // Wrap the callback to securely reacquire the GIL when invoking Python code
-            std::function<void(std::string_view)> safe_cb;
-            if (cb) {
-                safe_cb = [&cb](std::string_view sv) {
-                    nb::gil_scoped_acquire acquire;
-                    cb(sv);
-                    };
-            }
+            .def_static("create_patch_to_memory", [](const lotm::big::BigArchive& base, const lotm::big::BigArchive& target, std::string_view filter_pattern, nb::object cb) {
+            auto safe_cb = make_safe_progress_cb(cb);
 
             std::vector<uint8_t> data;
             {
@@ -289,15 +282,8 @@ namespace lotm::python {
                 },
                 nb::arg("base"), nb::arg("target"), nb::arg("filter_pattern") = "", nb::arg("progress_callback") = nb::none(),
                 "Packs only added and modified entries between two open BigArchive instances into memory")
-            .def_static("create_patch_to_memory", [](const std::filesystem::path& base, const std::filesystem::path& target, std::string_view filter_pattern, std::function<void(std::string_view)> cb) {
-            // Wrap the callback to securely reacquire the GIL when invoking Python code
-            std::function<void(std::string_view)> safe_cb;
-            if (cb) {
-                safe_cb = [&cb](std::string_view sv) {
-                    nb::gil_scoped_acquire acquire;
-                    cb(sv);
-                    };
-            }
+            .def_static("create_patch_to_memory", [](const std::filesystem::path& base, const std::filesystem::path& target, std::string_view filter_pattern, nb::object cb) {
+            auto safe_cb = make_safe_progress_cb(cb);
 
             std::vector<uint8_t> data;
             {
@@ -309,15 +295,8 @@ namespace lotm::python {
                 },
                 nb::arg("base"), nb::arg("target"), nb::arg("filter_pattern") = "", nb::arg("progress_callback") = nb::none(),
                 "Packs only added and modified entries between two BIG4 files on disk into memory")
-            .def_static("create_patch", [](const lotm::big::BigArchive& base, const lotm::big::BigArchive& target, const std::filesystem::path& output_file, std::string_view filter_pattern, std::function<void(std::string_view)> cb) {
-            // Wrap the callback to securely reacquire the GIL when invoking Python code
-            std::function<void(std::string_view)> safe_cb;
-            if (cb) {
-                safe_cb = [&cb](std::string_view sv) {
-                    nb::gil_scoped_acquire acquire;
-                    cb(sv);
-                    };
-            }
+            .def_static("create_patch", [](const lotm::big::BigArchive& base, const lotm::big::BigArchive& target, const std::filesystem::path& output_file, std::string_view filter_pattern, nb::object cb) {
+            auto safe_cb = make_safe_progress_cb(cb);
 
             // Release GIL for the duration of the C++ diff and disk I/O
             nb::gil_scoped_release release;
@@ -325,15 +304,8 @@ namespace lotm::python {
                 },
                 nb::arg("base"), nb::arg("target"), nb::arg("output_file"), nb::arg("filter_pattern") = "", nb::arg("progress_callback") = nb::none(),
                 "Packs only added and modified entries between two open BigArchive instances into a patch file")
-            .def_static("create_patch", [](const std::filesystem::path& base, const std::filesystem::path& target, const std::filesystem::path& output_file, std::string_view filter_pattern, std::function<void(std::string_view)> cb) {
-            // Wrap the callback to securely reacquire the GIL when invoking Python code
-            std::function<void(std::string_view)> safe_cb;
-            if (cb) {
-                safe_cb = [&cb](std::string_view sv) {
-                    nb::gil_scoped_acquire acquire;
-                    cb(sv);
-                    };
-            }
+            .def_static("create_patch", [](const std::filesystem::path& base, const std::filesystem::path& target, const std::filesystem::path& output_file, std::string_view filter_pattern, nb::object cb) {
+            auto safe_cb = make_safe_progress_cb(cb);
 
             // Release GIL for the duration of the C++ diff and disk I/O
             nb::gil_scoped_release release;

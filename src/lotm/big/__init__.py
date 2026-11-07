@@ -12,6 +12,7 @@ from lotm._core import big
 BigArchive = big.BigArchive
 BigPacker = big.BigPacker
 BigEntry = big.BigEntry
+ProgressReport = big.ProgressReport
 BigDiff = big.BigDiff
 BigDiffResult = big.BigDiffResult
 BigOverlay = big.BigOverlay
@@ -29,6 +30,7 @@ __all__ = [
     "BigArchive",
     "BigPacker",
     "BigEntry",
+    "ProgressReport",
     "BigDiff",
     "BigDiffResult",
     "BigOverlay",

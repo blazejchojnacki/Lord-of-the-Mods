@@ -20,7 +20,7 @@ def unpack(
     big_path: str | os.PathLike[str],
     output_dir: str | os.PathLike[str],
     filter_pattern: str | None = None,
-    progress_callback: Callable[[str], None] | None = None,
+    progress_callback: Callable[[big.ProgressReport], bool | None] | None = None,
 ) -> list[big.BigEntry]:
     """
     Unpacks an EA BIG4 archive into a target directory.
@@ -29,7 +29,7 @@ def unpack(
         big_path: Path to the .big archive file.
         output_dir: Destination directory where files will be extracted.
         filter_pattern: Optional glob pattern (e.g., 'data/ini/*.ini') to selectively extract entries.
-        progress_callback: Optional callback invoked with each extracted entry name.
+        progress_callback: Optional callback invoked with ProgressReport; returning False cancels extraction.
 
     Returns:
         List of BigEntry objects describing the extracted files.
@@ -37,7 +37,7 @@ def unpack(
     Raises:
         FileNotFoundError: If the archive file does not exist.
         ValueError: If the file header does not match the BIG4 specification.
-        RuntimeError: If archive bounds checking or stream reads fail.
+        RuntimeError: If archive bounds checking, stream reads, or cancellation occurs.
     """
     archive_path = Path(big_path)
     dest_path = Path(output_dir)
@@ -52,10 +52,14 @@ def unpack(
     entries = archive.get_entries(pattern)
     logger.info("Loaded %d entries from %s", len(entries), archive_path.name)
 
-    def on_progress(name: str) -> None:
-        logger.debug("Extracted: %s", name)
+    def on_progress(report: big.ProgressReport) -> bool:
+        if report.bytes_transferred == report.file_size:
+            logger.debug("Extracted: %s", report.entry_name)
         if progress_callback is not None:
-            progress_callback(name)
+            res = progress_callback(report)
+            if res is False:
+                return False
+        return True
 
     # Extract all indexed files to the destination folder
     archive.extract_all(dest_path, progress_callback=on_progress, filter_pattern=pattern)

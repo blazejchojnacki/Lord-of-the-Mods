@@ -63,7 +63,7 @@ def create_patch(
     target_archive: str | os.PathLike[str],
     output_file: str | os.PathLike[str],
     filter_pattern: str | None = None,
-    progress_callback: Callable[[str], None] | None = None,
+    progress_callback: Callable[[big.ProgressReport], bool | None] | None = None,
 ) -> None:
     """
     Compares two EA BIG4 archives and packs only the added and modified entries into a standalone patch archive.
@@ -73,11 +73,11 @@ def create_patch(
         target_archive: Path to the target/modified .big archive file.
         output_file: Destination path for the generated delta patch .big archive.
         filter_pattern: Optional glob pattern to restrict which entries are evaluated and packed.
-        progress_callback: Optional callback invoked with each packed patch entry name.
+        progress_callback: Optional callback invoked with ProgressReport; returning False cancels patch creation.
 
     Raises:
         FileNotFoundError: If either the base or target archive file or target output directory does not exist.
-        RuntimeError/ValueError: Native C++ exceptions if validation or serialization fails.
+        RuntimeError/ValueError: Native C++ exceptions if validation, serialization, or cancellation occurs.
     """
     base_path = Path(base_archive)
     target_path = Path(target_archive)
@@ -91,10 +91,14 @@ def create_patch(
     if not output_path.parent.is_dir():
         raise FileNotFoundError(f"Target output directory '{output_path.parent}' does not exist.")
 
-    def on_progress(name: str) -> None:
-        logger.debug("Packed patch entry: %s", name)
+    def on_progress(report: big.ProgressReport) -> bool:
+        if report.bytes_transferred == report.file_size:
+            logger.debug("Packed patch entry: %s", report.entry_name)
         if progress_callback is not None:
-            progress_callback(name)
+            res = progress_callback(report)
+            if res is False:
+                return False
+        return True
 
     big.BigDiff.create_patch(
         base_path, target_path, output_path, filter_pattern=pattern, progress_callback=on_progress
@@ -106,7 +110,7 @@ def create_patch_to_memory(
     base_archive: str | os.PathLike[str],
     target_archive: str | os.PathLike[str],
     filter_pattern: str | None = None,
-    progress_callback: Callable[[str], None] | None = None,
+    progress_callback: Callable[[big.ProgressReport], bool | None] | None = None,
 ) -> bytes:
     """
     Compares two EA BIG4 archives and packs only the added and modified entries into an in-memory BIG4 buffer.
@@ -115,14 +119,14 @@ def create_patch_to_memory(
         base_archive: Path to the baseline .big archive file.
         target_archive: Path to the target/modified .big archive file.
         filter_pattern: Optional glob pattern to restrict which entries are evaluated and packed.
-        progress_callback: Optional callback invoked with each packed patch entry name.
+        progress_callback: Optional callback invoked with ProgressReport; returning False cancels patch creation.
 
     Returns:
         A bytes object containing the serialized delta patch BIG4 archive.
 
     Raises:
         FileNotFoundError: If either the base or target archive file does not exist.
-        RuntimeError/ValueError: Native C++ exceptions if validation or serialization fails.
+        RuntimeError/ValueError: Native C++ exceptions if validation, serialization, or cancellation occurs.
     """
     base_path = Path(base_archive)
     target_path = Path(target_archive)
@@ -133,10 +137,14 @@ def create_patch_to_memory(
     if not target_path.is_file():
         raise FileNotFoundError(f"Target archive not found: {target_path}")
 
-    def on_progress(name: str) -> None:
-        logger.debug("Packed patch entry to memory: %s", name)
+    def on_progress(report: big.ProgressReport) -> bool:
+        if report.bytes_transferred == report.file_size:
+            logger.debug("Packed patch entry to memory: %s", report.entry_name)
         if progress_callback is not None:
-            progress_callback(name)
+            res = progress_callback(report)
+            if res is False:
+                return False
+        return True
 
     data = big.BigDiff.create_patch_to_memory(
         base_path, target_path, filter_pattern=pattern, progress_callback=on_progress

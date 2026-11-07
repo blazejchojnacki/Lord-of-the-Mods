@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <string_view>
 
@@ -25,5 +26,15 @@ namespace lotm::big {
         uint32_t size{ 0 };
         std::string name;
     };
+
+    struct ProgressReport {
+        std::string_view entry_name;
+        uint64_t bytes_transferred{ 0 };
+        uint64_t file_size{ 0 };
+        uint64_t total_bytes_transferred{ 0 };
+        uint64_t total_archive_size{ 0 };
+    };
+
+    using ProgressCallback = std::function<bool(const ProgressReport&)>;
 
 } // namespace lotm::big

@@ -27,7 +27,7 @@ namespace lotm::big {
         // Extracts all files to the output directory
         void extract_all(
             const std::filesystem::path& output_dir,
-            std::function<void(std::string_view)> progress_callback = {},
+            ProgressCallback progress_callback = {},
             std::string_view filter_pattern = {}
         ) const;
 

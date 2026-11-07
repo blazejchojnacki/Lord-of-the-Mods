@@ -16,6 +16,20 @@ class big:
     class BigFormatError(BigArchiveError): ...
     class BigSecurityError(BigArchiveError): ...
 
+    class ProgressReport:
+        def __init__(self, *args: object, **kwargs: object) -> None: ...
+        @property
+        def entry_name(self) -> str: ...
+        @property
+        def bytes_transferred(self) -> int: ...
+        @property
+        def file_size(self) -> int: ...
+        @property
+        def total_bytes_transferred(self) -> int: ...
+        @property
+        def total_archive_size(self) -> int: ...
+        def __repr__(self) -> str: ...
+
     class BigArchive:
         def __init__(self, file_path: str | os.PathLike[str]) -> None: ...
         @property
@@ -32,7 +46,7 @@ class big:
         def extract_all(
             self, 
             output_dir: str | os.PathLike[str], 
-            progress_callback: Callable[[str], None] | None = None,
+            progress_callback: Callable[['big.ProgressReport'], bool | None] | None = None,
             filter_pattern: str = ""
         ) -> None: ...
         def get_entries(self, filter_pattern: str = "") -> list['big.BigEntry']: ...
@@ -53,12 +67,12 @@ class big:
         def pack_from_directory(
             source_dir: str | os.PathLike[str], 
             output_file: str | os.PathLike[str], 
-            progress_callback: Callable[[str], None] | None = None
+            progress_callback: Callable[['big.ProgressReport'], bool | None] | None = None
         ) -> None: ...
         @staticmethod
         def pack_to_memory(
             source: str | os.PathLike[str] | Sequence[tuple[str, Buffer]],
-            progress_callback: Callable[[str], None] | None = None
+            progress_callback: Callable[['big.ProgressReport'], bool | None] | None = None
         ) -> bytes: ...
 
     class BigDiffResult:
@@ -88,7 +102,7 @@ class big:
             base: str | os.PathLike[str] | 'big.BigArchive',
             target: str | os.PathLike[str] | 'big.BigArchive',
             filter_pattern: str = "",
-            progress_callback: Callable[[str], None] | None = None
+            progress_callback: Callable[['big.ProgressReport'], bool | None] | None = None
         ) -> bytes: ...
         @staticmethod
         def create_patch(
@@ -96,7 +110,7 @@ class big:
             target: str | os.PathLike[str] | 'big.BigArchive',
             output_file: str | os.PathLike[str],
             filter_pattern: str = "",
-            progress_callback: Callable[[str], None] | None = None
+            progress_callback: Callable[['big.ProgressReport'], bool | None] | None = None
         ) -> None: ...
 
     class BigOverlayEntry:

@@ -28,7 +28,7 @@ logger = logging.getLogger("lotm.big")
 
 
 def _setup_logging(verbose: bool) -> None:
-    level = logging.DEBUG if verbose else logging.INFO
+    level = logging.DEBUG if verbose else logging.WARNING
     pkg_logger = logging.getLogger("lotm")
     pkg_logger.setLevel(level)
     if not any(isinstance(h, logging.StreamHandler) for h in pkg_logger.handlers):
@@ -90,27 +90,36 @@ def build_parser() -> argparse.ArgumentParser:
 def _handle_pack(args: argparse.Namespace) -> int:
     _setup_logging(args.verbose)
     pack(args.source_dir, args.output)
+    print(f"Packed archive: {args.output}")
     return EXIT_SUCCESS
 
 
 def _handle_unpack(args: argparse.Namespace) -> int:
     _setup_logging(args.verbose)
-    unpack(args.archive, args.output, filter_pattern=args.filter)
+    entries = unpack(args.archive, args.output, filter_pattern=args.filter)
+    print(f"Extracted {len(entries)} entries into: {args.output}")
     return EXIT_SUCCESS
 
 
 def _handle_diff(args: argparse.Namespace) -> int:
     _setup_logging(args.verbose)
     result = diff(args.base_archive, args.target_archive, filter_pattern=args.filter)
-    for entry in result.added:
-        logger.debug("+ %s (%d B)", entry.name, entry.size)
-    for entry in result.removed:
-        logger.debug("- %s (%d B)", entry.name, entry.size)
-    for entry in result.modified:
-        logger.debug("~ %s (%d B)", entry.name, entry.size)
+    print(
+        f"Diff summary ({args.base_archive.name} vs {args.target_archive.name}): "
+        f"+{len(result.added)} added, -{len(result.removed)} removed, "
+        f"~{len(result.modified)} modified, ={len(result.unchanged)} unchanged"
+    )
+    if args.verbose:
+        for entry in result.added:
+            print(f"+ {entry.name} ({entry.size} B)")
+        for entry in result.removed:
+            print(f"- {entry.name} ({entry.size} B)")
+        for entry in result.modified:
+            print(f"~ {entry.name} ({entry.size} B)")
 
     if args.output is not None:
         create_patch(args.base_archive, args.target_archive, args.output, filter_pattern=args.filter)
+        print(f"Generated delta patch: {args.output}")
     return EXIT_SUCCESS
 
 
@@ -119,9 +128,10 @@ def _handle_overlay(args: argparse.Namespace) -> int:
     target_source = args.sources[0] if len(args.sources) == 1 and args.sources[0].is_dir() else args.sources
     overlay = load_overlay(target_source)
     entries = overlay.get_entries(args.filter or "")
-    logger.info("Resolved %d effective entries across %d archives", len(entries), len(overlay.mounted_archives))
-    for item in entries:
-        logger.debug("%s -> %s (overrides=%d)", item.name, item.source_archive.name, item.override_count)
+    print(f"Resolved {len(entries)} effective entries across {len(overlay.mounted_archives)} archives")
+    if args.verbose:
+        for item in entries:
+            print(f"{item.name} -> {item.source_archive.name} (overrides={item.override_count})")
     return EXIT_SUCCESS
 
 

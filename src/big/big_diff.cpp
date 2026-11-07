@@ -137,7 +137,7 @@ namespace lotm::big {
         const BigArchive& base_archive,
         const BigArchive& target_archive,
         std::string_view filter_pattern,
-        std::function<void(std::string_view)> progress_callback
+        ProgressCallback progress_callback
     ) {
         const BigDiffResult diff_result = compare(base_archive, target_archive, filter_pattern);
 
@@ -159,7 +159,7 @@ namespace lotm::big {
         const std::filesystem::path& base_path,
         const std::filesystem::path& target_path,
         std::string_view filter_pattern,
-        std::function<void(std::string_view)> progress_callback
+        ProgressCallback progress_callback
     ) {
         const BigArchive base_archive(base_path);
         const BigArchive target_archive(target_path);
@@ -171,7 +171,7 @@ namespace lotm::big {
         const BigArchive& target_archive,
         const std::filesystem::path& output_file,
         std::string_view filter_pattern,
-        std::function<void(std::string_view)> progress_callback
+        ProgressCallback progress_callback
     ) {
         if (std::filesystem::is_directory(output_file)) {
             throw std::invalid_argument("Target output path cannot be a directory: " + to_utf8(output_file));
@@ -296,6 +296,8 @@ namespace lotm::big {
             }
 
             std::vector<char> chunk(1024 * 1024);
+            uint64_t total_bytes_transferred = 0;
+
             for (std::size_t i = 0; i < file_list.size(); ++i) {
                 const auto& f = file_list[i];
                 if (f.size > 0) {
@@ -305,6 +307,7 @@ namespace lotm::big {
                     }
 
                     uint32_t remaining = f.size;
+                    uint64_t file_bytes_transferred = 0;
                     while (remaining > 0) {
                         const auto chunk_size = static_cast<std::streamsize>(
                             std::min<std::size_t>(remaining, chunk.size()));
@@ -319,11 +322,34 @@ namespace lotm::big {
                         }
 
                         remaining -= static_cast<uint32_t>(chunk_size);
+                        file_bytes_transferred += static_cast<uint64_t>(chunk_size);
+                        total_bytes_transferred += static_cast<uint64_t>(chunk_size);
+
+                        if (progress_callback) {
+                            const ProgressReport report{
+                                f.rel_path,
+                                file_bytes_transferred,
+                                f.size,
+                                total_bytes_transferred,
+                                static_cast<uint64_t>(total_payload_size)
+                            };
+                            if (!progress_callback(report)) {
+                                throw BigArchiveError("Operation cancelled by progress callback.");
+                            }
+                        }
                     }
                 }
-
-                if (progress_callback) {
-                    progress_callback(f.rel_path);
+                else if (progress_callback) {
+                    const ProgressReport report{
+                        f.rel_path,
+                        0,
+                        0,
+                        total_bytes_transferred,
+                        static_cast<uint64_t>(total_payload_size)
+                    };
+                    if (!progress_callback(report)) {
+                        throw BigArchiveError("Operation cancelled by progress callback.");
+                    }
                 }
             }
         }
@@ -348,7 +374,7 @@ namespace lotm::big {
         const std::filesystem::path& target_path,
         const std::filesystem::path& output_file,
         std::string_view filter_pattern,
-        std::function<void(std::string_view)> progress_callback
+        ProgressCallback progress_callback
     ) {
         const BigArchive base_archive(base_path);
         const BigArchive target_archive(target_path);
