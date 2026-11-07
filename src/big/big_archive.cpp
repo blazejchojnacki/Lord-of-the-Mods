@@ -36,8 +36,13 @@ namespace lotm::big {
         }
 
         inline std::filesystem::path from_utf8(std::string_view sv) {
-            return std::filesystem::path(std::u8string_view(
-                reinterpret_cast<const char8_t*>(sv.data()), sv.size()));
+            try {
+                return std::filesystem::path(std::u8string_view(
+                    reinterpret_cast<const char8_t*>(sv.data()), sv.size()));
+            }
+            catch (const std::exception&) {
+                throw BigSecurityError("Invalid UTF-8 or unmappable characters in entry path: " + std::string(sv));
+            }
         }
 
         // Case-insensitive glob matcher supporting '*' and '?' with normalized path separators

@@ -470,13 +470,18 @@ TEST_CASE("BigArchive Windows Path Security and NTFS Evasions", "[big_unpack][se
         BigArchive archive3(env.test_file);
         REQUIRE_THROWS_AS(archive3.extract_all(env.out_dir), BigSecurityError);
 
-        env.write_big_file("BIG4", { { "data\\COM\xB2.ini", "payload" } });
+        env.write_big_file("BIG4", { { "data\\COM\xC2\xB2.ini", "payload" } });
         BigArchive archive4(env.test_file);
         REQUIRE_THROWS_AS(archive4.extract_all(env.out_dir), BigSecurityError);
 
         env.write_big_file("BIG4", { { "data\\CLOCK$.ini", "payload" } });
         BigArchive archive5(env.test_file);
         REQUIRE_THROWS_AS(archive5.extract_all(env.out_dir), BigSecurityError);
+
+        // Malformed/raw non-UTF-8 bytes in entry path are caught as security errors
+        env.write_big_file("BIG4", { { "data\\raw_\xB2.ini", "payload" } });
+        BigArchive archive6(env.test_file);
+        REQUIRE_THROWS_AS(archive6.extract_all(env.out_dir), BigSecurityError);
     }
 
     SECTION("Negative scenario: Zip-Bomb Amplification Threshold Exceeded") {
