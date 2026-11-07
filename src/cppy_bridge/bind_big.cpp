@@ -22,6 +22,8 @@
 #include <big/big_packer.hpp>
 #include <big/exceptions.hpp>
 #include <cstdint>
+#include <exception>
+#include <filesystem>
 #include <functional>
 #include <span>
 #include <string>
@@ -86,6 +88,18 @@ namespace lotm::python {
         nb::exception<lotm::big::BigArchiveError> exc_archive(sub, "BigArchiveError");
         nb::exception<lotm::big::BigFormatError>(sub, "BigFormatError", exc_archive);
         nb::exception<lotm::big::BigSecurityError>(sub, "BigSecurityError", exc_archive);
+
+        nb::register_exception_translator(
+            [](const std::exception_ptr& p, void* payload) {
+                try {
+                    std::rethrow_exception(p);
+                }
+                catch (const std::filesystem::filesystem_error& e) {
+                    PyErr_SetString(static_cast<PyObject*>(payload), e.what());
+                }
+            },
+            exc_archive.ptr()
+        );
 
         nb::class_<lotm::big::BigEntry>(sub, "BigEntry", "Metadata record for an entry inside a BIG4 archive")
             .def_ro("offset", &lotm::big::BigEntry::offset, "Byte offset within archive")

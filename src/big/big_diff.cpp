@@ -227,7 +227,7 @@ namespace lotm::big {
         header_size_calc += EA_PADDING_SIZE;
 
         if (header_size_calc + total_payload_size > std::numeric_limits<uint32_t>::max()) {
-            throw std::length_error("Total archive size exceeds the 32-bit (4GB) BIG4 format limit.");
+            throw BigFormatError("Total archive size exceeds the 32-bit (4GB) BIG4 format limit.");
         }
 
         std::vector<uint32_t> source_offsets;

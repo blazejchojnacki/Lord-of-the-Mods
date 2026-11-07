@@ -131,7 +131,7 @@ namespace lotm::big {
 
             // Guard against total archive size exceeding 32-bit limits (4GB overflow)
             if (header_size_calc + total_payload_size > std::numeric_limits<uint32_t>::max()) {
-                throw std::length_error("Total archive size exceeds the 32-bit (4GB) BIG4 format limit.");
+                throw BigFormatError("Total archive size exceeds the 32-bit (4GB) BIG4 format limit.");
             }
 
             if (out_original_indices) {
@@ -259,7 +259,7 @@ namespace lotm::big {
 
                 // Guard against individual files exceeding 32-bit limits
                 if (fsize > std::numeric_limits<uint32_t>::max()) {
-                    throw std::length_error("File '" + pack_entry.rel_path + "' exceeds the 4GB format limit.");
+                    throw BigFormatError("File '" + pack_entry.rel_path + "' exceeds the 4GB format limit.");
                 }
 
                 pack_entry.size = static_cast<uint32_t>(fsize);
@@ -282,7 +282,7 @@ namespace lotm::big {
 
         // Guard against total archive size exceeding 32-bit limits (4GB overflow)
         if (header_size_calc + total_payload_size > std::numeric_limits<uint32_t>::max()) {
-            throw std::length_error("Total archive size exceeds the 32-bit (4GB) BIG4 format limit.");
+            throw BigFormatError("Total archive size exceeds the 32-bit (4GB) BIG4 format limit.");
         }
 
         uint32_t header_size = static_cast<uint32_t>(header_size_calc);
@@ -411,7 +411,7 @@ namespace lotm::big {
 
                 // Guard against individual files exceeding 32-bit limits
                 if (fsize > std::numeric_limits<uint32_t>::max()) {
-                    throw std::length_error("File '" + pack_entry.rel_path + "' exceeds the 4GB format limit.");
+                    throw BigFormatError("File '" + pack_entry.rel_path + "' exceeds the 4GB format limit.");
                 }
 
                 pack_entry.size = static_cast<uint32_t>(fsize);
@@ -464,7 +464,7 @@ namespace lotm::big {
             }
 
             if (payload.size() > std::numeric_limits<uint32_t>::max()) {
-                throw std::length_error("File '" + pack_entry.rel_path + "' exceeds the 4GB format limit.");
+                throw BigFormatError("File '" + pack_entry.rel_path + "' exceeds the 4GB format limit.");
             }
 
             pack_entry.size = static_cast<uint32_t>(payload.size());

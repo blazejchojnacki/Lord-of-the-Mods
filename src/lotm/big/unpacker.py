@@ -7,6 +7,7 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
+from collections.abc import Callable
 import logging
 import os
 from pathlib import Path
@@ -19,6 +20,7 @@ def unpack(
     big_path: str | os.PathLike[str],
     output_dir: str | os.PathLike[str],
     filter_pattern: str | None = None,
+    progress_callback: Callable[[str], None] | None = None,
 ) -> list[big.BigEntry]:
     """
     Unpacks an EA BIG4 archive into a target directory.
@@ -27,6 +29,7 @@ def unpack(
         big_path: Path to the .big archive file.
         output_dir: Destination directory where files will be extracted.
         filter_pattern: Optional glob pattern (e.g., 'data/ini/*.ini') to selectively extract entries.
+        progress_callback: Optional callback invoked with each extracted entry name.
 
     Returns:
         List of BigEntry objects describing the extracted files.
@@ -51,6 +54,8 @@ def unpack(
 
     def on_progress(name: str) -> None:
         logger.debug("Extracted: %s", name)
+        if progress_callback is not None:
+            progress_callback(name)
 
     # Extract all indexed files to the destination folder
     archive.extract_all(dest_path, progress_callback=on_progress, filter_pattern=pattern)
