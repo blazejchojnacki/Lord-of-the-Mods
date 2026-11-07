@@ -218,8 +218,9 @@ TEST_CASE("BigDiff Delta Patch Generation", "[big_diff][patch]") {
     SECTION("Positive scenario: create_patch and create_patch_to_memory pack only added and modified files") {
         std::vector<std::string> reported_mem;
         auto mem_patch = BigDiff::create_patch_to_memory(
-            env.base_file, env.target_file, "", [&](std::string_view name) {
-                reported_mem.emplace_back(name);
+            env.base_file, env.target_file, "", [&](const ProgressReport& report) -> bool {
+                reported_mem.emplace_back(report.entry_name);
+                return true;
             }
         );
 
@@ -229,8 +230,9 @@ TEST_CASE("BigDiff Delta Patch Generation", "[big_diff][patch]") {
 
         std::vector<std::string> reported_disk;
         BigDiff::create_patch(
-            env.base_file, env.target_file, env.patch_file, "", [&](std::string_view name) {
-                reported_disk.emplace_back(name);
+            env.base_file, env.target_file, env.patch_file, "", [&](const ProgressReport& report) -> bool {
+                reported_disk.emplace_back(report.entry_name);
+                return true;
             }
         );
 
@@ -251,6 +253,32 @@ TEST_CASE("BigDiff Delta Patch Generation", "[big_diff][patch]") {
 
         auto mod_payload = patch_arc.read_entry("data/modified.ini");
         REQUIRE(std::string(mod_payload.begin(), mod_payload.end()) == "Damage=99");
+    }
+
+    SECTION("Positive and negative scenarios: Zero-byte patch entries and cooperative cancellation") {
+        env.write_archive(env.target_file, {
+            { "data/unchanged.ini", "Keep=1" },
+            { "art/empty_added.txt", "" }
+            });
+
+        std::vector<std::string> reported;
+        BigDiff::create_patch(
+            env.base_file, env.target_file, env.patch_file, "", [&](const ProgressReport& report) -> bool {
+                reported.emplace_back(report.entry_name);
+                REQUIRE(report.file_size == 0);
+                return true;
+            }
+        );
+        REQUIRE(reported.size() == 1);
+        REQUIRE(reported[0] == "art\\empty_added.txt");
+
+        auto cancel_cb = [](const ProgressReport&) -> bool {
+            return false;
+            };
+        REQUIRE_THROWS_AS(
+            BigDiff::create_patch(env.base_file, env.target_file, env.patch_file, "", cancel_cb),
+            BigArchiveError
+        );
     }
 
     SECTION("Positive scenario: create_patch with open BigArchive instances and filter_pattern") {
@@ -298,7 +326,7 @@ TEST_CASE("BigDiff Delta Patch Generation", "[big_diff][patch]") {
         REQUIRE(std::filesystem::exists(env.patch_file));
 
         // Interrupted patch creation preserves pre-existing target file intact
-        auto throwing_cb = [](std::string_view) {
+        auto throwing_cb = [](const ProgressReport&) -> bool {
             throw std::runtime_error("Simulated patch interrupt");
             };
         REQUIRE_THROWS_AS(

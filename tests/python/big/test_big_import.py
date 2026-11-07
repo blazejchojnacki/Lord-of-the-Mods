@@ -24,6 +24,7 @@ def test_big_subpackage_exports():
     assert hasattr(big, "BigArchive")
     assert hasattr(big, "BigPacker")
     assert hasattr(big, "BigEntry")
+    assert hasattr(big, "ProgressReport")
     assert hasattr(big, "BigDiff")
     assert hasattr(big, "BigDiffResult")
     assert hasattr(big, "BigOverlay")
@@ -54,9 +55,11 @@ def test_big_subpackage_exports():
 
 
 def test_cli_modules_import():
-    """Verify that CLI entry point handlers are discoverable."""
+    """Verify that CLI entry point handlers and __main__ module are discoverable."""
     import lotm.big.cli as cli
 
+    main_mod = importlib.import_module("lotm.big.__main__")
+    assert hasattr(main_mod, "cli_entry")
     assert hasattr(cli, "build_parser")
     assert hasattr(cli, "main")
     assert hasattr(cli, "cli_entry")

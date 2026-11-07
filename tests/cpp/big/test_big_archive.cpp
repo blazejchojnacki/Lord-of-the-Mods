@@ -510,13 +510,16 @@ TEST_CASE("BigArchive Progress Callback Integration", "[big_unpack][callback]") 
     SECTION("Positive scenario: Callback is invoked for each extracted file") {
         env.write_big_file("BIG4", {
             { "fileA.txt", "data" },
-            { "fileB.txt", "data" }
+            { "fileB.txt", "" }
             });
 
         BigArchive archive(env.test_file);
         std::vector<std::string> reported_files;
-        auto cb = [&](std::string_view name) {
-            reported_files.emplace_back(name);
+        auto cb = [&](const ProgressReport& report) -> bool {
+            reported_files.emplace_back(report.entry_name);
+            REQUIRE(report.bytes_transferred == report.file_size);
+            REQUIRE(report.total_archive_size == 4);
+            return true;
             };
 
         REQUIRE_NOTHROW(archive.extract_all(env.out_dir, cb));
@@ -524,6 +527,28 @@ TEST_CASE("BigArchive Progress Callback Integration", "[big_unpack][callback]") 
         REQUIRE(reported_files.size() == 2);
         REQUIRE(reported_files[0] == "fileA.txt");
         REQUIRE(reported_files[1] == "fileB.txt");
+    }
+
+    SECTION("Negative scenario: Returning false from callback cancels extraction and removes partial file") {
+        env.write_big_file("BIG4", {
+            { "fileA.txt", "data" },
+            { "fileB.txt", "more_data" }
+            });
+
+        BigArchive archive(env.test_file);
+        auto cancel_cb = [](const ProgressReport&) -> bool {
+            return false;
+            };
+
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir, cancel_cb), BigArchiveError);
+        REQUIRE_FALSE(std::filesystem::exists(env.out_dir / "fileA.txt"));
+        REQUIRE_FALSE(std::filesystem::exists(env.out_dir / "fileB.txt"));
+
+        // Cancellation on zero-byte file
+        env.write_big_file("BIG4", { { "empty.txt", "" } });
+        BigArchive empty_arc(env.test_file);
+        REQUIRE_THROWS_AS(empty_arc.extract_all(env.out_dir, cancel_cb), BigArchiveError);
+        REQUIRE_FALSE(std::filesystem::exists(env.out_dir / "empty.txt"));
     }
 }
 
@@ -758,8 +783,9 @@ TEST_CASE("BigArchive Selective Glob Extraction", "[big_unpack][filter]") {
 
     SECTION("Positive scenario: extract_all with filter_pattern extracts only matching entries") {
         std::vector<std::string> extracted;
-        archive.extract_all(env.out_dir, [&](std::string_view name) {
-            extracted.emplace_back(name);
+        archive.extract_all(env.out_dir, [&](const ProgressReport& report) -> bool {
+            extracted.emplace_back(report.entry_name);
+            return true;
             }, "data/ini/*.ini");
 
         REQUIRE(extracted.size() == 2);

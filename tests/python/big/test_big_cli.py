@@ -7,6 +7,7 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
+import sys
 import pytest
 from pathlib import Path
 
@@ -14,7 +15,7 @@ import lotm.big.cli as cli
 import lotm.big as big
 
 
-def test_cli_pack_successful_execution(standard_mod_directory: Path, tmp_path: Path):
+def test_cli_pack_successful_execution(standard_mod_directory: Path, tmp_path: Path, capsys):
     """Verify standard packing CLI command executes successfully and creates the archive."""
     out_big = tmp_path / "cli_test.big"
     argv = ["pack", str(standard_mod_directory), "-o", str(out_big)]
@@ -22,6 +23,8 @@ def test_cli_pack_successful_execution(standard_mod_directory: Path, tmp_path: P
     assert cli.main(argv) == cli.EXIT_SUCCESS
     assert out_big.exists()
     assert out_big.stat().st_size > 0
+    stdout, _ = capsys.readouterr()
+    assert "Packed archive:" in stdout
 
 
 def test_cli_pack_invalid_source_exits_with_error(tmp_path: Path, capsys):
@@ -35,7 +38,7 @@ def test_cli_pack_invalid_source_exits_with_error(tmp_path: Path, capsys):
     assert "failed:" in stderr
 
 
-def test_cli_unpack_successful_execution(standard_mod_directory: Path, tmp_path: Path):
+def test_cli_unpack_successful_execution(standard_mod_directory: Path, tmp_path: Path, capsys):
     """Verify standard unpacking CLI command executes successfully and extracts files."""
     archive = tmp_path / "ready.big"
     extract_dir = tmp_path / "extracted"
@@ -46,6 +49,8 @@ def test_cli_unpack_successful_execution(standard_mod_directory: Path, tmp_path:
 
     assert cli.main(argv) == cli.EXIT_SUCCESS
     assert (extract_dir / "data" / "weapon.ini").exists()
+    stdout, _ = capsys.readouterr()
+    assert "Extracted 3 entries into:" in stdout
 
 
 def test_cli_unpack_missing_archive_exits_with_error(tmp_path: Path, capsys):
@@ -73,8 +78,8 @@ def test_cli_unpack_with_filter_pattern(standard_mod_directory: Path, tmp_path: 
     assert not (extract_dir / "readme.txt").exists()
 
 
-def test_cli_diff_successful_and_verbose_execution(tmp_path: Path):
-    """Verify lotm-big diff CLI command executes cleanly with verbose output and patch output."""
+def test_cli_diff_successful_and_verbose_execution(tmp_path: Path, capsys):
+    """Verify lotm-big diff CLI command executes cleanly with and without verbose and patch output."""
     base_arc = tmp_path / "base.big"
     target_arc = tmp_path / "target.big"
     patch_arc = tmp_path / "patch.big"
@@ -82,10 +87,20 @@ def test_cli_diff_successful_and_verbose_execution(tmp_path: Path):
     base_arc.write_bytes(big.pack_to_memory({"a.txt": b"1", "b.txt": b"2"}))
     target_arc.write_bytes(big.pack_to_memory({"b.txt": b"3", "c.txt": b"4"}))
 
+    # Non-verbose diff without patch output
+    assert cli.main(["diff", str(base_arc), str(target_arc)]) == cli.EXIT_SUCCESS
+    stdout_quiet, _ = capsys.readouterr()
+    assert "Diff summary" in stdout_quiet
+
+    # Verbose diff with patch output
     argv = ["diff", str(base_arc), str(target_arc), "-o", str(patch_arc), "-v"]
-    
     assert cli.main(argv) == cli.EXIT_SUCCESS
     assert patch_arc.is_file()
+    stdout_verbose, _ = capsys.readouterr()
+    assert "+ c.txt" in stdout_verbose
+    assert "- a.txt" in stdout_verbose
+    assert "~ b.txt" in stdout_verbose
+    assert "Generated delta patch:" in stdout_verbose
 
 
 def test_cli_diff_missing_archive_exits_with_error(tmp_path: Path, capsys):
@@ -99,7 +114,7 @@ def test_cli_diff_missing_archive_exits_with_error(tmp_path: Path, capsys):
     assert "failed:" in stderr
 
 
-def test_cli_overlay_successful_and_verbose_execution(tmp_path: Path):
+def test_cli_overlay_successful_and_verbose_execution(tmp_path: Path, capsys):
     """Verify lotm-big overlay CLI command executes cleanly for directory and file inputs."""
     arc1 = tmp_path / "01_base.big"
     arc2 = tmp_path / "02_patch.big"
@@ -107,9 +122,15 @@ def test_cli_overlay_successful_and_verbose_execution(tmp_path: Path):
     arc1.write_bytes(big.pack_to_memory({"a.ini": b"1"}))
     arc2.write_bytes(big.pack_to_memory({"a.ini": b"2", "b.ini": b"3"}))
 
+    assert cli.main(["overlay", str(arc1), str(arc2)]) == cli.EXIT_SUCCESS
+    stdout_quiet, _ = capsys.readouterr()
+    assert "Resolved 2 effective entries across 2 archives" in stdout_quiet
+
     argv = ["overlay", str(tmp_path), "-f", "*.ini", "-v"]
     
     assert cli.main(argv) == cli.EXIT_SUCCESS
+    stdout_verbose, _ = capsys.readouterr()
+    assert "a.ini -> 02_patch.big (overrides=1)" in stdout_verbose
 
 
 def test_cli_overlay_missing_source_exits_with_error(tmp_path: Path, capsys):
@@ -121,3 +142,15 @@ def test_cli_overlay_missing_source_exits_with_error(tmp_path: Path, capsys):
     _, stderr = capsys.readouterr()
     assert len(stderr.strip()) > 0
     assert "failed:" in stderr
+
+
+def test_cli_entry_invokes_sys_exit(standard_mod_directory: Path, tmp_path: Path, monkeypatch):
+    """Verify cli_entry() parses sys.argv and exits with the returned status code."""
+    out_big = tmp_path / "entry.big"
+    monkeypatch.setattr(sys, "argv", ["lotm-big", "pack", str(standard_mod_directory), "-o", str(out_big)])
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.cli_entry()
+
+    assert exc_info.value.code == cli.EXIT_SUCCESS
+    assert out_big.is_file()

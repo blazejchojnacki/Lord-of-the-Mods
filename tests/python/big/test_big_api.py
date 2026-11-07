@@ -20,13 +20,25 @@ def test_programmatic_packing_and_unpacking_roundtrip(standard_mod_directory: Pa
     archive_path = tmp_path / "mod_test.big"
     extract_dir = tmp_path / "output_dir"
 
+    packed_reports: list[str] = []
     # Pack the standard fixture directory
-    big.pack(standard_mod_directory, archive_path)
+    big.pack(
+        standard_mod_directory,
+        archive_path,
+        progress_callback=lambda r: (packed_reports.append(r.entry_name), True)[1],
+    )
     assert archive_path.is_file()
     assert archive_path.stat().st_size > 0
+    assert len(packed_reports) == 3
 
+    unpacked_reports: list[str] = []
     # Unpack the generated archive
-    entries = big.unpack(archive_path, extract_dir)
+    entries = big.unpack(
+        archive_path,
+        extract_dir,
+        progress_callback=lambda r: (unpacked_reports.append(r.entry_name), None)[1],
+    )
+    assert len(unpacked_reports) == 3
 
     # Verify returned entries list
     assert len(entries) == 3
@@ -41,13 +53,17 @@ def test_programmatic_packing_and_unpacking_roundtrip(standard_mod_directory: Pa
     assert extracted_ini.read_text(encoding="utf-8") == "Damage=50"
 
 
-def test_pack_invalid_source_directory_raises_error(tmp_path: Path):
-    """Verify that pack() raises NotADirectoryError when given a non-existent path."""
+def test_pack_invalid_source_directory_raises_error(standard_mod_directory: Path, tmp_path: Path):
+    """Verify that pack() raises NotADirectoryError or FileNotFoundError for missing paths."""
     missing_dir = tmp_path / "does_not_exist"
     out_file = tmp_path / "out.big"
 
     with pytest.raises(NotADirectoryError, match="does not exist"):
         big.pack(missing_dir, out_file)
+
+    missing_parent_out = tmp_path / "missing_parent" / "out.big"
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        big.pack(standard_mod_directory, missing_parent_out)
 
 
 def test_pack_output_inside_source_directory_raises_error(standard_mod_directory: Path):
@@ -174,13 +190,17 @@ def test_concurrent_pack_and_unpack_releases_gil(standard_mod_directory: Path, t
 
 
 def test_cpp_api_progress_callbacks_propagate(standard_mod_directory: Path, tmp_path: Path):
-    """Verify that C++ progress callbacks correctly invoke Python callables."""
+    """Verify that C++ progress callbacks correctly invoke Python callables with ProgressReport."""
     archive_path = tmp_path / "callback.big"
     out_dir = tmp_path / "out"
 
     packed: list[str] = []
-    def pack_cb(name: str) -> None:
-        packed.append(name)
+    def pack_cb(report: big.ProgressReport) -> bool:
+        assert report.bytes_transferred == report.file_size
+        assert report.total_bytes_transferred <= report.total_archive_size
+        assert "ProgressReport" in repr(report)
+        packed.append(report.entry_name)
+        return True
 
     big.BigPacker.pack_from_directory(standard_mod_directory, archive_path, progress_callback=pack_cb)
 
@@ -189,8 +209,8 @@ def test_cpp_api_progress_callbacks_propagate(standard_mod_directory: Path, tmp_
 
     archive = big.BigArchive(archive_path)
     extracted: list[str] = []
-    def extract_cb(name: str) -> None:
-        extracted.append(name)
+    def extract_cb(report: big.ProgressReport) -> None:
+        extracted.append(report.entry_name)
 
     archive.extract_all(out_dir, progress_callback=extract_cb)
 
@@ -198,13 +218,33 @@ def test_cpp_api_progress_callbacks_propagate(standard_mod_directory: Path, tmp_
     assert any("texture.dds" in e for e in extracted)
 
 
+def test_cooperative_cancellation_across_python_api(standard_mod_directory: Path, tmp_path: Path):
+    """Verify returning False from progress_callback cancels operations cleanly."""
+    archive_path = tmp_path / "cancel_pack.big"
+    with pytest.raises(big.BigArchiveError, match="cancelled"):
+        big.pack(standard_mod_directory, archive_path, progress_callback=lambda _: False)
+    assert not archive_path.exists()
+
+    with pytest.raises(big.BigArchiveError, match="cancelled"):
+        big.pack_to_memory(standard_mod_directory, progress_callback=lambda _: False)
+
+    with pytest.raises(big.BigArchiveError, match="cancelled"):
+        big.pack_to_memory({"a.txt": b"1"}, progress_callback=lambda _: False)
+
+    valid_arc = tmp_path / "valid.big"
+    big.pack(standard_mod_directory, valid_arc)
+    with pytest.raises(big.BigArchiveError, match="cancelled"):
+        big.unpack(valid_arc, tmp_path / "cancel_out", progress_callback=lambda _: False)
+
+
 def test_pack_exception_in_callback_cleans_up_partial_file(standard_mod_directory: Path, tmp_path: Path):
     """Verify that Python exceptions inside the C++ callback clean up temp files and preserve existing targets."""
     archive_path = tmp_path / "failed_pack.big"
 
-    def raising_cb(name: str) -> None:
-        if "texture.dds" in name:
+    def raising_cb(report: big.ProgressReport) -> bool:
+        if "texture.dds" in report.entry_name:
             raise RuntimeError("Simulated user interrupt during packing")
+        return True
 
     with pytest.raises(RuntimeError, match="Simulated user interrupt"):
         big.BigPacker.pack_from_directory(standard_mod_directory, archive_path, progress_callback=raising_cb)
@@ -225,7 +265,7 @@ def test_unpack_exception_in_callback_aborts_safely(standard_mod_directory: Path
     out_dir = tmp_path / "aborted_extract"
     big.pack(standard_mod_directory, archive)
 
-    def raising_cb(name: str) -> None:
+    def raising_cb(report: big.ProgressReport) -> bool:
         raise ValueError("Simulated extraction abort")
 
     with pytest.raises(ValueError, match="Simulated extraction abort"):
@@ -304,9 +344,14 @@ def test_pack_to_memory_from_directory_and_records(standard_mod_directory: Path,
     expected_bytes = disk_archive.read_bytes()
 
     # 1. Pack from directory path
-    mem_from_dir = big.pack_to_memory(standard_mod_directory)
+    dir_reports: list[str] = []
+    mem_from_dir = big.pack_to_memory(
+        standard_mod_directory,
+        progress_callback=lambda r: (dir_reports.append(r.entry_name), True)[1],
+    )
     assert isinstance(mem_from_dir, bytes)
     assert mem_from_dir == expected_bytes
+    assert len(dir_reports) == 3
 
     # 2. Pack from Mapping[str, bytes]
     mapping_input = {
@@ -314,8 +359,13 @@ def test_pack_to_memory_from_directory_and_records(standard_mod_directory: Path,
         "art/texture.dds": b"DDS_HEADER_DATA",
         "readme.txt": b"Lord of the Mods",
     }
-    mem_from_dict = big.pack_to_memory(mapping_input)
+    dict_reports: list[str] = []
+    mem_from_dict = big.pack_to_memory(
+        mapping_input,
+        progress_callback=lambda r: (dict_reports.append(r.entry_name), None)[1],
+    )
     assert mem_from_dict == expected_bytes
+    assert len(dict_reports) == 3
 
     # 3. Pack from sequence of (path, bytes) tuples
     sequence_input = list(mapping_input.items())
@@ -352,7 +402,7 @@ def test_pack_to_memory_validation_and_callbacks(tmp_path: Path):
     reported: list[str] = []
     raw_bytes = big.BigPacker.pack_to_memory(
         [("b.txt", b"B"), ("a.txt", b"A")],
-        progress_callback=reported.append
+        progress_callback=lambda r: (reported.append(r.entry_name), True)[1]
     )
     assert len(raw_bytes) > 0
     assert reported == ["a.txt", "b.txt"]
@@ -466,11 +516,31 @@ def test_create_patch_and_create_patch_to_memory(tmp_path: Path):
         "data/new_unit.ini": b"Cost=200",
     }))
 
-    big.create_patch(base_path, target_path, patch_path)
+    patch_cb_names: list[str] = []
+    big.create_patch(
+        base_path,
+        target_path,
+        patch_path,
+        progress_callback=lambda r: (patch_cb_names.append(r.entry_name), True)[1],
+    )
     assert patch_path.is_file()
+    assert patch_cb_names == ["data\\new_unit.ini", "data\\weapon.ini"]
 
-    mem_patch = big.create_patch_to_memory(base_path, target_path)
+    mem_cb_names: list[str] = []
+    mem_patch = big.create_patch_to_memory(
+        base_path,
+        target_path,
+        progress_callback=lambda r: (mem_cb_names.append(r.entry_name), None)[1],
+    )
     assert patch_path.read_bytes() == mem_patch
+    assert mem_cb_names == patch_cb_names
+
+    # Cooperative cancellation in create_patch and create_patch_to_memory
+    with pytest.raises(big.BigArchiveError, match="cancelled"):
+        big.create_patch(base_path, target_path, tmp_path / "cancelled_patch.big", progress_callback=lambda _: False)
+
+    with pytest.raises(big.BigArchiveError, match="cancelled"):
+        big.create_patch_to_memory(base_path, target_path, progress_callback=lambda _: False)
 
     with big.BigArchive(patch_path) as patch_arc:
         names = [e.name for e in patch_arc.get_entries()]
@@ -482,16 +552,23 @@ def test_create_patch_and_create_patch_to_memory(tmp_path: Path):
     cb_disk: list[str] = []
     direct_patch_path = tmp_path / "direct_patch.big"
     with big.BigArchive(base_path) as b_arc, big.BigArchive(target_path) as t_arc:
-        raw = big.BigDiff.create_patch_to_memory(b_arc, t_arc, progress_callback=cb_mem.append)
+        raw = big.BigDiff.create_patch_to_memory(
+            b_arc, t_arc, progress_callback=lambda r: (cb_mem.append(r.entry_name), True)[1]
+        )
         assert raw == mem_patch
-        big.BigDiff.create_patch(b_arc, t_arc, direct_patch_path, progress_callback=cb_disk.append)
+        big.BigDiff.create_patch(
+            b_arc, t_arc, direct_patch_path, progress_callback=lambda r: (cb_disk.append(r.entry_name), True)[1]
+        )
 
     assert cb_mem == ["data\\new_unit.ini", "data\\weapon.ini"]
     assert cb_disk == cb_mem
 
-    # Error handling for overwriting input archives and missing input archives
+    # Error handling for overwriting input archives, missing parent dir, and missing input archives
     with pytest.raises(ValueError, match="cannot overwrite an input archive"):
         big.create_patch(base_path, target_path, base_path)
+
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        big.create_patch(base_path, target_path, tmp_path / "missing_parent" / "patch.big")
 
     missing = tmp_path / "missing.big"
     with pytest.raises(FileNotFoundError, match="Base archive not found"):

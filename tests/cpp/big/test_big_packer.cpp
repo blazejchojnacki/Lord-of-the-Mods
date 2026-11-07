@@ -204,7 +204,7 @@ TEST_CASE("BigPacker Payload Fidelity and Offset Alignment", "[big_pack][payload
 TEST_CASE("BigPacker Output Path Handling and Boundary Limits", "[big_pack][limits]") {
     ScopedPackEnv env;
 
-    SECTION("Negative scenario: Archive payload exceeding 4GB format limits throws std::length_error") {
+    SECTION("Negative scenario: Archive payload exceeding 4GB format limits throws BigFormatError") {
         std::filesystem::path huge_file = env.src_dir / "large_payload.dat";
         std::ofstream out(huge_file, std::ios::binary);
         out.write("X", 1);
@@ -213,7 +213,7 @@ TEST_CASE("BigPacker Output Path Handling and Boundary Limits", "[big_pack][limi
         // Resize sparse allocation to 4.1 GB to trigger 32-bit format limit validation
         std::filesystem::resize_file(huge_file, 4402341478ULL);
 
-        REQUIRE_THROWS_AS(BigPacker::pack_from_directory(env.src_dir, env.out_file), std::length_error);
+        REQUIRE_THROWS_AS(BigPacker::pack_from_directory(env.src_dir, env.out_file), BigFormatError);
     }
 }
 
@@ -222,11 +222,14 @@ TEST_CASE("BigPacker Progress Callback Integration", "[big_pack][callback]") {
 
     SECTION("Positive scenario: Callback is invoked for each file packed") {
         env.create_dummy_file("fileA.txt", "data");
-        env.create_dummy_file("sub/fileB.txt", "data");
+        env.create_dummy_file("sub/fileB.txt", "");
 
         std::vector<std::string> reported_files;
-        auto cb = [&](std::string_view name) {
-            reported_files.emplace_back(name);
+        auto cb = [&](const ProgressReport& report) -> bool {
+            reported_files.emplace_back(report.entry_name);
+            REQUIRE(report.bytes_transferred == report.file_size);
+            REQUIRE(report.total_archive_size == 4);
+            return true;
             };
 
         REQUIRE_NOTHROW(BigPacker::pack_from_directory(env.src_dir, env.out_file, cb));
@@ -235,6 +238,21 @@ TEST_CASE("BigPacker Progress Callback Integration", "[big_pack][callback]") {
         // SAGE sorting puts fileA before sub\fileB
         REQUIRE(reported_files[0] == "fileA.txt");
         REQUIRE(reported_files[1] == "sub\\fileB.txt");
+    }
+
+    SECTION("Negative scenario: Returning false from callback cancels packing and cleans up temp file") {
+        env.create_dummy_file("fileA.txt", "data");
+        auto cancel_cb = [](const ProgressReport&) -> bool {
+            return false;
+            };
+
+        REQUIRE_THROWS_AS(BigPacker::pack_from_directory(env.src_dir, env.out_file, cancel_cb), BigArchiveError);
+        REQUIRE_FALSE(std::filesystem::exists(env.out_file));
+
+        std::filesystem::remove(env.src_dir / "fileA.txt");
+        env.create_dummy_file("empty.txt", "");
+        REQUIRE_THROWS_AS(BigPacker::pack_from_directory(env.src_dir, env.out_file, cancel_cb), BigArchiveError);
+        REQUIRE_FALSE(std::filesystem::exists(env.out_file));
     }
 }
 
@@ -276,7 +294,7 @@ TEST_CASE("BigPacker Cumulative Limits and RAII Cleanup", "[big_pack][limits][ra
     SECTION("Negative scenario: Exception in progress callback triggers RAII cleanup") {
         env.create_dummy_file("file.txt", "data");
 
-        auto throwing_cb = [](std::string_view) {
+        auto throwing_cb = [](const ProgressReport&) -> bool {
             throw std::runtime_error("Simulated interrupt");
             };
 
@@ -303,7 +321,7 @@ TEST_CASE("BigPacker Cumulative Limits and RAII Cleanup", "[big_pack][limits][ra
 
         REQUIRE_THROWS_AS(
             BigPacker::pack_from_directory(env.src_dir, env.out_file),
-            std::length_error
+            BigFormatError
         );
     }
 }
@@ -418,14 +436,20 @@ TEST_CASE("BigPacker In-Memory Serialization", "[big_pack][memory]") {
         env.create_dummy_file("a.txt", "XYZ");
 
         std::vector<std::string> reported;
-        auto cb = [&](std::string_view name) {
-            reported.emplace_back(name);
+        auto cb = [&](const ProgressReport& report) -> bool {
+            reported.emplace_back(report.entry_name);
+            return true;
             };
 
         auto buf = BigPacker::pack_to_memory(env.src_dir, cb);
         REQUIRE(buf == expected_golden);
         REQUIRE(reported.size() == 1);
         REQUIRE(reported[0] == "a.txt");
+
+        auto cancel_cb = [](const ProgressReport&) -> bool {
+            return false;
+            };
+        REQUIRE_THROWS_AS(BigPacker::pack_to_memory(env.src_dir, cancel_cb), BigArchiveError);
     }
 
     SECTION("Positive scenario: pack_to_memory from directory handles nested paths and zero-byte files") {
@@ -440,14 +464,20 @@ TEST_CASE("BigPacker In-Memory Serialization", "[big_pack][memory]") {
         };
 
         std::vector<std::string> reported;
-        auto cb = [&](std::string_view name) {
-            reported.emplace_back(name);
+        auto cb = [&](const ProgressReport& report) -> bool {
+            reported.emplace_back(report.entry_name);
+            return true;
             };
 
         auto buf = BigPacker::pack_to_memory(files, cb);
         REQUIRE(buf == expected_golden);
         REQUIRE(reported.size() == 1);
         REQUIRE(reported[0] == "a.txt");
+
+        auto cancel_cb = [](const ProgressReport&) -> bool {
+            return false;
+            };
+        REQUIRE_THROWS_AS(BigPacker::pack_to_memory(files, cancel_cb), BigArchiveError);
     }
 
     SECTION("Positive scenario: pack_to_memory from memory buffers normalizes slashes and handles empty payloads") {
@@ -457,8 +487,9 @@ TEST_CASE("BigPacker In-Memory Serialization", "[big_pack][memory]") {
         };
 
         std::vector<std::string> reported;
-        auto buf = BigPacker::pack_to_memory(files, [&](std::string_view name) {
-            reported.emplace_back(name);
+        auto buf = BigPacker::pack_to_memory(files, [&](const ProgressReport& report) -> bool {
+            reported.emplace_back(report.entry_name);
+            return true;
             });
 
         REQUIRE(!buf.empty());
@@ -520,7 +551,7 @@ TEST_CASE("BigPacker In-Memory Serialization", "[big_pack][memory]") {
         std::filesystem::path huge_file = env.src_dir / "huge.dat";
         std::ofstream(huge_file).put('X');
         std::filesystem::resize_file(huge_file, 4402341478ULL);
-        REQUIRE_THROWS_AS(BigPacker::pack_to_memory(env.src_dir), std::length_error);
+        REQUIRE_THROWS_AS(BigPacker::pack_to_memory(env.src_dir), BigFormatError);
         std::filesystem::remove(huge_file);
 
         // Cumulative 4GB overflow check inside allocate_and_write_header
@@ -530,6 +561,6 @@ TEST_CASE("BigPacker In-Memory Serialization", "[big_pack][memory]") {
         std::filesystem::resize_file(huge1, 2200000000ULL);
         std::ofstream(huge2).put('X');
         std::filesystem::resize_file(huge2, 2200000000ULL);
-        REQUIRE_THROWS_AS(BigPacker::pack_to_memory(env.src_dir), std::length_error);
+        REQUIRE_THROWS_AS(BigPacker::pack_to_memory(env.src_dir), BigFormatError);
     }
 }
