@@ -1,6 +1,44 @@
 # Lord-of-the-Mods
 # coverage-log
 
+## 0.4.0 - 2026-11-07
+
+```text
+========================================================================= tests coverage =========================================================================
+________________________________________________________ coverage: platform win32, python 3.12.3-final-0 _________________________________________________________
+
+Name                       Stmts   Miss  Cover   Missing
+--------------------------------------------------------
+src\lotm\__init__.py           4      0   100%
+src\lotm\__main__.py           1      0   100%
+src\lotm\big\__init__.py      17      0   100%
+src\lotm\big\__main__.py       1      0   100%
+src\lotm\big\cli.py          102      0   100%
+src\lotm\big\differ.py        57      0   100%
+src\lotm\big\overlay.py       23      0   100%
+src\lotm\big\packer.py        43      0   100%
+src\lotm\big\unpacker.py      26      0   100%
+src\lotm\cli.py               28      0   100%
+--------------------------------------------------------
+TOTAL                        302      0   100%
+```
+
+```text
+Cpp coverage at 96%.
+Name                              Total lines    Coverage
+build\tests\lotm_cpp_tests.exe           1023         96%
+src\big\big_diff.cpp                      229         94%
+src\big\big_archive.cpp                   334         95%
+src\big\big_packer.cpp                    326         97%
+include\big\big_archive.hpp                 3        100%
+include\big\big_diff.hpp                    3        100%
+include\big\big_overlay.hpp                 1        100%
+include\core\endian.hpp                    21        100%
+src\big\big_overlay.cpp                   106        100%
+
+Remaining 4% C++ consists of unmockable OS/hardware I/O faults (e.g., sudden disk space exhaustion during `out_file.write()`, physical read truncations) which are exempt from unit testing.
+```
+
 ## v0.3.0 - 2026-11-03
 
 ```text
