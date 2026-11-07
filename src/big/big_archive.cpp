@@ -216,6 +216,7 @@ namespace lotm::big {
 
         if (header_size_ < HEADER_BASE_SIZE ||
             header_size_ > physical_size ||
+            total_size_ < header_size_ ||
             static_cast<uintmax_t>(num_files) * 8 > header_size_ - HEADER_BASE_SIZE) {
             throw BigFormatError("Corrupted BIG4 index: Claims more files than physically possible.");
         }

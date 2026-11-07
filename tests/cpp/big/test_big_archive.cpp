@@ -344,6 +344,24 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         REQUIRE_NOTHROW(archive.extract_all(env.out_dir));
         REQUIRE(std::filesystem::exists(env.out_dir / "file.txt"));
     }
+
+    SECTION("Negative scenario: Header total_size smaller than header_size throws BigFormatError") {
+        std::ofstream out(env.test_file, std::ios::binary);
+        out.write("BIG4", 4);
+        uint32_t total_size = lotm::core::to_little_endian(static_cast<uint32_t>(12));
+        out.write(reinterpret_cast<const char*>(&total_size), 4);
+
+        uint32_t num_files = lotm::core::to_big_endian(static_cast<uint32_t>(0));
+        out.write(reinterpret_cast<const char*>(&num_files), 4);
+
+        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(24));
+        out.write(reinterpret_cast<const char*>(&header_size), 4);
+
+        out.write("L219\0\0\0\0", 8);
+        out.close();
+
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
 }
 
 TEST_CASE("BigArchive Windows Path Security and NTFS Evasions", "[big_unpack][security]") {

@@ -296,5 +296,17 @@ TEST_CASE("BigDiff Delta Patch Generation", "[big_diff][patch]") {
             fclose(locked_out);
         }
         REQUIRE(std::filesystem::exists(env.patch_file));
+
+        // Interrupted patch creation preserves pre-existing target file intact
+        auto throwing_cb = [](std::string_view) {
+            throw std::runtime_error("Simulated patch interrupt");
+            };
+        REQUIRE_THROWS_AS(
+            BigDiff::create_patch(base_arc, target_arc, env.patch_file, "", throwing_cb),
+            std::runtime_error
+        );
+        std::ifstream verify_in(env.patch_file, std::ios::binary);
+        std::string preserved((std::istreambuf_iterator<char>(verify_in)), std::istreambuf_iterator<char>());
+        REQUIRE(preserved == "locked");
     }
 }
