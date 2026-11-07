@@ -40,10 +40,11 @@ except (BigFormatError, BigArchiveError) as err:
     print(f"Native serialization failed: {err}")
 ```
 
-### `pack_to_memory(source) -> bytes`
+### `pack_to_memory(source, progress_callback: Callable[[ProgressReport], bool | None] | None = None) -> bytes`
 Packs a directory or an in-memory collection of paths and payloads into a contiguous BIG4 byte buffer without touching the disk.
 
-* **`source`**: A directory path `str | os.PathLike`, a `Mapping[str, bytes]`, or an `Iterable[tuple[str, bytes]]`.
+* **`source`**: A directory path `str | os.PathLike`, a `Mapping[str, Buffer]`, or an `Iterable[tuple[str, Buffer]]`.
+* **`progress_callback`**: Optional callable receiving a `ProgressReport` instance. Returning `False` cancels the operation.
 * **Returns**: A `bytes` object representing the fully compliant archive.
 
 ```python
@@ -60,18 +61,19 @@ archive_bytes = pack_to_memory(virtual_mod)
 
 ## `lotm.big.unpack`
 
-### `unpack(big_path: str | os.PathLike[str], output_dir: str | os.PathLike[str], filter_pattern: str | None = None) -> list[lotm.big.BigEntry]`
-Extracts the contents of a BIG4 archive into a designated folder. Missing parent directories are created automatically. Exposed directly from `lotm.big` (implemented in `lotm.big.unpacker`).
+### `unpack(big_path: str | os.PathLike[str], output_dir: str | os.PathLike[str], filter_pattern: str | None = None, progress_callback: Callable[[ProgressReport], bool | None] | None = None) -> list[lotm.big.BigEntry]`
+Extracts the contents of a BIG4 archive into a designated folder. Raises FileNotFoundError if the target extraction directory does not exist. Exposed directly from `lotm.big` (implemented in `lotm.big.unpacker`).
 
 * **`big_path`**: `str | os.PathLike[str]` pointing to the source `.big` archive to read.
 * **`output_dir`**: `str | os.PathLike[str]` indicating the target extraction directory.
 * **`filter_pattern`**: Optional glob string (e.g. `"data/ini/*.ini"`) to extract only matching files.
+* **`progress_callback`**: Optional callable receiving a `ProgressReport` instance. Returning `False` cancels the operation and triggers cleanup of partial extractions.
 * **Returns**: A list of `BigEntry` objects containing `name`, `size`, and `offset` metadata for each extracted entry.
 * **Exceptions**:
-  * `FileNotFoundError`: Raised if the source `.big` file cannot be found.
+  * `FileNotFoundError`: Raised if the source `.big` file or target output directory cannot be found.
   * `lotm.big.BigFormatError` (Native): Raised if the BIG4 magic header is missing, corrupted, or if physical archive bounds are breached.
   * `lotm.big.BigSecurityError` (Native): Raised if the archive contains directory traversals (Zip-Slip), Windows DOS device names, Alternate Data Streams (`:`), directory symlinks, or amplification (Zip-Bomb) structures.
-  * `lotm.big.BigArchiveError` (Native): Raised if standard OS file stream operations fail.
+  * `lotm.big.BigArchiveError` (Native): Raised if standard OS file stream operations fail or the operation is cancelled.
 
 **Usage Example:**
 ```python
@@ -148,7 +150,7 @@ if result.has_differences:
     print(f"Modified {len(result.modified)} files.")
 ```
 
-### `create_patch(base_archive, target_archive, output_file, filter_pattern=None) -> None`
+### `create_patch(base_archive, target_archive, output_file, filter_pattern=None, progress_callback=None) -> None`
 Automatically packs only the added and modified entries into a minimal, standalone patch archive. An in-memory variant (`create_patch_to_memory`) is also available.
 
 ---
