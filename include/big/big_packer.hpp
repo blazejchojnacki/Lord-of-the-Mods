@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -41,6 +42,11 @@ namespace lotm::big {
 
         [[nodiscard]] static std::vector<uint8_t> pack_to_memory(
             const std::filesystem::path& source_dir,
+            std::function<void(std::string_view)> progress_callback = {}
+        );
+
+        [[nodiscard]] static std::vector<uint8_t> pack_to_memory(
+            std::span<const std::pair<std::string, std::span<const uint8_t>>> files,
             std::function<void(std::string_view)> progress_callback = {}
         );
 

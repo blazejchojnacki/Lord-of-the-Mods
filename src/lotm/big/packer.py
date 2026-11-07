@@ -7,7 +7,7 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Buffer, Iterable, Mapping
 import logging
 import os
 from pathlib import Path
@@ -42,7 +42,7 @@ def pack(source_dir: str | os.PathLike[str], output_file: str | os.PathLike[str]
 
 
 def pack_to_memory(
-    source: str | os.PathLike[str] | Mapping[str, bytes] | Iterable[tuple[str, bytes]]
+    source: str | os.PathLike[str] | Mapping[str, Buffer] | Iterable[tuple[str, Buffer]]
 ) -> bytes:
     """
     Packs a directory or an in-memory collection of (path, bytes) records into an EA BIG4 archive buffer.

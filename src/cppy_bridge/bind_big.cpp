@@ -23,6 +23,7 @@
 #include <big/exceptions.hpp>
 #include <cstdint>
 #include <functional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -30,6 +31,53 @@
 namespace nb = nanobind;
 
 namespace lotm::python {
+
+    namespace {
+        struct ScopedPyBuffer {
+            Py_buffer view{};
+            bool valid{ false };
+
+            explicit ScopedPyBuffer(nb::handle obj) {
+                if (PyObject_GetBuffer(obj.ptr(), &view, PyBUF_SIMPLE) != 0) {
+                    throw nb::python_error();
+                }
+                valid = true;
+            }
+
+            ScopedPyBuffer(const ScopedPyBuffer&) = delete;
+            ScopedPyBuffer& operator=(const ScopedPyBuffer&) = delete;
+
+            ScopedPyBuffer(ScopedPyBuffer&& other) noexcept
+                : view(other.view), valid(other.valid) {
+                other.valid = false;
+            }
+
+            ScopedPyBuffer& operator=(ScopedPyBuffer&& other) noexcept {
+                if (this != &other) {
+                    if (valid) {
+                        PyBuffer_Release(&view);
+                    }
+                    view = other.view;
+                    valid = other.valid;
+                    other.valid = false;
+                }
+                return *this;
+            }
+
+            ~ScopedPyBuffer() {
+                if (valid) {
+                    PyBuffer_Release(&view);
+                }
+            }
+
+            [[nodiscard]] std::span<const uint8_t> as_span() const noexcept {
+                return std::span<const uint8_t>(
+                    static_cast<const uint8_t*>(view.buf),
+                    static_cast<std::size_t>(view.len)
+                );
+            }
+        };
+    } // namespace
 
     void register_big_bindings(nb::module_& m) {
         auto sub = m.def_submodule("big", "BIG archive handling");
@@ -149,7 +197,7 @@ namespace lotm::python {
                 },
                 nb::arg("source"), nb::arg("progress_callback") = nb::none(),
                 "Packs a directory tree directly into an in-memory BIG4 archive bytes object")
-            .def_static("pack_to_memory", [](const std::vector<std::pair<std::string, nb::bytes>>& files, std::function<void(std::string_view)> cb) {
+            .def_static("pack_to_memory", [](const std::vector<std::pair<std::string, nb::object>>& files, std::function<void(std::string_view)> cb) {
             // Wrap the callback to securely reacquire the GIL when invoking Python code
             std::function<void(std::string_view)> safe_cb;
             if (cb) {
@@ -159,23 +207,29 @@ namespace lotm::python {
                     };
             }
 
-            std::vector<std::pair<std::string, std::vector<uint8_t>>> cpp_files;
-            cpp_files.reserve(files.size());
-            for (const auto& [path, raw_bytes] : files) {
-                const auto* ptr = reinterpret_cast<const uint8_t*>(raw_bytes.c_str());
-                cpp_files.emplace_back(path, std::vector<uint8_t>(ptr, ptr + raw_bytes.size()));
+            std::vector<ScopedPyBuffer> pinned_buffers;
+            pinned_buffers.reserve(files.size());
+            std::vector<std::pair<std::string, std::span<const uint8_t>>> span_files;
+            span_files.reserve(files.size());
+
+            for (const auto& [path, buf_obj] : files) {
+                pinned_buffers.emplace_back(buf_obj);
+                span_files.emplace_back(path, pinned_buffers.back().as_span());
             }
 
             std::vector<uint8_t> data;
             {
                 // Release GIL for the duration of the C++ sorting and memory serialization
                 nb::gil_scoped_release release;
-                data = lotm::big::BigPacker::pack_to_memory(cpp_files, safe_cb);
+                data = lotm::big::BigPacker::pack_to_memory(
+                    std::span<const std::pair<std::string, std::span<const uint8_t>>>(span_files),
+                    safe_cb
+                );
             }
             return nb::bytes(reinterpret_cast<const char*>(data.data()), data.size());
                 },
                 nb::arg("source"), nb::arg("progress_callback") = nb::none(),
-                "Packs a sequence of (path, bytes) pairs directly into an in-memory BIG4 archive bytes object");
+                "Packs a sequence of (path, buffer) pairs directly into an in-memory BIG4 archive bytes object");
 
         nb::class_<lotm::big::BigDiffResult>(sub, "BigDiffResult", "Comparison result categorizing entries between two BIG4 archives")
             .def_ro("added", &lotm::big::BigDiffResult::added, "Entries present only in the target archive")

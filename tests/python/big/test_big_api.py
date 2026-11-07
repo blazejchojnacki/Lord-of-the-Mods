@@ -68,11 +68,31 @@ def test_unpack_missing_archive_raises_error(tmp_path: Path):
 
 
 def test_cpp_api_raises_big_format_error_on_corrupt_magic(tmp_path: Path):
-    """Verify that the C++ bindings propagate BigFormatError for invalid magic headers."""
+    """Verify that the C++ bindings propagate BigFormatError for invalid and binary magic headers."""
     bad_archive = tmp_path / "corrupt.big"
     bad_archive.write_bytes(b"BOGUS_DATA")
 
     with pytest.raises(big.BigFormatError, match="Not a valid BIG4 file"):
+        big.BigArchive(bad_archive)
+
+    binary_magic = tmp_path / "binary_magic.big"
+    binary_magic.write_bytes(b"\x80\xff\x00\x7f_DATA")
+
+    with pytest.raises(big.BigFormatError, match=r"Found: \?\?\?\?"):
+        big.BigArchive(binary_magic)
+
+
+def test_cpp_api_raises_big_format_error_on_total_size_underflow(tmp_path: Path):
+    """Verify that header total_size smaller than header_size raises BigFormatError."""
+    bad_archive = tmp_path / "underflow.big"
+    with open(bad_archive, "wb") as f:
+        f.write(b"BIG4")
+        f.write(struct.pack("<I", 12))  # total_size < header_size (24)
+        f.write(struct.pack(">I", 0))
+        f.write(struct.pack(">I", 24))
+        f.write(b"L219\x00\x00\x00\x00")
+
+    with pytest.raises(big.BigFormatError, match="Corrupted BIG4 index"):
         big.BigArchive(bad_archive)
 
 
@@ -179,7 +199,7 @@ def test_cpp_api_progress_callbacks_propagate(standard_mod_directory: Path, tmp_
 
 
 def test_pack_exception_in_callback_cleans_up_partial_file(standard_mod_directory: Path, tmp_path: Path):
-    """Verify that Python exceptions inside the C++ callback trigger RAII cleanup of the output file."""
+    """Verify that Python exceptions inside the C++ callback clean up temp files and preserve existing targets."""
     archive_path = tmp_path / "failed_pack.big"
 
     def raising_cb(name: str) -> None:
@@ -190,6 +210,13 @@ def test_pack_exception_in_callback_cleans_up_partial_file(standard_mod_director
         big.BigPacker.pack_from_directory(standard_mod_directory, archive_path, progress_callback=raising_cb)
 
     assert not archive_path.exists(), "The partial .big file was not deleted by the RAII guard"
+
+    # Pre-existing target file must remain intact if an overwrite pack is interrupted
+    archive_path.write_bytes(b"ORIGINAL_ARCHIVE_BYTES")
+    with pytest.raises(RuntimeError, match="Simulated user interrupt"):
+        big.BigPacker.pack_from_directory(standard_mod_directory, archive_path, progress_callback=raising_cb)
+
+    assert archive_path.read_bytes() == b"ORIGINAL_ARCHIVE_BYTES"
 
 
 def test_unpack_exception_in_callback_aborts_safely(standard_mod_directory: Path, tmp_path: Path):
@@ -271,7 +298,7 @@ def test_closed_archive_rejects_operations_and_context_reentry(standard_mod_dire
 
 
 def test_pack_to_memory_from_directory_and_records(standard_mod_directory: Path, tmp_path: Path):
-    """Verify in-memory archive packing from a directory, a mapping, and a sequence of pairs."""
+    """Verify in-memory archive packing from a directory, a mapping, and buffer-protocol objects."""
     disk_archive = tmp_path / "disk_reference.big"
     big.pack(standard_mod_directory, disk_archive)
     expected_bytes = disk_archive.read_bytes()
@@ -295,6 +322,17 @@ def test_pack_to_memory_from_directory_and_records(standard_mod_directory: Path,
     mem_from_seq = big.pack_to_memory(sequence_input)
     assert mem_from_seq == expected_bytes
 
+    # 4. Pack zero-copy from bytearray and memoryview slices
+    raw_padded = bytearray(b"__Damage=50__")
+    with memoryview(raw_padded)[2:11] as ini_slice:
+        buffer_input = [
+            ("data/weapon.ini", ini_slice),
+            ("art/texture.dds", bytearray(b"DDS_HEADER_DATA")),
+            ("readme.txt", memoryview(b"Lord of the Mods")),
+        ]
+        mem_from_buffers = big.pack_to_memory(buffer_input)
+        assert mem_from_buffers == expected_bytes
+
 
 def test_pack_to_memory_validation_and_callbacks(tmp_path: Path):
     """Verify error propagation and progress callbacks for in-memory packing."""
@@ -307,6 +345,9 @@ def test_pack_to_memory_validation_and_callbacks(tmp_path: Path):
 
     with pytest.raises(ValueError, match="Entry path cannot be empty"):
         big.pack_to_memory([("", b"payload")])
+
+    with pytest.raises(TypeError):
+        big.BigPacker.pack_to_memory([("a.txt", 12345)])  # type: ignore[list-item]
 
     reported: list[str] = []
     raw_bytes = big.BigPacker.pack_to_memory(
@@ -448,7 +489,10 @@ def test_create_patch_and_create_patch_to_memory(tmp_path: Path):
     assert cb_mem == ["data\\new_unit.ini", "data\\weapon.ini"]
     assert cb_disk == cb_mem
 
-    # Error handling for missing input archives
+    # Error handling for overwriting input archives and missing input archives
+    with pytest.raises(ValueError, match="cannot overwrite an input archive"):
+        big.create_patch(base_path, target_path, base_path)
+
     missing = tmp_path / "missing.big"
     with pytest.raises(FileNotFoundError, match="Base archive not found"):
         big.create_patch(missing, target_path, patch_path)

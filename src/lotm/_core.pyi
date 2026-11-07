@@ -1,13 +1,13 @@
-'''
+"""
 @file src/lotm/_core.pyi
 @brief Type stubs for the private C++ native extension core.
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
 Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
-'''
+"""
 
-from collections.abc import Callable, Sequence
+from collections.abc import Buffer, Callable, Sequence
 import os
 from pathlib import Path
 
@@ -57,7 +57,7 @@ class big:
         ) -> None: ...
         @staticmethod
         def pack_to_memory(
-            source: str | os.PathLike[str] | Sequence[tuple[str, bytes]],
+            source: str | os.PathLike[str] | Sequence[tuple[str, Buffer]],
             progress_callback: Callable[[str], None] | None = None
         ) -> bytes: ...
 

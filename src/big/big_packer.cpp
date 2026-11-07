@@ -19,6 +19,7 @@
 #include <fstream>
 #include <functional>
 #include <limits>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -233,6 +234,13 @@ namespace lotm::big {
                 "Target output archive cannot reside inside the source directory: " + to_utf8(output_file));
         }
 
+        if (std::filesystem::exists(output_file)) {
+            std::fstream probe(output_file, std::ios::in | std::ios::out | std::ios::binary);
+            if (!probe.is_open()) {
+                throw BigArchiveError("Cannot create output file: " + to_utf8(output_file));
+            }
+        }
+
         std::vector<detail::PackSourceRecord> file_list;
         uintmax_t total_payload_size = 0;
 
@@ -286,7 +294,10 @@ namespace lotm::big {
 
         uint32_t total_size = current_offset;
 
-        std::ofstream out(output_file, std::ios::binary);
+        std::filesystem::path temp_file = output_file;
+        temp_file += ".lotm_tmp";
+
+        std::ofstream out(temp_file, std::ios::binary);
         if (!out.is_open()) {
             throw BigArchiveError("Cannot create output file: " + to_utf8(output_file));
         }
@@ -303,7 +314,7 @@ namespace lotm::big {
                     std::filesystem::remove(path, ec);
                 }
             }
-        } guard{ out, output_file, pack_successful };
+        } guard{ out, temp_file, pack_successful };
 
         out.write(BIG4_MAGIC.data(), 4);
 
@@ -362,6 +373,13 @@ namespace lotm::big {
         out.flush();
         if (!out.good()) {
             throw BigArchiveError("Failed writing data to archive: " + to_utf8(output_file));
+        }
+        out.close();
+
+        std::error_code rename_ec;
+        std::filesystem::rename(temp_file, output_file, rename_ec);
+        if (rename_ec) {
+            throw BigArchiveError("Cannot commit output file: " + to_utf8(output_file));
         }
 
         pack_successful = true;
@@ -426,7 +444,7 @@ namespace lotm::big {
     }
 
     std::vector<uint8_t> BigPacker::pack_to_memory(
-        const std::vector<std::pair<std::string, std::vector<uint8_t>>>& files,
+        std::span<const std::pair<std::string, std::span<const uint8_t>>> files,
         std::function<void(std::string_view)> progress_callback
     ) {
         std::vector<detail::PackSourceRecord> file_list;
@@ -445,8 +463,11 @@ namespace lotm::big {
                 if (c == '/') c = '\\';
             }
 
-            pack_entry.size = static_cast<uint32_t>(
-                std::min<std::size_t>(payload.size(), std::numeric_limits<uint32_t>::max()));
+            if (payload.size() > std::numeric_limits<uint32_t>::max()) {
+                throw std::length_error("File '" + pack_entry.rel_path + "' exceeds the 4GB format limit.");
+            }
+
+            pack_entry.size = static_cast<uint32_t>(payload.size());
             // Store original index temporarily in offset prior to alphabetical sorting
             pack_entry.offset = static_cast<uint32_t>(i);
             total_payload_size += payload.size();
@@ -469,6 +490,21 @@ namespace lotm::big {
         }
 
         return buffer;
+    }
+
+    std::vector<uint8_t> BigPacker::pack_to_memory(
+        const std::vector<std::pair<std::string, std::vector<uint8_t>>>& files,
+        std::function<void(std::string_view)> progress_callback
+    ) {
+        std::vector<std::pair<std::string, std::span<const uint8_t>>> span_files;
+        span_files.reserve(files.size());
+        for (const auto& [raw_path, payload] : files) {
+            span_files.emplace_back(raw_path, std::span<const uint8_t>(payload.data(), payload.size()));
+        }
+        return pack_to_memory(
+            std::span<const std::pair<std::string, std::span<const uint8_t>>>(span_files),
+            std::move(progress_callback)
+        );
     }
 
 } // namespace lotm::big
