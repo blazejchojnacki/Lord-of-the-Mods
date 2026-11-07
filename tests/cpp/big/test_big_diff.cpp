@@ -12,6 +12,7 @@
 #include <big/big_diff.hpp>
 #include <big/big_packer.hpp>
 #include <big/exceptions.hpp>
+#include <core/endian.hpp>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -32,6 +33,7 @@ public:
 
     ScopedDiffEnv() {
         root_dir = std::filesystem::temp_directory_path() / "lotm_diff_test";
+        std::filesystem::remove_all(root_dir);
         std::filesystem::create_directories(root_dir);
         base_file = root_dir / "base.big";
         target_file = root_dir / "target.big";
@@ -161,6 +163,41 @@ TEST_CASE("BigDiff Comparison Scenarios", "[big_diff][compare]") {
 
         REQUIRE_THROWS_AS(BigDiff::compare(base_arc, target_arc), BigArchiveError);
     }
+
+    SECTION("Negative scenario: Comparing or patching a Zip-Bomb archive throws BigSecurityError") {
+        env.write_archive(env.base_file, { { "a.txt", "1" } });
+
+        // Construct an archive with 30 overlapping entries pointing to the same 1KB payload
+        std::ofstream out(env.target_file, std::ios::binary);
+        out.write("BIG4", 4);
+        constexpr uint32_t file_count = 30;
+        constexpr uint32_t payload_size = 1024;
+        uint32_t header_size = 16 + file_count * 15;
+        uint32_t total_size = header_size + payload_size;
+
+        uint32_t le_total = lotm::core::to_little_endian(total_size);
+        uint32_t be_count = lotm::core::to_big_endian(file_count);
+        uint32_t be_header = lotm::core::to_big_endian(header_size);
+        out.write(reinterpret_cast<const char*>(&le_total), 4);
+        out.write(reinterpret_cast<const char*>(&be_count), 4);
+        out.write(reinterpret_cast<const char*>(&be_header), 4);
+
+        uint32_t be_offset = lotm::core::to_big_endian(header_size);
+        uint32_t be_size = lotm::core::to_big_endian(payload_size);
+        for (uint32_t i = 0; i < file_count; ++i) {
+            out.write(reinterpret_cast<const char*>(&be_offset), 4);
+            out.write(reinterpret_cast<const char*>(&be_size), 4);
+            char name[7];
+            snprintf(name, sizeof(name), "f%02u.in", i);
+            out.write(name, 7);
+        }
+        std::vector<char> payload(payload_size, 'Z');
+        out.write(payload.data(), static_cast<std::streamsize>(payload.size()));
+        out.close();
+
+        REQUIRE_THROWS_AS(BigDiff::compare(env.base_file, env.target_file), BigSecurityError);
+        REQUIRE_THROWS_AS(BigDiff::create_patch_to_memory(env.base_file, env.target_file), BigSecurityError);
+    }
 }
 
 TEST_CASE("BigDiff Delta Patch Generation", "[big_diff][patch]") {
@@ -228,7 +265,7 @@ TEST_CASE("BigDiff Delta Patch Generation", "[big_diff][patch]") {
         REQUIRE(entries[0].name == "data\\modified.ini");
     }
 
-    SECTION("Negative scenario: create_patch validates output directory, missing parent, and locked output file") {
+    SECTION("Negative scenario: create_patch validates output directory, missing parent, input aliasing, and locked output file") {
         BigArchive base_arc(env.base_file);
         BigArchive target_arc(env.target_file);
 
@@ -241,7 +278,11 @@ TEST_CASE("BigDiff Delta Patch Generation", "[big_diff][patch]") {
         std::filesystem::path missing_parent_out = env.root_dir / "missing_folder" / "patch.big";
         REQUIRE_THROWS_AS(BigDiff::create_patch(base_arc, target_arc, missing_parent_out), std::invalid_argument);
 
-        // Locked output file triggers BigArchiveError and CleanupGuard
+        // Output path aliases base or target archive
+        REQUIRE_THROWS_AS(BigDiff::create_patch(base_arc, target_arc, env.base_file), std::invalid_argument);
+        REQUIRE_THROWS_AS(BigDiff::create_patch(base_arc, target_arc, env.target_file), std::invalid_argument);
+
+        // Locked output file triggers BigArchiveError and preserves pre-existing file
         {
             std::ofstream pre(env.patch_file, std::ios::binary);
             pre << "locked";
@@ -254,5 +295,6 @@ TEST_CASE("BigDiff Delta Patch Generation", "[big_diff][patch]") {
             );
             fclose(locked_out);
         }
+        REQUIRE(std::filesystem::exists(env.patch_file));
     }
 }

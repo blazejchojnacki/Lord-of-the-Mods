@@ -30,6 +30,7 @@ public:
 
     ScopedPackEnv() {
         root_dir = std::filesystem::temp_directory_path() / "lotm_pack_test";
+        std::filesystem::remove_all(root_dir);
         src_dir = root_dir / "src";
         out_file = root_dir / "output.big";
 
@@ -330,6 +331,7 @@ TEST_CASE("BigPacker File I/O Error Handling", "[big_pack][io]") {
             );
             fclose(locked_out);
         }
+        REQUIRE(std::filesystem::exists(env.out_file));
     }
 
     SECTION("Negative scenario: Source file cannot be read during packing") {
@@ -465,7 +467,7 @@ TEST_CASE("BigPacker In-Memory Serialization", "[big_pack][memory]") {
         REQUIRE(reported[1] == "z\\empty.txt");
     }
 
-    SECTION("Negative scenario: pack_to_memory rejects empty path or duplicate case-insensitive paths") {
+    SECTION("Negative scenario: pack_to_memory rejects empty, duplicate, or malicious entry paths") {
         std::vector<std::pair<std::string, std::vector<uint8_t>>> empty_path_files = {
             { "",{ 'A' } }
         };
@@ -476,6 +478,29 @@ TEST_CASE("BigPacker In-Memory Serialization", "[big_pack][memory]") {
             { "DATA\\UNIT.INI",{ 'B' } }
         };
         REQUIRE_THROWS_AS(BigPacker::pack_to_memory(dup_files), std::invalid_argument);
+
+        std::vector<std::string> malicious_paths = {
+            std::string("valid.ini\0injected.ini", 22),
+            "../escaped.ini",
+            "data\\..\\escaped.ini",
+            "\\rooted.ini",
+            "data\\trailing\\",
+            "data\\\\empty_seg.ini",
+            "C:drive_rel.ini",
+            "data\\CON .ini",
+            "data\\COM1.ini",
+            "data\\COM\xC2\xB9.ini",
+            "data\\COM\xB2.ini",
+            "data\\CLOCK$.ini",
+            "data\\bad<char>.ini",
+            "data\\trailing_dot."
+        };
+        for (const auto& bad_path : malicious_paths) {
+            std::vector<std::pair<std::string, std::vector<uint8_t>>> bad_files = {
+                { bad_path,{ 'A' } }
+            };
+            REQUIRE_THROWS_AS(BigPacker::pack_to_memory(bad_files), std::invalid_argument);
+        }
     }
 
     SECTION("Negative scenario: pack_to_memory from directory validates missing directory, 4GB limits, and locked files") {
@@ -502,8 +527,8 @@ TEST_CASE("BigPacker In-Memory Serialization", "[big_pack][memory]") {
         std::filesystem::path huge1 = env.src_dir / "huge1.dat";
         std::filesystem::path huge2 = env.src_dir / "huge2.dat";
         std::ofstream(huge1).put('X');
-        std::ofstream(huge2).put('X');
         std::filesystem::resize_file(huge1, 2200000000ULL);
+        std::ofstream(huge2).put('X');
         std::filesystem::resize_file(huge2, 2200000000ULL);
         REQUIRE_THROWS_AS(BigPacker::pack_to_memory(env.src_dir), std::length_error);
     }

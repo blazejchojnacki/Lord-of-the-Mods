@@ -79,13 +79,13 @@ def test_cpp_api_raises_big_format_error_on_corrupt_magic(tmp_path: Path):
 def test_cpp_api_raises_big_security_error_on_zip_slip(tmp_path: Path):
     """Verify that the C++ bindings propagate BigSecurityError for path traversal attempts."""
     bad_archive = tmp_path / "zipslip.big"
-    
+
     name = b"../escaped.txt\x00"
     header_size = 16 + 8 + len(name)
     payload_size = 4
     offset = header_size
     total_size = header_size + payload_size
-    
+
     with open(bad_archive, "wb") as f:
         f.write(b"BIG4")
         f.write(struct.pack("<I", total_size))
@@ -95,10 +95,10 @@ def test_cpp_api_raises_big_security_error_on_zip_slip(tmp_path: Path):
         f.write(struct.pack(">I", payload_size))
         f.write(name)
         f.write(b"DATA")
-        
+
     archive = big.BigArchive(bad_archive)
     out_dir = tmp_path / "out"
-    
+
     with pytest.raises(big.BigSecurityError, match="Directory traversal"):
         archive.extract_all(out_dir)
 
@@ -108,17 +108,19 @@ def test_cpp_api_raises_big_security_error_on_zip_slip(tmp_path: Path):
     b"\\??\\malicious.exe\x00",
     b"C:../escaped.txt\x00",
     b"folder .\\payload.txt\x00",
-    b"data\\file<invalid>.txt\x00"
+    b"data\\file<invalid>.txt\x00",
+    b"data\\COM\xC2\xB9.ini\x00",
+    b"data\\CLOCK$.txt\x00",
 ])
 def test_cpp_api_raises_big_security_error_on_ntfs_evasion(tmp_path: Path, malicious_path: bytes):
     """Verify that the C++ bindings propagate BigSecurityError for extended NTFS path evasions."""
     bad_archive = tmp_path / "ntfs_evasion.big"
-    
+
     header_size = 16 + 8 + len(malicious_path)
     payload_size = 4
     offset = header_size
     total_size = header_size + payload_size
-    
+
     with open(bad_archive, "wb") as f:
         f.write(b"BIG4")
         f.write(struct.pack("<I", total_size))
@@ -128,10 +130,10 @@ def test_cpp_api_raises_big_security_error_on_ntfs_evasion(tmp_path: Path, malic
         f.write(struct.pack(">I", payload_size))
         f.write(malicious_path)
         f.write(b"DATA")
-        
+
     archive = big.BigArchive(bad_archive)
     out_dir = tmp_path / "out"
-    
+
     with pytest.raises(big.BigSecurityError, match="prefix|drive-relative|Unsafe"):
         archive.extract_all(out_dir)
 
@@ -155,23 +157,23 @@ def test_cpp_api_progress_callbacks_propagate(standard_mod_directory: Path, tmp_
     """Verify that C++ progress callbacks correctly invoke Python callables."""
     archive_path = tmp_path / "callback.big"
     out_dir = tmp_path / "out"
-    
-    packed = []
+
+    packed: list[str] = []
     def pack_cb(name: str) -> None:
         packed.append(name)
-        
+
     big.BigPacker.pack_from_directory(standard_mod_directory, archive_path, progress_callback=pack_cb)
-    
+
     assert len(packed) == 3
     assert any("weapon.ini" in p for p in packed)
-    
+
     archive = big.BigArchive(archive_path)
-    extracted = []
+    extracted: list[str] = []
     def extract_cb(name: str) -> None:
         extracted.append(name)
-        
+
     archive.extract_all(out_dir, progress_callback=extract_cb)
-    
+
     assert len(extracted) == 3
     assert any("texture.dds" in e for e in extracted)
 
@@ -179,14 +181,14 @@ def test_cpp_api_progress_callbacks_propagate(standard_mod_directory: Path, tmp_
 def test_pack_exception_in_callback_cleans_up_partial_file(standard_mod_directory: Path, tmp_path: Path):
     """Verify that Python exceptions inside the C++ callback trigger RAII cleanup of the output file."""
     archive_path = tmp_path / "failed_pack.big"
-    
+
     def raising_cb(name: str) -> None:
         if "texture.dds" in name:
             raise RuntimeError("Simulated user interrupt during packing")
-            
+
     with pytest.raises(RuntimeError, match="Simulated user interrupt"):
         big.BigPacker.pack_from_directory(standard_mod_directory, archive_path, progress_callback=raising_cb)
-        
+
     assert not archive_path.exists(), "The partial .big file was not deleted by the RAII guard"
 
 
@@ -195,10 +197,10 @@ def test_unpack_exception_in_callback_aborts_safely(standard_mod_directory: Path
     archive = tmp_path / "valid.big"
     out_dir = tmp_path / "aborted_extract"
     big.pack(standard_mod_directory, archive)
-    
+
     def raising_cb(name: str) -> None:
         raise ValueError("Simulated extraction abort")
-        
+
     with pytest.raises(ValueError, match="Simulated extraction abort"):
         archive_obj = big.BigArchive(archive)
         archive_obj.extract_all(out_dir, progress_callback=raising_cb)
@@ -315,6 +317,16 @@ def test_pack_to_memory_validation_and_callbacks(tmp_path: Path):
     assert reported == ["a.txt", "b.txt"]
 
 
+def test_pack_to_memory_path_injection():
+    """Verify pack_to_memory blocks embedded nulls and directory traversals."""
+    with pytest.raises(ValueError, match="Invalid or unsafe archive entry path"):
+        big.pack_to_memory([("data/weapon.ini\x00b.ini", b"payload")])
+    with pytest.raises(ValueError, match="Invalid or unsafe archive entry path"):
+        big.pack_to_memory([("../escaped.txt", b"payload")])
+    with pytest.raises(ValueError, match="Invalid or unsafe archive entry path"):
+        big.pack_to_memory([("COM1", b"payload")])
+
+
 def test_selective_unpack_with_glob_filter(standard_mod_directory: Path, tmp_path: Path):
     """Verify that unpack() with filter_pattern extracts and returns only matching entries."""
     archive_path = tmp_path / "selective.big"
@@ -364,6 +376,37 @@ def test_diff_archives_and_error_handling(tmp_path: Path):
 
     with pytest.raises(FileNotFoundError, match="Target archive not found"):
         big.diff(base_path, tmp_path / "missing_target.big")
+
+
+def test_diff_amplification_limit(tmp_path: Path):
+    """Verify diff and create_patch bounds check amplification ratios."""
+    base_archive = tmp_path / "zipbomb_base.big"
+    target_archive = tmp_path / "safe_target.big"
+
+    target_archive.write_bytes(big.pack_to_memory({"readme.txt": b"Safe"}))
+
+    file_count = 50
+    entry_name = b"A.txt\x00"
+    entry_record_size = 4 + 4 + len(entry_name)
+    header_size = 16 + (file_count * entry_record_size)
+    payload_size = 1024 * 1024
+    total_size = header_size + payload_size
+
+    with open(base_archive, "wb") as f:
+        f.write(b"BIG4")
+        f.write(struct.pack("<I", total_size))
+        f.write(struct.pack(">I", file_count))
+        f.write(struct.pack(">I", header_size))
+
+        for _ in range(file_count):
+            f.write(struct.pack(">I", header_size))
+            f.write(struct.pack(">I", payload_size))
+            f.write(entry_name)
+
+        f.write(b"X" * payload_size)
+
+    with pytest.raises(big.BigSecurityError, match="amplification"):
+        big.diff(base_archive, target_archive)
 
 
 def test_create_patch_and_create_patch_to_memory(tmp_path: Path):

@@ -57,11 +57,9 @@ def test_cli_modules_import():
     """Verify that CLI entry point handlers are discoverable."""
     import lotm.big.cli as cli
 
-    assert hasattr(cli, "main_pack")
-    assert hasattr(cli, "main_unpack")
-    assert hasattr(cli, "main_diff")
-    assert hasattr(cli, "main_overlay")
-    assert callable(cli.main_pack)
-    assert callable(cli.main_unpack)
-    assert callable(cli.main_diff)
-    assert callable(cli.main_overlay)
+    assert hasattr(cli, "build_parser")
+    assert hasattr(cli, "main")
+    assert hasattr(cli, "cli_entry")
+    assert callable(cli.build_parser)
+    assert callable(cli.main)
+    assert callable(cli.cli_entry)

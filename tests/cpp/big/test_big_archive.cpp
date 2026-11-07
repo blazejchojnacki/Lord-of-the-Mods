@@ -28,6 +28,7 @@ public:
 
     ScopedTempEnv() {
         root_dir = std::filesystem::temp_directory_path() / "lotm_unpack_test";
+        std::filesystem::remove_all(root_dir);
         std::filesystem::create_directories(root_dir);
         test_file = root_dir / "test.big";
         out_dir = root_dir / "out";
@@ -110,6 +111,11 @@ TEST_CASE("BigArchive Initialization and Basic Error Handling", "[big_unpack][er
         env.write_big_file("BOGUS", {});
         REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
     }
+
+    SECTION("Negative scenario: Non-printable binary magic bytes") {
+        env.write_big_file("\x80\xFF\x00\x7F", {});
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
 }
 
 TEST_CASE("BigArchive Header Parsing", "[big_unpack][header]") {
@@ -120,6 +126,7 @@ TEST_CASE("BigArchive Header Parsing", "[big_unpack][header]") {
         REQUIRE_NOTHROW(BigArchive(env.test_file));
         BigArchive archive(env.test_file);
         REQUIRE(archive.get_entries().empty());
+        REQUIRE(archive.file_path() == env.test_file);
     }
 
     SECTION("Positive scenario: Valid BIG4 file with multiple entries") {
@@ -201,6 +208,21 @@ TEST_CASE("BigArchive Extraction", "[big_unpack][extraction]") {
         std::string content2((std::istreambuf_iterator<char>(in2)), std::istreambuf_iterator<char>());
         REQUIRE(content2 == large_payload);
     }
+
+    SECTION("Positive scenario: UTF-8 entry names extract and read cleanly without CP_ACP errors") {
+        env.write_big_file("BIG4", {
+            { "data/\xC5\xBC\xC3\xB3\xC5\x82\xC4\x87.ini", "Damage=100" }
+            });
+
+        BigArchive archive(env.test_file);
+        REQUIRE_NOTHROW(archive.extract_all(env.out_dir));
+
+        auto expected_path = env.out_dir / std::filesystem::path(u8"data/\u017C\u00F3\u0142\u0107.ini");
+        REQUIRE(std::filesystem::exists(expected_path));
+
+        auto buf = archive.read_entry("data/\xC5\xBC\xC3\xB3\xC5\x82\xC4\x87.ini");
+        REQUIRE(std::string(buf.begin(), buf.end()) == "Damage=100");
+    }
 }
 
 TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_cases]") {
@@ -233,6 +255,31 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         out.close();
 
         // Must throw instead of allocating a massive vector of garbage
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
+
+    SECTION("Negative scenario: Header reserve OOM DoS (small header_size inside larger physical file)") {
+        std::ofstream out(env.test_file, std::ios::binary);
+        out.write("BIG4", 4);
+        uint32_t total_size = lotm::core::to_little_endian(static_cast<uint32_t>(1024));
+        out.write(reinterpret_cast<const char*>(&total_size), 4);
+
+        // Claim 100 files, which fits in physical_size (1024 >= 800) but not in header_size (16)
+        uint32_t num_files = lotm::core::to_big_endian(static_cast<uint32_t>(100));
+        out.write(reinterpret_cast<const char*>(&num_files), 4);
+
+        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(16));
+        out.write(reinterpret_cast<const char*>(&header_size), 4);
+
+        std::vector<char> padding(1008, 'A');
+        out.write(padding.data(), static_cast<std::streamsize>(padding.size()));
+        out.close();
+
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
+
+    SECTION("Negative scenario: Empty entry name in index table throws BigFormatError") {
+        env.write_big_file("BIG4", { { "", "payload" } });
         REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
     }
 
@@ -307,6 +354,7 @@ TEST_CASE("BigArchive Windows Path Security and NTFS Evasions", "[big_unpack][se
         BigArchive archive(env.test_file);
         REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
         REQUIRE_FALSE(std::filesystem::exists(env.root_dir / "escaped.txt"));
+        REQUIRE_FALSE(std::filesystem::exists(env.out_dir));
     }
 
     SECTION("Negative scenario: Rooted paths in entry are blocked") {
@@ -344,6 +392,19 @@ TEST_CASE("BigArchive Windows Path Security and NTFS Evasions", "[big_unpack][se
         env.write_big_file("BIG4", { { "data\\COM1.ini", "payload" } });
         BigArchive archive2(env.test_file);
         REQUIRE_THROWS_AS(archive2.extract_all(env.out_dir), BigSecurityError);
+
+        // Superscript UTF-8 COM¹ and CLOCK$ device names
+        env.write_big_file("BIG4", { { "data\\COM\xC2\xB9.ini", "payload" } });
+        BigArchive archive3(env.test_file);
+        REQUIRE_THROWS_AS(archive3.extract_all(env.out_dir), BigSecurityError);
+
+        env.write_big_file("BIG4", { { "data\\COM\xB2.ini", "payload" } });
+        BigArchive archive4(env.test_file);
+        REQUIRE_THROWS_AS(archive4.extract_all(env.out_dir), BigSecurityError);
+
+        env.write_big_file("BIG4", { { "data\\CLOCK$.ini", "payload" } });
+        BigArchive archive5(env.test_file);
+        REQUIRE_THROWS_AS(archive5.extract_all(env.out_dir), BigSecurityError);
     }
 
     SECTION("Negative scenario: Zip-Bomb Amplification Threshold Exceeded") {
@@ -521,11 +582,11 @@ TEST_CASE("BigArchive Fast-Fail Logic Paths", "[big_unpack][malformed]") {
         uint32_t num_files = lotm::core::to_big_endian(static_cast<uint32_t>(2));
         out.write(reinterpret_cast<const char*>(&num_files), 4);
 
-        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(64));
+        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(32));
         out.write(reinterpret_cast<const char*>(&header_size), 4);
 
         // Write only ONE entry's offset and size, then abruptly end the file
-        uint32_t offset = lotm::core::to_big_endian(static_cast<uint32_t>(64));
+        uint32_t offset = lotm::core::to_big_endian(static_cast<uint32_t>(32));
         uint32_t size = lotm::core::to_big_endian(static_cast<uint32_t>(100));
         out.write(reinterpret_cast<const char*>(&offset), 4);
         out.write(reinterpret_cast<const char*>(&size), 4);
