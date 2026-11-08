@@ -77,3 +77,13 @@ namespace lotm::big {
     };
 
 } // namespace lotm::big
+
+template <>
+struct std::hash<lotm::big::BigOverlayEntry> {
+    std::size_t operator()(const lotm::big::BigOverlayEntry& e) const noexcept {
+        std::size_t h1 = std::hash<lotm::big::BigEntry>{}(e.entry);
+        std::size_t h2 = std::filesystem::hash_value(e.source_archive);
+        std::size_t h3 = std::hash<uint32_t>{}(e.override_count);
+        return h1 ^ (h2 << 1) ^ (h3 << 2);
+    }
+};

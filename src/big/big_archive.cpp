@@ -449,7 +449,7 @@ namespace lotm::big {
             total_extracted_bytes += entry.size;
         }
 
-        return physical_size;
+        return physical_size_;
     }
 
     void BigArchive::extract_all(

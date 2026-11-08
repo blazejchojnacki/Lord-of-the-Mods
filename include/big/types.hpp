@@ -12,6 +12,7 @@
 #include <compare>
 #include <cstdint>
 #include <functional>
+#include <span>
 #include <string>
 #include <string_view>
 
