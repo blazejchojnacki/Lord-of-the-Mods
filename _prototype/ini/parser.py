@@ -530,6 +530,21 @@ class ConstructFile:
             self.current_level += 1
             return
 
+        # Intercept for dynamically keyed FCurve blocks (e.g. "Alpha = FCurve")
+        if len(lexed.line_tokens) >= 3 and lexed.line_tokens[1] == '=' and lexed.line_tokens[2].lower() == 'fcurve':
+            new_fcurve = ConstructLevel(
+                _class=f"{lexed.words[0]} =",
+                name=lexed.words[1],
+                identifier=' '.join(lexed.words[2:]),
+                comment=self.last_comment,
+                header_comment=lexed.comment,
+            )
+            self.context_stack[-1].append(new_fcurve)
+            self.context_stack.append(new_fcurve)
+            self.last_comment = ''
+            self.current_level += 1
+            return
+
         if self._handle_block_start(lexed.words, lexed.line_tokens, lexed.comment):
             return
 
