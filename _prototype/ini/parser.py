@@ -125,8 +125,10 @@ def load_delimiters() -> None:
     STR_DELIMITER_RULES = _compile_delimiter_rules(STR_DELIMITERS)
 
 
-def _read_file_lines(file_path: str) -> List[str]:
+def _read_file_lines(file_path: str, file_content: str | None = None) -> List[str]:
     """Reads file contents into memory with an encoding fallback for legacy SAGE files."""
+    if file_content is not None:
+        return file_content.splitlines()
     path = Path(file_path)
     try:
         return path.read_text(encoding='utf-8').splitlines()
@@ -175,13 +177,13 @@ def _match_delimiter_rule(line_tokens: List[str], rules: List[DelimiterRule]) ->
     return None
 
 
-def recognize_structure(file_path: str) -> Tuple[List[List[str]], int]:
+def recognize_structure(file_path: str, file_content: str | None = None) -> Tuple[List[List[str]], int]:
     load_delimiters()
     if file_path.endswith('.str'):
         empty_tail: List[str] = []
         return [list(STR_DELIMITERS), empty_tail], 0
     elif file_path.endswith('.ini') or file_path.endswith('.inc'):
-        lines = _read_file_lines(file_path)
+        lines = _read_file_lines(file_path, file_content=file_content)
         for file_line in lines:
             lexed = lex_line(file_line)
             if not lexed.line_tokens:
@@ -255,16 +257,16 @@ class StrParser:
     """Dedicated single-level parser for SAGE .str localization files."""
 
     @staticmethod
-    def parse_file(file_path: str, strict: bool = False) -> StrDocument:
+    def parse_file(file_path: str, strict: bool = False, file_content: str | None = None) -> StrDocument:
         load_delimiters()
-        if not (os.path.isfile(file_path) and file_path.endswith('.str')):
+        if not file_path.endswith('.str') or (file_content is None and not os.path.isfile(file_path)):
             raise IniParseError(f'file {file_path} invalid.')
 
         doc = StrDocument(name=file_path)
         active_entry: StrEntry | None = None
         last_comment = ''
 
-        lines = _read_file_lines(file_path)
+        lines = _read_file_lines(file_path, file_content=file_content)
         for line_num, raw_line in enumerate(lines, start=1):
             lexed = lex_line(raw_line)
 
@@ -395,6 +397,7 @@ class ConstructFile:
     delimiters: List[List[str]] = field(default_factory=list)
     start_level: int = 0
     strict: bool = False
+    file_content: str | None = None
 
     items: List[Union[AstNode, StrEntry]] = field(default_factory=list, init=False)
     current_level: int = field(default=0, init=False)
@@ -420,7 +423,9 @@ class ConstructFile:
         self.items.append(item)
 
     def construct(self) -> None:
-        if not (os.path.isfile(self.name) and self.name.endswith(('.ini', '.inc', '.str'))):
+        if not self.name.endswith(('.ini', '.inc', '.str')) or (
+            self.file_content is None and not os.path.isfile(self.name)
+        ):
             raise IniParseError(f'file {self.name} invalid.')
 
         self.items = []
@@ -431,7 +436,11 @@ class ConstructFile:
 
         if self.name.endswith('.str'):
             load_delimiters()
-            str_doc = StrParser.parse_file(self.name, strict=self.strict)
+            str_doc = StrParser.parse_file(
+                self.name,
+                strict=self.strict,
+                file_content=self.file_content,
+            )
             empty_tail: List[str] = []
             self.delimiters = [list(STR_DELIMITERS), empty_tail]
             self.start_level = 0
@@ -439,11 +448,14 @@ class ConstructFile:
             self.errors = list(str_doc.errors)
             return
 
-        self.delimiters, self.start_level = recognize_structure(self.name)
+        self.delimiters, self.start_level = recognize_structure(
+            self.name,
+            file_content=self.file_content,
+        )
         self.active_rules = [_compile_delimiter_rules(level) for level in self.delimiters]
         self.current_level = self.start_level
 
-        lines = _read_file_lines(self.name)
+        lines = _read_file_lines(self.name, file_content=self.file_content)
         for line_num, raw_line in enumerate(lines, start=1):
             self._parse_line(raw_line, line_num)
 
