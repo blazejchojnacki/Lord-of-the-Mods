@@ -23,6 +23,7 @@
 #include <big/exceptions.hpp>
 #include <big/types.hpp>
 #include <cstdint>
+#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <functional>
@@ -96,7 +97,7 @@ namespace lotm::python {
                 nb::gil_scoped_acquire acquire;
                 bytes_obj = PyBytes_FromStringAndSize(nullptr, static_cast<Py_ssize_t>(size));
                 if (!bytes_obj) throw std::bad_alloc();
-                return reinterpret_cast<uint8_t*>(PyBytes_AS_STRING(bytes_obj));
+                return reinterpret_cast<uint8_t*>(PyBytes_AsString(bytes_obj));
             }
 
             nb::bytes steal() {
@@ -209,8 +210,7 @@ namespace lotm::python {
             if (it == entries.end()) throw lotm::big::BigArchiveError("Entry not found in archive: " + std::string(entry_name));
 
             PythonBytesAllocator allocator;
-            allocator.allocate(it->size);
-            char* buffer = reinterpret_cast<char*>(PyBytes_AS_STRING(allocator.bytes_obj));
+            uint8_t* buffer = allocator.allocate(it->size);
             std::size_t write_pos = 0;
             {
                 nb::gil_scoped_release release;
@@ -226,8 +226,7 @@ namespace lotm::python {
                 "Reads a single entry by path directly into memory as a buffer-protocol bytes object")
             .def("read_entry", [](const lotm::big::BigArchive& self, const lotm::big::BigEntry& entry) {
             PythonBytesAllocator allocator;
-            allocator.allocate(entry.size);
-            char* buffer = reinterpret_cast<char*>(PyBytes_AS_STRING(allocator.bytes_obj));
+            uint8_t* buffer = allocator.allocate(entry.size);
             std::size_t write_pos = 0;
             {
                 nb::gil_scoped_release release;
@@ -275,15 +274,15 @@ namespace lotm::python {
                 },
                 nb::arg("entry"), nb::arg("chunk_callback"),
                 "Streams a BigEntry payload in chunks to the provided callback.")
-                .def("extract_all", [](const lotm::big::BigArchive& self, const std::filesystem::path& out_dir, nb::object cb, std::string_view filter_pattern, bool create_directories) {
-                auto safe_cb = make_safe_progress_cb(cb);
+            .def("extract_all", [](const lotm::big::BigArchive& self, const std::filesystem::path& out_dir, nb::object cb, std::string_view filter_pattern, bool create_directories) {
+            auto safe_cb = make_safe_progress_cb(cb);
 
-                // Release GIL for the duration of the C++ disk I/O
-                nb::gil_scoped_release release;
-                self.extract_all(out_dir, safe_cb, filter_pattern, create_directories);
-                    },
-                    nb::arg("output_dir"), nb::arg("progress_callback") = nb::none(), nb::arg("filter_pattern") = "", nb::arg("create_directories") = true,
-                    "Extracts all contained files into the specified directory");
+            // Release GIL for the duration of the C++ disk I/O
+            nb::gil_scoped_release release;
+            self.extract_all(out_dir, safe_cb, filter_pattern, create_directories);
+                },
+                nb::arg("output_dir"), nb::arg("progress_callback") = nb::none(), nb::arg("filter_pattern") = "", nb::arg("create_directories") = true,
+                "Extracts all contained files into the specified directory");
 
         nb::class_<lotm::big::BigPacker>(sub, "BigPacker", "Packing engine for BIG4 archives")
             .def_static("pack_from_directory", [](const std::filesystem::path& source_dir, const std::filesystem::path& output_file, nb::object cb) {
@@ -298,13 +297,17 @@ namespace lotm::python {
             .def_static("pack_to_memory", [](const std::filesystem::path& source_dir, nb::object cb) {
             auto safe_cb = make_safe_progress_cb(cb);
 
-            std::vector<uint8_t> data;
+            PythonBytesAllocator allocator;
             {
                 // Release GIL for the duration of the C++ disk I/O and serialization
                 nb::gil_scoped_release release;
-                data = lotm::big::BigPacker::pack_to_memory(source_dir, safe_cb);
+                lotm::big::BigPacker::pack_to_memory(
+                    source_dir,
+                    [&](std::size_t s) { return allocator.allocate(s); },
+                    safe_cb
+                );
             }
-            return nb::bytes(reinterpret_cast<const char*>(data.data()), data.size());
+            return allocator.steal();
                 },
                 nb::arg("source"), nb::arg("progress_callback") = nb::none(),
                 "Packs a directory tree directly into an in-memory BIG4 archive bytes object")
@@ -464,8 +467,7 @@ namespace lotm::python {
             .def("read_entry", [](const lotm::big::BigOverlay& self, std::string_view entry_name) {
             const auto overlay_entry = self.resolve(entry_name);
             PythonBytesAllocator allocator;
-            allocator.allocate(overlay_entry.entry.size);
-            char* buffer = reinterpret_cast<char*>(PyBytes_AS_STRING(allocator.bytes_obj));
+            uint8_t* buffer = allocator.allocate(overlay_entry.entry.size);
             std::size_t write_pos = 0;
             {
                 nb::gil_scoped_release release;
