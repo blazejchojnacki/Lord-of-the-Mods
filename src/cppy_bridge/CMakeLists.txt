@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 nanobind_add_module(_core
+    STABLE_ABI
     NB_STATIC
     main.cpp
     bind_big.cpp
