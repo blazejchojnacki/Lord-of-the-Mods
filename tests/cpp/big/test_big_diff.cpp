@@ -379,4 +379,18 @@ TEST_CASE("BigDiff Delta Patch Generation", "[big_diff][patch]") {
         REQUIRE(retained_reports[0].entry_name == "art\\added.dds");
         REQUIRE(retained_reports[1].entry_name == "data\\modified.ini");
     }
+
+    SECTION("Negative scenario: BufferAllocator failure throws std::bad_alloc") {
+        BigArchive base_arc(env.base_file);
+        BigArchive target_arc(env.target_file);
+
+        auto failing_allocator = [](std::size_t) -> uint8_t* {
+            return nullptr;
+            };
+
+        REQUIRE_THROWS_AS(
+            BigDiff::create_patch_to_memory(base_arc, target_arc, failing_allocator),
+            std::bad_alloc
+        );
+    }
 }

@@ -143,4 +143,10 @@ TEST_CASE("BigOverlay Load-Order Resolution and Override Semantics", "[big_overl
         REQUIRE_THROWS_AS(overlay.resolve("missing/file.ini"), BigArchiveError);
         REQUIRE_THROWS_AS(overlay.read_entry("missing/file.ini"), BigArchiveError);
     }
+
+    SECTION("Negative scenario: Mounting to a closed overlay throws BigArchiveError") {
+        auto overlay = BigOverlay::from_archives({ arc1 });
+        overlay.close();
+        REQUIRE_THROWS_AS(overlay.mount(arc2), BigArchiveError);
+    }
 }

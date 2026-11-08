@@ -575,4 +575,16 @@ TEST_CASE("BigPacker In-Memory Serialization", "[big_pack][memory]") {
         std::filesystem::resize_file(huge2, 2200000000ULL);
         REQUIRE_THROWS_AS(BigPacker::pack_to_memory(env.src_dir), BigFormatError);
     }
+
+    SECTION("Negative scenario: BufferAllocator failure throws std::bad_alloc") {
+        env.create_dummy_file("test.txt", "data");
+        auto failing_allocator = [](std::size_t) -> uint8_t* {
+            return nullptr;
+            };
+
+        REQUIRE_THROWS_AS(
+            BigPacker::pack_to_memory(env.src_dir, failing_allocator),
+            std::bad_alloc
+        );
+    }
 }
