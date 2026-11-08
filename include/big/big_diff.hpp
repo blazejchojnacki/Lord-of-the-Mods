@@ -54,10 +54,26 @@ namespace lotm::big {
             ProgressCallback progress_callback = {}
         );
 
+        static void create_patch_to_memory(
+            const BigArchive& base_archive,
+            const BigArchive& target_archive,
+            const BufferAllocator& allocator,
+            std::string_view filter_pattern = {},
+            ProgressCallback progress_callback = {}
+        );
+
         // Opens two BIG4 archives from disk and packs only added and modified entries into memory
         [[nodiscard]] static std::vector<uint8_t> create_patch_to_memory(
             const std::filesystem::path& base_path,
             const std::filesystem::path& target_path,
+            std::string_view filter_pattern = {},
+            ProgressCallback progress_callback = {}
+        );
+
+        static void create_patch_to_memory(
+            const std::filesystem::path& base_path,
+            const std::filesystem::path& target_path,
+            const BufferAllocator& allocator,
             std::string_view filter_pattern = {},
             ProgressCallback progress_callback = {}
         );

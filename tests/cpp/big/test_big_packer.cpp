@@ -446,6 +446,18 @@ TEST_CASE("BigPacker In-Memory Serialization", "[big_pack][memory]") {
         REQUIRE(reported.size() == 1);
         REQUIRE(reported[0] == "a.txt");
 
+        // Test BufferAllocator overload
+        uint8_t* external_buf = nullptr;
+        std::size_t alloc_size = 0;
+        BigPacker::pack_to_memory(env.src_dir, [&](std::size_t size) {
+            alloc_size = size;
+            external_buf = new uint8_t[size];
+            return external_buf;
+            });
+        REQUIRE(alloc_size == expected_golden.size());
+        REQUIRE(std::memcmp(external_buf, expected_golden.data(), alloc_size) == 0);
+        delete[] external_buf;
+
         auto cancel_cb = [](const ProgressReport&) -> bool {
             return false;
             };

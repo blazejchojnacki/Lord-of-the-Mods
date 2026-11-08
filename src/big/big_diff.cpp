@@ -243,13 +243,30 @@ namespace lotm::big {
         std::string_view filter_pattern,
         ProgressCallback progress_callback
     ) {
+        std::vector<uint8_t> result;
+        create_patch_to_memory(base_archive, target_archive, [&](std::size_t size) {
+            result.resize(size);
+            return result.data();
+            }, filter_pattern, std::move(progress_callback));
+        return result;
+    }
+
+    void BigDiff::create_patch_to_memory(
+        const BigArchive& base_archive,
+        const BigArchive& target_archive,
+        const BufferAllocator& allocator,
+        std::string_view filter_pattern,
+        ProgressCallback progress_callback
+    ) {
         const PatchPlan plan = build_patch_plan(base_archive, target_archive, filter_pattern);
 
-        std::vector<uint8_t> buffer(plan.total_size);
+        uint8_t* buffer = allocator(plan.total_size);
+        if (!buffer) throw std::bad_alloc();
+
         std::size_t write_pos = 0;
 
-        auto append_bytes = [&buffer, &write_pos](const void* data, std::size_t len) {
-            std::memcpy(buffer.data() + write_pos, data, len);
+        auto append_bytes = [buffer, &write_pos](const void* data, std::size_t len) {
+            std::memcpy(buffer + write_pos, data, len);
             write_pos += len;
             };
 
@@ -297,7 +314,7 @@ namespace lotm::big {
                     while (remaining > 0) {
                         const auto chunk_size = static_cast<std::streamsize>(
                             std::min<std::size_t>(remaining, DIFF_CHUNK_SIZE));
-                        char* dest_ptr = reinterpret_cast<char*>(buffer.data() + f.offset + file_bytes_transferred);
+                        char* dest_ptr = reinterpret_cast<char*>(buffer + f.offset + file_bytes_transferred);
                         src.read(dest_ptr, chunk_size);
                         if (!src || src.gcount() != chunk_size) {
                             throw BigArchiveError("Failed to read payload for file: " + f.rel_path);
@@ -336,21 +353,33 @@ namespace lotm::big {
             }
         }
 
-        return buffer;
-    }
+        std::vector<uint8_t> BigDiff::create_patch_to_memory(
+            const std::filesystem::path& base_path,
+            const std::filesystem::path& target_path,
+            std::string_view filter_pattern,
+            ProgressCallback progress_callback
+        ) {
+            std::vector<uint8_t> result;
+            create_patch_to_memory(base_path, target_path, [&](std::size_t size) {
+                result.resize(size);
+                return result.data();
+                }, filter_pattern, std::move(progress_callback));
+            return result;
+        }
 
-    std::vector<uint8_t> BigDiff::create_patch_to_memory(
-        const std::filesystem::path& base_path,
-        const std::filesystem::path& target_path,
-        std::string_view filter_pattern,
-        ProgressCallback progress_callback
-    ) {
-        const BigArchive base_archive(base_path);
-        const BigArchive target_archive(target_path);
-        return create_patch_to_memory(base_archive, target_archive, filter_pattern, std::move(progress_callback));
-    }
+        void BigDiff::create_patch_to_memory(
+            const std::filesystem::path& base_path,
+            const std::filesystem::path& target_path,
+            const BufferAllocator& allocator,
+            std::string_view filter_pattern,
+            ProgressCallback progress_callback
+        ) {
+            const BigArchive base_archive(base_path);
+            const BigArchive target_archive(target_path);
+            create_patch_to_memory(base_archive, target_archive, allocator, filter_pattern, std::move(progress_callback));
+        }
 
-    void BigDiff::create_patch(
+        void BigDiff::create_patch(
         const BigArchive& base_archive,
         const BigArchive& target_archive,
         const std::filesystem::path& output_file,

@@ -333,6 +333,14 @@ def test_in_memory_read_entry_and_buffer_protocol(standard_mod_directory: Path, 
         raw_dds = arc.read_entry(dds_entry)
         assert raw_dds == b"DDS_HEADER_DATA"
 
+        # Verify streaming entry
+        streamed_chunks = []
+        def chunk_cb(mv: memoryview) -> bool:
+            streamed_chunks.append(mv.tobytes())
+            return True
+        arc.stream_entry("DATA/weapon.ini", chunk_cb)
+        assert b"".join(streamed_chunks) == b"Damage=50"
+
     assert arc.closed
 
 

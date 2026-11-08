@@ -764,6 +764,19 @@ TEST_CASE("BigArchive In-Memory Single-File Extraction and Lifecycle", "[big_unp
         REQUIRE_THROWS_AS(archive.read_entry("fileB.txt"), BigArchiveError);
     }
 
+    SECTION("Positive scenario: Stream entry reads payload safely without massive allocation") {
+        env.write_big_file("BIG4", { { "fileA.txt", "ABCDEFGH" } });
+        BigArchive archive(env.test_file);
+
+        std::string collected;
+        archive.stream_entry("fileA.txt", [&](std::span<const uint8_t> chunk) -> bool {
+            collected.append(reinterpret_cast<const char*>(chunk.data()), chunk.size());
+            return true;
+            });
+
+        REQUIRE(collected == "ABCDEFGH");
+    }
+
     SECTION("Negative scenario: Entry bounds exceeding physical file size throws BigFormatError") {
         env.write_big_file("BIG4", { { "test.txt", "data" } });
 

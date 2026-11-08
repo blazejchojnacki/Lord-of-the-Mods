@@ -113,9 +113,10 @@ namespace lotm::big {
         }
 
         // Computes header size, validates 32-bit format bounds, and writes the BIG4 header into a pre-allocated buffer
-        std::vector<uint8_t> allocate_and_write_header(
+        uint8_t* allocate_and_write_header(
             std::vector<detail::PackSourceRecord>& file_list,
             uintmax_t total_payload_size,
+            const BufferAllocator& allocator,
             std::vector<std::size_t>* out_original_indices = nullptr
         ) {
             detail::sort_and_validate_entries(file_list);
@@ -149,11 +150,13 @@ namespace lotm::big {
             }
 
             uint32_t total_size = current_offset;
-            std::vector<uint8_t> buffer(total_size);
+            uint8_t* buffer = allocator(total_size);
+            if (!buffer) throw std::bad_alloc();
+
             std::size_t write_pos = 0;
 
-            auto append_bytes = [&buffer, &write_pos](const void* data, std::size_t len) {
-                std::memcpy(buffer.data() + write_pos, data, len);
+            auto append_bytes = [buffer, &write_pos](const void* data, std::size_t len) {
+                std::memcpy(buffer + write_pos, data, len);
                 write_pos += len;
                 };
 
@@ -414,6 +417,19 @@ namespace lotm::big {
         const std::filesystem::path& source_dir,
         ProgressCallback progress_callback
     ) {
+        std::vector<uint8_t> result;
+        pack_to_memory(source_dir, [&](std::size_t size) {
+            result.resize(size);
+            return result.data();
+            }, std::move(progress_callback));
+        return result;
+    }
+
+    void BigPacker::pack_to_memory(
+        const std::filesystem::path& source_dir,
+        const BufferAllocator& allocator,
+        ProgressCallback progress_callback
+    ) {
         if (!std::filesystem::exists(source_dir) || !std::filesystem::is_directory(source_dir)) {
             throw std::invalid_argument("Source directory does not exist or is not a directory.");
         }
@@ -445,7 +461,7 @@ namespace lotm::big {
             }
         }
 
-        std::vector<uint8_t> buffer = allocate_and_write_header(file_list, total_payload_size);
+        uint8_t* buffer = allocate_and_write_header(file_list, total_payload_size, allocator);
         uint64_t total_bytes_transferred = 0;
 
         for (const auto& f : file_list) {
@@ -455,7 +471,7 @@ namespace lotm::big {
             }
 
             if (f.size > 0) {
-                src.read(reinterpret_cast<char*>(buffer.data() + f.offset), static_cast<std::streamsize>(f.size));
+                src.read(reinterpret_cast<char*>(buffer + f.offset), static_cast<std::streamsize>(f.size));
                 if (src.bad() || static_cast<uint32_t>(src.gcount()) != f.size) {
                     throw BigArchiveError("Byte count mismatch while packing file: " + f.rel_path);
                 }
@@ -476,12 +492,23 @@ namespace lotm::big {
                 }
             }
         }
-
-        return buffer;
     }
 
     std::vector<uint8_t> BigPacker::pack_to_memory(
         std::span<const std::pair<std::string, std::span<const uint8_t>>> files,
+        ProgressCallback progress_callback
+    ) {
+        std::vector<uint8_t> result;
+        pack_to_memory(files, [&](std::size_t size) {
+            result.resize(size);
+            return result.data();
+            }, std::move(progress_callback));
+        return result;
+    }
+
+    void BigPacker::pack_to_memory(
+        std::span<const std::pair<std::string, std::span<const uint8_t>>> files,
+        const BufferAllocator& allocator,
         ProgressCallback progress_callback
     ) {
         std::vector<detail::PackSourceRecord> file_list;
@@ -512,14 +539,14 @@ namespace lotm::big {
         }
 
         std::vector<std::size_t> sorted_indices;
-        std::vector<uint8_t> buffer = allocate_and_write_header(file_list, total_payload_size, &sorted_indices);
+        uint8_t* buffer = allocate_and_write_header(file_list, total_payload_size, allocator, &sorted_indices);
         uint64_t total_bytes_transferred = 0;
 
         for (std::size_t i = 0; i < file_list.size(); ++i) {
             const auto& f = file_list[i];
             const auto& payload = files[sorted_indices[i]].second;
             if (!payload.empty()) {
-                std::memcpy(buffer.data() + f.offset, payload.data(), payload.size());
+                std::memcpy(buffer + f.offset, payload.data(), payload.size());
             }
 
             total_bytes_transferred += f.size;
@@ -537,8 +564,6 @@ namespace lotm::big {
                 }
             }
         }
-
-        return buffer;
     }
 
     std::vector<uint8_t> BigPacker::pack_to_memory(

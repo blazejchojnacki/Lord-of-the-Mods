@@ -46,8 +46,20 @@ namespace lotm::big {
             ProgressCallback progress_callback = {}
         );
 
+        static void pack_to_memory(
+            const std::filesystem::path& source_dir,
+            const BufferAllocator& allocator,
+            ProgressCallback progress_callback = {}
+        );
+
         [[nodiscard]] static std::vector<uint8_t> pack_to_memory(
             std::span<const std::pair<std::string, std::span<const uint8_t>>> files,
+            ProgressCallback progress_callback = {}
+        );
+
+        static void pack_to_memory(
+            std::span<const std::pair<std::string, std::span<const uint8_t>>> files,
+            const BufferAllocator& allocator,
             ProgressCallback progress_callback = {}
         );
 
