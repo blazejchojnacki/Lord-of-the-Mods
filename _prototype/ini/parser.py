@@ -20,7 +20,7 @@ class IniParseError(ValueError):
     pass
 
 LEVEL_INDENT = ' ' * 4
-INI_ENDS = ('End', 'END', 'EndScript')
+INI_ENDS = ('End', 'END', 'end')
 
 
 @dataclass(frozen=True)
@@ -60,7 +60,42 @@ class IncludeNode:
     comment: str = ""
 
 
-AstNode = Union[CommentNode, StatementNode, IncludeNode, 'ConstructLevel']
+@dataclass
+class ScriptNode:
+    """Represents an embedded script block (BeginScript ... EndScript)."""
+    name: str = "BeginScript"
+    identifier: str = ""
+    comment: str = ""
+    header_comment: str = ""
+    end_token: str = "EndScript"
+    end_comment: str = ""
+    content: List[str] = field(default_factory=list)
+
+    def print(self, level: int = 0, file_type: str = '.ini') -> str:
+        output = ''
+        if self.comment:
+            output += _format_indented_text(self.comment, level)
+        
+        header_line = _combine_text_and_comment(
+            f"{self.name} {self.identifier}".strip(), self.header_comment
+        )
+        output += _format_indented_text(header_line.lstrip(), level)
+
+        inner_level = level + 1
+        for line in self.content:
+            if line:
+                output += _format_indented_text(line, inner_level)
+            else:
+                output += '\n'
+
+        if self.end_token:
+            end_line = _combine_text_and_comment(self.end_token, self.end_comment)
+            output += f"{LEVEL_INDENT * level}{end_line}\n"
+
+        return output
+
+
+AstNode = Union[CommentNode, StatementNode, IncludeNode, ScriptNode, 'ConstructLevel']
 
 INI_DELIMITER_RULES: List[List[List[DelimiterRule]]] = []
 STR_DELIMITER_RULES: List[DelimiterRule] = []
@@ -359,7 +394,7 @@ class ConstructLevel:
 
         inner_level = level + 1
         for item in self.items:
-            if isinstance(item, ConstructLevel):
+            if isinstance(item, (ConstructLevel, ScriptNode)):
                 output += item.print(level=inner_level, file_type=file_type)
             elif isinstance(item, (StatementNode, IncludeNode)):
                 output += _format_indented_text(_combine_text_and_comment(item.text, item.comment), inner_level)
@@ -389,7 +424,7 @@ class ConstructFile:
     last_comment: str = field(default='', init=False)
     errors: List[str] = field(default_factory=list, init=False)
     active_rules: List[List[DelimiterRule]] = field(default_factory=list, init=False)
-    context_stack: List[Union['ConstructFile', ConstructLevel]] = field(default_factory=list, init=False)
+    context_stack: List[Union['ConstructFile', ConstructLevel, ScriptNode]] = field(default_factory=list, init=False)
 
     def __post_init__(self) -> None:
         if self.name:
@@ -465,10 +500,34 @@ class ConstructFile:
     def _parse_line(self, raw_line: str, line_num: int = 0) -> None:
         lexed = lex_line(raw_line)
 
+        if isinstance(self.context_stack[-1], ScriptNode):
+            active_script = self.context_stack[-1]
+            if lexed.words and lexed.words[0].lower() == 'endscript':
+                active_script.end_token = ' '.join(lexed.words)
+                active_script.end_comment = lexed.comment
+                self.context_stack.pop()
+                self.current_level -= 1
+            else:
+                active_script.content.append(raw_line.strip())
+            return
+
         if not lexed.words:
             if lexed.comment:
                 self.last_comment += ('\n' if self.last_comment else '') + lexed.comment
             self._handle_empty_line(raw_line)
+            return
+
+        if lexed.words[0].lower() == 'beginscript':
+            new_script = ScriptNode(
+                name=lexed.words[0],
+                identifier=' '.join(lexed.words[1:]),
+                comment=self.last_comment,
+                header_comment=lexed.comment,
+            )
+            self.context_stack[-1].append(new_script)
+            self.context_stack.append(new_script)
+            self.last_comment = ''
+            self.current_level += 1
             return
 
         if self._handle_block_start(lexed.words, lexed.line_tokens, lexed.comment):
@@ -594,7 +653,7 @@ class ConstructFile:
         for item in self.items:
             if isinstance(item, StrEntry):
                 output += item.print()
-            elif isinstance(item, ConstructLevel):
+            elif isinstance(item, (ConstructLevel, ScriptNode)):
                 output += item.print(self.start_level, self.name[-4:])
             elif isinstance(item, (StatementNode, IncludeNode)):
                 output += _format_indented_text(_combine_text_and_comment(item.text, item.comment), self.start_level)
