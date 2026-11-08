@@ -127,13 +127,13 @@ namespace lotm::python {
                 });
 
         nb::class_<lotm::big::ProgressReport>(sub, "ProgressReport", "Granular byte and file telemetry report for BIG4 operations")
-            .def_prop_ro("entry_name", [](const lotm::big::ProgressReport& r) { return std::string(r.entry_name); }, "Internal path of the active entry")
+            .def_ro("entry_name", &lotm::big::ProgressReport::entry_name, "Internal path of the active entry")
             .def_ro("bytes_transferred", &lotm::big::ProgressReport::bytes_transferred, "Bytes processed for the current entry")
             .def_ro("file_size", &lotm::big::ProgressReport::file_size, "Total uncompressed size of the current entry in bytes")
             .def_ro("total_bytes_transferred", &lotm::big::ProgressReport::total_bytes_transferred, "Cumulative payload bytes processed across the operation")
             .def_ro("total_archive_size", &lotm::big::ProgressReport::total_archive_size, "Total payload bytes scheduled for the operation")
             .def("__repr__", [](const lotm::big::ProgressReport& r) {
-            return "<ProgressReport entry_name='" + std::string(r.entry_name) +
+            return "<ProgressReport entry_name='" + r.entry_name +
                 "' bytes=" + std::to_string(r.bytes_transferred) + "/" + std::to_string(r.file_size) +
                 " total=" + std::to_string(r.total_bytes_transferred) + "/" + std::to_string(r.total_archive_size) + ">";
                 });

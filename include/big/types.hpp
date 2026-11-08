@@ -28,7 +28,7 @@ namespace lotm::big {
     };
 
     struct ProgressReport {
-        std::string_view entry_name;
+        std::string entry_name;
         uint64_t bytes_transferred{ 0 };
         uint64_t file_size{ 0 };
         uint64_t total_bytes_transferred{ 0 };
