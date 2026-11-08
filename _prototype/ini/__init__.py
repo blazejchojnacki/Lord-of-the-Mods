@@ -1,5 +1,5 @@
 """
-@file src/lotm/ini/__init__.py
+@file _prototype/ini/__init__.py
 @brief SAGE engine text configuration (.ini, .inc, .str) parser prototype.
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>

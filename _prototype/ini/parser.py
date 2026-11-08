@@ -1,5 +1,5 @@
 """
-@file src/lotm/ini/parser.py
+@file _prototype/ini/parser.py
 @brief Structural parser for SAGE engine .ini, .inc, and .str configuration files.
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
