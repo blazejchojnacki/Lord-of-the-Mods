@@ -14,4 +14,6 @@ logging.getLogger("lotm").addHandler(logging.NullHandler())
 
 __version__ = "0.4.0"
 
-__all__ = ["__version__"]
+from . import big
+
+__all__ = ["__version__", "big"]

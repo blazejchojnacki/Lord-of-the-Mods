@@ -21,6 +21,7 @@ def unpack(
     output_dir: str | os.PathLike[str],
     filter_pattern: str | None = None,
     progress_callback: Callable[[big.ProgressReport], bool | None] | None = None,
+    create_directories: bool = True,
 ) -> list[big.BigEntry]:
     """
     Unpacks an EA BIG4 archive into a target directory.
@@ -45,6 +46,8 @@ def unpack(
 
     if not archive_path.is_file():
         raise FileNotFoundError(f"Archive not found: {archive_path}")
+    if not create_directories and not dest_path.is_dir():
+        raise FileNotFoundError(f"Target output directory '{dest_path}' does not exist.")
 
     archive = big.BigArchive(archive_path)
 
@@ -62,7 +65,7 @@ def unpack(
         return True
 
     # Extract all indexed files to the destination folder
-    archive.extract_all(dest_path, progress_callback=on_progress, filter_pattern=pattern)
+    archive.extract_all(dest_path, progress_callback=on_progress, filter_pattern=pattern, create_directories=create_directories)
     logger.info("Finished extracting into: %s", dest_path.resolve())
 
     return entries

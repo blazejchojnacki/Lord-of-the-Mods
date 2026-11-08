@@ -147,6 +147,9 @@ namespace lotm::python {
             .def_ro("offset", &lotm::big::BigEntry::offset, "Byte offset within archive")
             .def_ro("size", &lotm::big::BigEntry::size, "Size of uncompressed data in bytes")
             .def_ro("name", &lotm::big::BigEntry::name, "Internal path of the entry")
+            .def("__eq__", [](const lotm::big::BigEntry& self, const lotm::big::BigEntry& other) { return self == other; })
+            .def("__lt__", [](const lotm::big::BigEntry& self, const lotm::big::BigEntry& other) { return self < other; })
+            .def("__hash__", [](const lotm::big::BigEntry& self) { return std::hash<lotm::big::BigEntry>{}(self); })
             .def("__repr__", [](const lotm::big::BigEntry& entry) {
             return "<BigEntry name='" + entry.name + "' size=" + std::to_string(entry.size) +
                 " offset=" + std::to_string(entry.offset) + ">";
@@ -168,6 +171,8 @@ namespace lotm::python {
             .def(nb::init<std::filesystem::path>(), nb::arg("file_path"),
                 nb::call_guard<nb::gil_scoped_release>(),
                 "Open a BIG archive from disk and parses its header index")
+            .def_prop_ro("file_path", [](const lotm::big::BigArchive& self) { return self.file_path(); },
+                "Absolute path to the bound archive on disk")
             .def_prop_ro("closed", &lotm::big::BigArchive::is_closed,
                 "True if the archive has been closed")
             .def("close", &lotm::big::BigArchive::close,
@@ -270,15 +275,15 @@ namespace lotm::python {
                 },
                 nb::arg("entry"), nb::arg("chunk_callback"),
                 "Streams a BigEntry payload in chunks to the provided callback.")
-            .def("extract_all", [](const lotm::big::BigArchive& self, const std::filesystem::path& out_dir, nb::object cb, std::string_view filter_pattern) {
-            auto safe_cb = make_safe_progress_cb(cb);
+                .def("extract_all", [](const lotm::big::BigArchive& self, const std::filesystem::path& out_dir, nb::object cb, std::string_view filter_pattern, bool create_directories) {
+                auto safe_cb = make_safe_progress_cb(cb);
 
-            // Release GIL for the duration of the C++ disk I/O
-            nb::gil_scoped_release release;
-            self.extract_all(out_dir, safe_cb, filter_pattern);
-                },
-                nb::arg("output_dir"), nb::arg("progress_callback") = nb::none(), nb::arg("filter_pattern") = "",
-                "Extracts all contained files into the specified directory");
+                // Release GIL for the duration of the C++ disk I/O
+                nb::gil_scoped_release release;
+                self.extract_all(out_dir, safe_cb, filter_pattern, create_directories);
+                    },
+                    nb::arg("output_dir"), nb::arg("progress_callback") = nb::none(), nb::arg("filter_pattern") = "", nb::arg("create_directories") = true,
+                    "Extracts all contained files into the specified directory");
 
         nb::class_<lotm::big::BigPacker>(sub, "BigPacker", "Packing engine for BIG4 archives")
             .def_static("pack_from_directory", [](const std::filesystem::path& source_dir, const std::filesystem::path& output_file, nb::object cb) {
@@ -412,6 +417,9 @@ namespace lotm::python {
             .def_prop_ro("name", [](const lotm::big::BigOverlayEntry& self) { return self.entry.name; }, "Internal path of the entry")
             .def_prop_ro("size", [](const lotm::big::BigOverlayEntry& self) { return self.entry.size; }, "Size of uncompressed data in bytes")
             .def_prop_ro("offset", [](const lotm::big::BigOverlayEntry& self) { return self.entry.offset; }, "Byte offset within the winning archive")
+            .def("__eq__", [](const lotm::big::BigOverlayEntry& self, const lotm::big::BigOverlayEntry& other) { return self == other; })
+            .def("__lt__", [](const lotm::big::BigOverlayEntry& self, const lotm::big::BigOverlayEntry& other) { return self < other; })
+            .def("__hash__", [](const lotm::big::BigOverlayEntry& self) { return std::hash<lotm::big::BigOverlayEntry>{}(self); })
             .def("__repr__", [](const lotm::big::BigOverlayEntry& self) {
             auto u8 = self.source_archive.filename().u8string();
             std::string filename(reinterpret_cast<const char*>(u8.data()), u8.size());
@@ -421,6 +429,16 @@ namespace lotm::python {
 
         nb::class_<lotm::big::BigOverlay>(sub, "BigOverlay", "SAGE engine load-order emulator and virtual archive overlay")
             .def(nb::init<>(), "Initializes an empty SAGE archive overlay")
+            .def_prop_ro("closed", &lotm::big::BigOverlay::is_closed, "True if the overlay has been closed")
+            .def("close", &lotm::big::BigOverlay::close, "Closes the overlay and releases its mounted index tables")
+            .def("__enter__", [](nb::object self) {
+            if (nb::cast<const lotm::big::BigOverlay&>(self).is_closed()) throw lotm::big::BigArchiveError("Cannot enter context with a closed overlay.");
+            return self;
+                }, "Enters the runtime context related to this overlay")
+            .def("__exit__", [](lotm::big::BigOverlay& self, nb::handle, nb::handle, nb::handle) {
+            self.close();
+                }, nb::arg("exc_type") = nb::none(), nb::arg("exc_val") = nb::none(), nb::arg("exc_tb") = nb::none(),
+                    "Exits the runtime context and closes the overlay")
             .def_static("from_directory", &lotm::big::BigOverlay::from_directory,
                 nb::arg("dir_path"),
                 nb::call_guard<nb::gil_scoped_release>(),

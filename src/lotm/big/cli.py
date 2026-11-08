@@ -31,7 +31,7 @@ def _setup_logging(verbose: bool) -> None:
     level = logging.DEBUG if verbose else logging.WARNING
     pkg_logger = logging.getLogger("lotm")
     pkg_logger.setLevel(level)
-    if not any(isinstance(h, logging.StreamHandler) for h in pkg_logger.handlers):
+    if not any(type(h) is logging.StreamHandler for h in pkg_logger.handlers):
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(logging.Formatter("%(message)s"))
         pkg_logger.addHandler(handler)
