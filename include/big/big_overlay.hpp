@@ -33,6 +33,8 @@ namespace lotm::big {
     };
 
     class BigOverlay {
+    public:
+        BigOverlay() = default;
 
         // Scans a directory for .big files, sorts them in SAGE alphabetical order, and mounts them
         [[nodiscard]] static BigOverlay from_directory(const std::filesystem::path& dir_path);
