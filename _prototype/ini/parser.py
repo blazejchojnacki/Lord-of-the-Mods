@@ -390,6 +390,12 @@ class ConstructFile:
         if not (os.path.isfile(self.name) and self.name.endswith(('.ini', '.inc', '.str'))):
             raise IniParseError(f'file {self.name} invalid.')
 
+        self.items = []
+        self.defines = []
+        self.errors = []
+        self.last_comment = ''
+        self.context_stack = [self]
+
         if self.name.endswith('.str'):
             load_delimiters()
             str_doc = StrParser.parse_file(self.name, strict=self.strict)
@@ -403,9 +409,6 @@ class ConstructFile:
         self.delimiters, self.start_level = recognize_structure(self.name)
         self.active_rules = [_compile_delimiter_rules(level) for level in self.delimiters]
         self.current_level = self.start_level
-        self.last_comment = ''
-        self.errors = []
-        self.context_stack = [self]
 
         lines = _read_file_lines(self.name)
         for line_num, raw_line in enumerate(lines, start=1):
@@ -415,7 +418,7 @@ class ConstructFile:
         """Calculates schema depth, shifting by 1 when inside a transparent ReplaceModule wrapper."""
         shift = sum(
             1 for node in self.context_stack
-            if isinstance(node, ConstructLevel) and node._class == 'ReplaceModule'
+            if isinstance(node, ConstructLevel) and node._class in ('ReplaceModule', 'ReplaceModule =')
         )
         return max(0, self.current_level - shift)
 
@@ -469,14 +472,19 @@ class ConstructFile:
 
                 block_name = ""
                 block_identifier = ""
-                if len(remaining_words) == 2 and self.name.endswith('.ini'):
+                if len(remaining_words) == 2 and self.name.endswith(('.ini', '.inc')):
                     block_name = remaining_words[0]
                     block_identifier = remaining_words[1]
                 elif remaining_words:
                     block_name = ' '.join(remaining_words)
 
+                class_token = matched_rule.raw
+                next_idx = len(matched_rule.match_tokens)
+                if next_idx < len(line_tokens) and line_tokens[next_idx] == '=' and not class_token.endswith('='):
+                    class_token += ' ='
+
                 new_block = ConstructLevel(
-                    _class=matched_rule.raw,
+                    _class=class_token,
                     name=block_name,
                     identifier=block_identifier,
                     comment=self.last_comment,
