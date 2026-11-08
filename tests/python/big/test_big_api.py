@@ -79,7 +79,7 @@ def test_unpack_missing_archive_raises_error(tmp_path: Path):
     missing_file = tmp_path / "ghost.big"
     out_dir = tmp_path / "out"
 
-with pytest.raises(FileNotFoundError, match="Archive not found"):
+    with pytest.raises(FileNotFoundError, match="Archive not found"):
         big.unpack(missing_file, out_dir)
 
 
