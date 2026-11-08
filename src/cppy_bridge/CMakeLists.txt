@@ -12,6 +12,11 @@ nanobind_add_module(_core
     bind_big.cpp
 )
 
+set_target_properties(_core PROPERTIES
+    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+    SUFFIX ".pyd"
+)
+
 target_include_directories(_core PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
