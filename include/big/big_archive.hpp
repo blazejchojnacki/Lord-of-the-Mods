@@ -14,6 +14,7 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 #include <cstdint>
 
@@ -28,7 +29,8 @@ namespace lotm::big {
         void extract_all(
             const std::filesystem::path& output_dir,
             ProgressCallback progress_callback = {},
-            std::string_view filter_pattern = {}
+            std::string_view filter_pattern = {},
+            bool create_directories = true
         ) const;
 
         // Reads a single archive entry into memory by its internal path
@@ -59,9 +61,31 @@ namespace lotm::big {
     private:
         std::filesystem::path file_path_;
         std::vector<BigEntry> entries_;
+        std::unordered_map<std::string, std::size_t> index_map_;
+        uintmax_t physical_size_{ 0 };
         uint32_t total_size_{ 0 };
         uint32_t header_size_{ 0 };
         bool is_closed_{ false };
     };
 
 } // namespace lotm::big
+
+template <>
+struct std::hash<lotm::big::BigEntry> {
+    std::size_t operator()(const lotm::big::BigEntry& e) const noexcept {
+        std::size_t h1 = std::hash<uint32_t>{}(e.offset);
+        std::size_t h2 = std::hash<uint32_t>{}(e.size);
+        std::size_t h3 = std::hash<std::string>{}(e.name);
+        return h1 ^ (h2 << 1) ^ (h3 << 2);
+    }
+};
+
+template <>
+struct std::hash<lotm::big::BigOverlayEntry> {
+    std::size_t operator()(const lotm::big::BigOverlayEntry& e) const noexcept {
+        std::size_t h1 = std::hash<lotm::big::BigEntry>{}(e.entry);
+        std::size_t h2 = std::filesystem::hash_value(e.source_archive);
+        std::size_t h3 = std::hash<uint32_t>{}(e.override_count);
+        return h1 ^ (h2 << 1) ^ (h3 << 2);
+    }
+};

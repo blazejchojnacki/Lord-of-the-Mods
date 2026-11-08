@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <compare>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
@@ -26,11 +27,12 @@ namespace lotm::big {
         BigEntry entry;
         std::filesystem::path source_archive;
         uint32_t override_count{ 0 };
+
+        bool operator==(const BigOverlayEntry&) const = default;
+        auto operator<=>(const BigOverlayEntry&) const = default;
     };
 
     class BigOverlay {
-    public:
-        BigOverlay() = default;
 
         // Scans a directory for .big files, sorts them in SAGE alphabetical order, and mounts them
         [[nodiscard]] static BigOverlay from_directory(const std::filesystem::path& dir_path);
@@ -56,7 +58,14 @@ namespace lotm::big {
         // Streams the effective winning entry payload in chunks to the provided callback
         void stream_entry(std::string_view entry_name, ChunkCallback chunk_cb) const;
 
+        // Releases the in-memory index and marks the overlay as closed
+        void close() noexcept;
+
+        [[nodiscard]] bool is_closed() const noexcept;
+
     private:
+        bool is_closed_{ false };
+
         struct OverlayRecord {
             BigEntry entry;
             std::size_t archive_index{ 0 };

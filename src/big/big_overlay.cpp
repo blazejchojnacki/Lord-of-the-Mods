@@ -46,6 +46,16 @@ namespace lotm::big {
         }
     } // namespace
 
+    void BigOverlay::close() noexcept {
+        is_closed_ = true;
+        archives_.clear();
+        index_map_.clear();
+    }
+
+    bool BigOverlay::is_closed() const noexcept {
+        return is_closed_;
+    }
+
     BigOverlay BigOverlay::from_directory(const std::filesystem::path& dir_path) {
         if (!std::filesystem::exists(dir_path) || !std::filesystem::is_directory(dir_path)) {
             throw std::invalid_argument("Overlay directory does not exist or is not a directory.");
@@ -87,6 +97,7 @@ namespace lotm::big {
     }
 
     void BigOverlay::mount(const std::filesystem::path& archive_path) {
+        if (is_closed_) throw BigArchiveError("Cannot mount to a closed overlay.");
         BigArchive archive(archive_path);
         const std::size_t current_idx = archives_.size();
 
@@ -107,6 +118,7 @@ namespace lotm::big {
     }
 
     std::vector<std::filesystem::path> BigOverlay::get_mounted_archives() const {
+        if (is_closed_) throw BigArchiveError("Cannot access closed overlay.");
         std::vector<std::filesystem::path> result;
         result.reserve(archives_.size());
         for (const auto& [path, _] : archives_) {
@@ -116,6 +128,7 @@ namespace lotm::big {
     }
 
     std::vector<BigOverlayEntry> BigOverlay::get_entries(std::string_view filter_pattern) const {
+        if (is_closed_) throw BigArchiveError("Cannot access closed overlay.");
         std::vector<BigOverlayEntry> result;
 
         for (std::size_t idx = 0; idx < archives_.size(); ++idx) {
@@ -135,13 +148,20 @@ namespace lotm::big {
 
         std::sort(result.begin(), result.end(),
             [](const BigOverlayEntry& a, const BigOverlayEntry& b) {
-                return a.entry.name < b.entry.name;
+                return std::lexicographical_compare(
+                    a.entry.name.begin(), a.entry.name.end(),
+                    b.entry.name.begin(), b.entry.name.end(),
+                    [](unsigned char c1, unsigned char c2) {
+                        return std::tolower(c1) < std::tolower(c2);
+                    }
+                );
             });
 
         return result;
     }
 
     BigOverlayEntry BigOverlay::resolve(std::string_view entry_name) const {
+        if (is_closed_) throw BigArchiveError("Cannot resolve on a closed overlay.");
         const std::string key = normalize_lookup_key(entry_name);
         auto it = index_map_.find(key);
         if (it == index_map_.end()) {
@@ -157,6 +177,7 @@ namespace lotm::big {
     }
 
     std::vector<uint8_t> BigOverlay::read_entry(std::string_view entry_name) const {
+        if (is_closed_) throw BigArchiveError("Cannot read from a closed overlay.");
         const std::string key = normalize_lookup_key(entry_name);
         auto it = index_map_.find(key);
         if (it == index_map_.end()) {
@@ -168,6 +189,7 @@ namespace lotm::big {
     }
 
     void BigOverlay::stream_entry(std::string_view entry_name, ChunkCallback chunk_cb) const {
+        if (is_closed_) throw BigArchiveError("Cannot read from a closed overlay.");
         const std::string key = normalize_lookup_key(entry_name);
         auto it = index_map_.find(key);
         if (it == index_map_.end()) {

@@ -214,13 +214,13 @@ namespace lotm::big {
 
         // Prevent memory exhaustion from malicious/corrupted num_files claims
         std::error_code ec;
-        auto physical_size = std::filesystem::file_size(file_path_, ec);
+        physical_size_ = std::filesystem::file_size(file_path_, ec);
         if (ec) {
             throw BigArchiveError("Cannot read physical file size: " + to_utf8(file_path_));
         }
 
         if (header_size_ < HEADER_BASE_SIZE ||
-            header_size_ > physical_size ||
+            header_size_ > physical_size_ ||
             total_size_ < header_size_ ||
             static_cast<uintmax_t>(num_files) * 8 > header_size_ - HEADER_BASE_SIZE) {
             throw BigFormatError("Corrupted BIG4 index: Claims more files than physically possible.");
@@ -264,7 +264,13 @@ namespace lotm::big {
                 }
             }
 
+            std::string lower_name = entry.name;
+            for (char& c : lower_name) {
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            }
+
             entries_.push_back(std::move(entry));
+            index_map_.emplace(std::move(lower_name), entries_.size() - 1);
         }
     }
 
@@ -276,6 +282,7 @@ namespace lotm::big {
         is_closed_ = true;
         entries_.clear();
         entries_.shrink_to_fit();
+        index_map_.clear();
     }
 
     bool BigArchive::is_closed() const noexcept {
@@ -376,19 +383,15 @@ namespace lotm::big {
         std::string normalized_name(entry_name);
         for (char& c : normalized_name) {
             if (c == '\\' || c == '/') c = static_cast<char>(std::filesystem::path::preferred_separator);
+            else c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         }
 
-        auto it = std::find_if(entries_.begin(), entries_.end(),
-            [&normalized_name](const BigEntry& e) {
-                if (e.name.size() != normalized_name.size()) return false;
-                return std::equal(e.name.begin(), e.name.end(), normalized_name.begin(),
-                    [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
-            });
-
-        if (it == entries_.end()) {
+        auto it = index_map_.find(normalized_name);
+        if (it == index_map_.end()) {
             throw BigArchiveError("Entry not found in archive: " + std::string(entry_name));
         }
-        stream_entry(*it, std::move(chunk_cb));
+
+        stream_entry(entries_[it->second], std::move(chunk_cb));
     }
 
     void BigArchive::stream_entry(const BigEntry& entry, ChunkCallback chunk_cb) const {
@@ -397,11 +400,7 @@ namespace lotm::big {
         }
         if (!chunk_cb) return;
 
-        std::error_code ec;
-        const auto physical_size = std::filesystem::file_size(file_path_, ec);
-        if (ec) throw BigArchiveError("Cannot open file for reading: " + to_utf8(file_path_));
-
-        if (static_cast<uintmax_t>(entry.offset) + entry.size > physical_size) {
+        if (static_cast<uintmax_t>(entry.offset) + entry.size > physical_size_) {
             throw BigFormatError("Extraction bounds exceeded for file: " + entry.name);
         }
 
@@ -433,13 +432,10 @@ namespace lotm::big {
     }
 
     uintmax_t BigArchive::validate_extraction_quota(std::string_view filter_pattern) const {
-        std::error_code ec;
-        const auto physical_size = std::filesystem::file_size(file_path_, ec);
-        if (ec) {
-            throw BigArchiveError("Cannot open file for extraction: " + to_utf8(file_path_));
+        if (is_closed_) {
+            throw BigArchiveError("Cannot access closed archive.");
         }
-
-        const uintmax_t max_extraction_quota = physical_size * MAX_AMPLIFICATION_RATIO;
+        const uintmax_t max_extraction_quota = physical_size_ * MAX_AMPLIFICATION_RATIO;
 
         // Upfront quota evaluation across all entries to prevent amplification / zip-bomb attacks
         uintmax_t total_extracted_bytes = 0;
@@ -459,10 +455,20 @@ namespace lotm::big {
     void BigArchive::extract_all(
         const std::filesystem::path& output_dir,
         ProgressCallback progress_callback,
-        std::string_view filter_pattern
+        std::string_view filter_pattern,
+        bool create_directories
     ) const {
         if (is_closed_) {
             throw BigArchiveError("Cannot extract from a closed archive.");
+        }
+
+        if (!std::filesystem::exists(output_dir)) {
+            if (create_directories) {
+                std::filesystem::create_directories(output_dir);
+            }
+            else {
+                throw std::invalid_argument("Target output directory does not exist: " + to_utf8(output_dir));
+            }
         }
 
         const uintmax_t physical_size = validate_extraction_quota(filter_pattern);

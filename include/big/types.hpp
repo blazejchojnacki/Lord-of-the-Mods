@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <compare>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -25,6 +26,9 @@ namespace lotm::big {
         uint32_t offset{ 0 };
         uint32_t size{ 0 };
         std::string name;
+
+        bool operator==(const BigEntry&) const = default;
+        auto operator<=>(const BigEntry&) const = default;
     };
 
     struct ProgressReport {
