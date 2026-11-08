@@ -10,7 +10,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 import argparse
 import sys
 from pathlib import Path
-from lotm.ini import scan_file_for_errors
+from parser import scan_file_for_errors
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Scan SAGE config files for delimiter mismatches.")
