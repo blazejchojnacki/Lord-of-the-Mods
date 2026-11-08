@@ -94,7 +94,7 @@ class big:
 
     class BigDiff:
         from typing import overload
-        
+
         @overload
         @staticmethod
         def compare(
@@ -102,6 +102,7 @@ class big:
             target: 'big.BigArchive',
             filter_pattern: str = ""
         ) -> 'big.BigDiffResult': ...
+
         @overload
         @staticmethod
         def compare(
@@ -118,6 +119,7 @@ class big:
             filter_pattern: str = "",
             progress_callback: Callable[['big.ProgressReport'], bool | None] | None = None
         ) -> bytes: ...
+
         @overload
         @staticmethod
         def create_patch_to_memory(
@@ -136,6 +138,7 @@ class big:
             filter_pattern: str = "",
             progress_callback: Callable[['big.ProgressReport'], bool | None] | None = None
         ) -> None: ...
+
         @overload
         @staticmethod
         def create_patch(
@@ -158,10 +161,6 @@ class big:
         @property
         def size(self) -> int: ...
         @property
-        def offset(self) -> int: ...
-        def __repr__(self) -> str: ...
-
-@property
         def offset(self) -> int: ...
         def __eq__(self, other: object) -> bool: ...
         def __lt__(self, other: 'big.BigOverlayEntry') -> bool: ...
