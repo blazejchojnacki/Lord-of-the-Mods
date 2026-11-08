@@ -3,11 +3,27 @@ import shutil
 from pathlib import Path
 import lotm.big as big
 
+
+def on_extract_progress(report: big.ProgressReport) -> bool:
+    """Telemetry callback that cancels extraction if it hits a massive file."""
+    if report.file_size > 50_000_000:  # e.g., > 50 MB
+        print(f"  [ABORT] Skipping overly large extraction task on '{report.entry_name}'")
+        return False
+    
+    if report.bytes_transferred == report.file_size:
+        print(f"  [OK] Extracted: {report.entry_name} ({report.file_size} bytes)")
+    return True
+
+
 def main():
     archive_path = Path("virtual_mod.big")
-    if not archive_path.exists():
-        print(f"Error: {archive_path} not found. Run demo_in_memory_packing.py first.")
-        return
+    
+    # Provision a dummy archive for the demo
+    archive_path.write_bytes(big.pack_to_memory({
+        "data/ini/weapon.ini": b"Damage=50",
+        "data/ini/armor.ini": b"Armor=Standard",
+        "art/textures/hero.dds": b"DDS_DATA"
+    }))
 
     # 1. Preview filtered files without extracting them
     print("Previewing files matching '*.ini':")
@@ -28,12 +44,16 @@ def main():
     print(f"\nExtracting '*.ini' to {out_dir.resolve()}...")
     
     # unpack() avoids dumping non-matching files (like .dds or .txt) to disk
-    extracted = big.unpack(archive_path, out_dir, filter_pattern="*.ini")
+    extracted = big.unpack(archive_path, out_dir, filter_pattern="*.ini", progress_callback=on_extract_progress)
     
     print(f"Successfully extracted {len(extracted)} files.")
     for file in out_dir.rglob("*.*"):
         if file.is_file():
             print(f" - On disk: {file.relative_to(out_dir)}")
+            
+    # Cleanup
+    archive_path.unlink(missing_ok=True)
+    shutil.rmtree(out_dir, ignore_errors=True)
 
 if __name__ == "__main__":
     main()

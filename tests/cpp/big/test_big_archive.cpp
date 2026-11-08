@@ -28,6 +28,7 @@ public:
 
     ScopedTempEnv() {
         root_dir = std::filesystem::temp_directory_path() / "lotm_unpack_test";
+        std::filesystem::remove_all(root_dir);
         std::filesystem::create_directories(root_dir);
         test_file = root_dir / "test.big";
         out_dir = root_dir / "out";
@@ -110,6 +111,11 @@ TEST_CASE("BigArchive Initialization and Basic Error Handling", "[big_unpack][er
         env.write_big_file("BOGUS", {});
         REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
     }
+
+    SECTION("Negative scenario: Non-printable binary magic bytes") {
+        env.write_big_file("\x80\xFF\x00\x7F", {});
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
 }
 
 TEST_CASE("BigArchive Header Parsing", "[big_unpack][header]") {
@@ -120,6 +126,7 @@ TEST_CASE("BigArchive Header Parsing", "[big_unpack][header]") {
         REQUIRE_NOTHROW(BigArchive(env.test_file));
         BigArchive archive(env.test_file);
         REQUIRE(archive.get_entries().empty());
+        REQUIRE(archive.file_path() == env.test_file);
     }
 
     SECTION("Positive scenario: Valid BIG4 file with multiple entries") {
@@ -201,10 +208,32 @@ TEST_CASE("BigArchive Extraction", "[big_unpack][extraction]") {
         std::string content2((std::istreambuf_iterator<char>(in2)), std::istreambuf_iterator<char>());
         REQUIRE(content2 == large_payload);
     }
+
+    SECTION("Positive scenario: UTF-8 entry names extract and read cleanly without CP_ACP errors") {
+        env.write_big_file("BIG4", {
+            { "data/\xC5\xBC\xC3\xB3\xC5\x82\xC4\x87.ini", "Damage=100" }
+            });
+
+        BigArchive archive(env.test_file);
+        REQUIRE_NOTHROW(archive.extract_all(env.out_dir));
+
+        auto expected_path = env.out_dir / std::filesystem::path(u8"data/\u017C\u00F3\u0142\u0107.ini");
+        REQUIRE(std::filesystem::exists(expected_path));
+
+        auto buf = archive.read_entry("data/\xC5\xBC\xC3\xB3\xC5\x82\xC4\x87.ini");
+        REQUIRE(std::string(buf.begin(), buf.end()) == "Damage=100");
+    }
 }
 
 TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_cases]") {
     ScopedTempEnv env;
+
+    SECTION("Negative scenario: 0-byte .big file completely empty") {
+        std::ofstream out(env.test_file, std::ios::binary);
+        out.close();
+
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
 
     SECTION("Negative scenario: Truncated header (file too small for metadata)") {
         std::ofstream out(env.test_file, std::ios::binary);
@@ -233,6 +262,48 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         out.close();
 
         // Must throw instead of allocating a massive vector of garbage
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
+
+    SECTION("Negative scenario: Header size is smaller than HEADER_BASE_SIZE (16)") {
+        std::ofstream out(env.test_file, std::ios::binary);
+        out.write("BIG4", 4);
+        uint32_t total_size = lotm::core::to_little_endian(static_cast<uint32_t>(16));
+        out.write(reinterpret_cast<const char*>(&total_size), 4);
+
+        uint32_t num_files = lotm::core::to_big_endian(static_cast<uint32_t>(0));
+        out.write(reinterpret_cast<const char*>(&num_files), 4);
+
+        // Header size claimed is 12 (invalid, must be >= 16)
+        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(12));
+        out.write(reinterpret_cast<const char*>(&header_size), 4);
+        out.close();
+
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
+
+    SECTION("Negative scenario: Header reserve OOM DoS (small header_size inside larger physical file)") {
+        std::ofstream out(env.test_file, std::ios::binary);
+        out.write("BIG4", 4);
+        uint32_t total_size = lotm::core::to_little_endian(static_cast<uint32_t>(1024));
+        out.write(reinterpret_cast<const char*>(&total_size), 4);
+
+        // Claim 100 files, which fits in physical_size (1024 >= 800) but not in header_size (16)
+        uint32_t num_files = lotm::core::to_big_endian(static_cast<uint32_t>(100));
+        out.write(reinterpret_cast<const char*>(&num_files), 4);
+
+        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(16));
+        out.write(reinterpret_cast<const char*>(&header_size), 4);
+
+        std::vector<char> padding(1008, 'A');
+        out.write(padding.data(), static_cast<std::streamsize>(padding.size()));
+        out.close();
+
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
+
+    SECTION("Negative scenario: Empty entry name in index table throws BigFormatError") {
+        env.write_big_file("BIG4", { { "", "payload" } });
         REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
     }
 
@@ -276,6 +347,36 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigFormatError);
     }
 
+    SECTION("Negative scenario: 32-bit addition wrap-around in extraction bounds check") {
+        std::ofstream out(env.test_file, std::ios::binary);
+        out.write("BIG4", 4);
+
+        uint32_t total_size = lotm::core::to_little_endian(static_cast<uint32_t>(38));
+        out.write(reinterpret_cast<const char*>(&total_size), 4);
+
+        uint32_t num_files = lotm::core::to_big_endian(static_cast<uint32_t>(1));
+        out.write(reinterpret_cast<const char*>(&num_files), 4);
+
+        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(38));
+        out.write(reinterpret_cast<const char*>(&header_size), 4);
+
+        // offset + size = 0xFFFFFFF0 + 0x20 = 0x100000010.
+        // Cast to uint32_t = 0x10. If the engine didn't safely upcast to uintmax_t,
+        // 0x10 < 38, so it would pass bounds checking maliciously.
+        uint32_t offset = lotm::core::to_big_endian(static_cast<uint32_t>(0xFFFFFFF0));
+        uint32_t size = lotm::core::to_big_endian(static_cast<uint32_t>(0x20));
+        out.write(reinterpret_cast<const char*>(&offset), 4);
+        out.write(reinterpret_cast<const char*>(&size), 4);
+
+        out.write("A.txt", 5);
+        out.write("\0", 1);
+        out.write("L219\0\0\0\0", 8);
+        out.close();
+
+        BigArchive archive(env.test_file);
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigFormatError);
+    }
+
     SECTION("Positive scenario: Zero-byte file extraction succeeds safely") {
         env.write_big_file("BIG4", { { "empty.txt", "" } });
 
@@ -297,6 +398,24 @@ TEST_CASE("BigArchive Malformed and Edge-Case Archives", "[big_unpack][edge_case
         REQUIRE_NOTHROW(archive.extract_all(env.out_dir));
         REQUIRE(std::filesystem::exists(env.out_dir / "file.txt"));
     }
+
+    SECTION("Negative scenario: Header total_size smaller than header_size throws BigFormatError") {
+        std::ofstream out(env.test_file, std::ios::binary);
+        out.write("BIG4", 4);
+        uint32_t total_size = lotm::core::to_little_endian(static_cast<uint32_t>(12));
+        out.write(reinterpret_cast<const char*>(&total_size), 4);
+
+        uint32_t num_files = lotm::core::to_big_endian(static_cast<uint32_t>(0));
+        out.write(reinterpret_cast<const char*>(&num_files), 4);
+
+        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(24));
+        out.write(reinterpret_cast<const char*>(&header_size), 4);
+
+        out.write("L219\0\0\0\0", 8);
+        out.close();
+
+        REQUIRE_THROWS_AS(BigArchive(env.test_file), BigFormatError);
+    }
 }
 
 TEST_CASE("BigArchive Windows Path Security and NTFS Evasions", "[big_unpack][security]") {
@@ -307,6 +426,9 @@ TEST_CASE("BigArchive Windows Path Security and NTFS Evasions", "[big_unpack][se
         BigArchive archive(env.test_file);
         REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
         REQUIRE_FALSE(std::filesystem::exists(env.root_dir / "escaped.txt"));
+
+        // Output directory is created proactively before validation occurs
+        REQUIRE(std::filesystem::exists(env.out_dir));
     }
 
     SECTION("Negative scenario: Rooted paths in entry are blocked") {
@@ -344,6 +466,24 @@ TEST_CASE("BigArchive Windows Path Security and NTFS Evasions", "[big_unpack][se
         env.write_big_file("BIG4", { { "data\\COM1.ini", "payload" } });
         BigArchive archive2(env.test_file);
         REQUIRE_THROWS_AS(archive2.extract_all(env.out_dir), BigSecurityError);
+
+        // Superscript UTF-8 COM¹ and CLOCK$ device names
+        env.write_big_file("BIG4", { { "data\\COM\xC2\xB9.ini", "payload" } });
+        BigArchive archive3(env.test_file);
+        REQUIRE_THROWS_AS(archive3.extract_all(env.out_dir), BigSecurityError);
+
+        env.write_big_file("BIG4", { { "data\\COM\xC2\xB2.ini", "payload" } });
+        BigArchive archive4(env.test_file);
+        REQUIRE_THROWS_AS(archive4.extract_all(env.out_dir), BigSecurityError);
+
+        env.write_big_file("BIG4", { { "data\\CLOCK$.ini", "payload" } });
+        BigArchive archive5(env.test_file);
+        REQUIRE_THROWS_AS(archive5.extract_all(env.out_dir), BigSecurityError);
+
+        // Malformed/raw non-UTF-8 bytes in entry path are caught as security errors
+        env.write_big_file("BIG4", { { "data\\raw_\xB2.ini", "payload" } });
+        BigArchive archive6(env.test_file);
+        REQUIRE_THROWS_AS(archive6.extract_all(env.out_dir), BigSecurityError);
     }
 
     SECTION("Negative scenario: Zip-Bomb Amplification Threshold Exceeded") {
@@ -431,13 +571,16 @@ TEST_CASE("BigArchive Progress Callback Integration", "[big_unpack][callback]") 
     SECTION("Positive scenario: Callback is invoked for each extracted file") {
         env.write_big_file("BIG4", {
             { "fileA.txt", "data" },
-            { "fileB.txt", "data" }
+            { "fileB.txt", "" }
             });
 
         BigArchive archive(env.test_file);
         std::vector<std::string> reported_files;
-        auto cb = [&](std::string_view name) {
-            reported_files.emplace_back(name);
+        auto cb = [&](const ProgressReport& report) -> bool {
+            reported_files.emplace_back(report.entry_name);
+            REQUIRE(report.bytes_transferred == report.file_size);
+            REQUIRE(report.total_archive_size == 4);
+            return true;
             };
 
         REQUIRE_NOTHROW(archive.extract_all(env.out_dir, cb));
@@ -445,6 +588,29 @@ TEST_CASE("BigArchive Progress Callback Integration", "[big_unpack][callback]") 
         REQUIRE(reported_files.size() == 2);
         REQUIRE(reported_files[0] == "fileA.txt");
         REQUIRE(reported_files[1] == "fileB.txt");
+    }
+
+    SECTION("Negative scenario: Returning false from callback cancels extraction and removes partial file") {
+        env.write_big_file("BIG4", {
+            { "fileA.txt", "data" },
+            { "fileB.txt", "more_data" }
+            });
+
+        BigArchive archive(env.test_file);
+        auto cancel_cb = [](const ProgressReport&) -> bool {
+            return false;
+            };
+
+        REQUIRE_THROWS_AS(archive.extract_all(env.out_dir, cancel_cb), BigArchiveError);
+        REQUIRE_FALSE(std::filesystem::exists(env.out_dir / "fileA.txt"));
+        REQUIRE_FALSE(std::filesystem::exists(env.out_dir / "fileB.txt"));
+
+        // Cancellation on zero-byte file
+        std::filesystem::remove(env.test_file);
+        env.write_big_file("BIG4", { { "empty.txt", "" } });
+        BigArchive empty_arc(env.test_file);
+        REQUIRE_THROWS_AS(empty_arc.extract_all(env.out_dir, cancel_cb), BigArchiveError);
+        REQUIRE_FALSE(std::filesystem::exists(env.out_dir / "empty.txt"));
     }
 }
 
@@ -521,11 +687,11 @@ TEST_CASE("BigArchive Fast-Fail Logic Paths", "[big_unpack][malformed]") {
         uint32_t num_files = lotm::core::to_big_endian(static_cast<uint32_t>(2));
         out.write(reinterpret_cast<const char*>(&num_files), 4);
 
-        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(64));
+        uint32_t header_size = lotm::core::to_big_endian(static_cast<uint32_t>(32));
         out.write(reinterpret_cast<const char*>(&header_size), 4);
 
         // Write only ONE entry's offset and size, then abruptly end the file
-        uint32_t offset = lotm::core::to_big_endian(static_cast<uint32_t>(64));
+        uint32_t offset = lotm::core::to_big_endian(static_cast<uint32_t>(32));
         uint32_t size = lotm::core::to_big_endian(static_cast<uint32_t>(100));
         out.write(reinterpret_cast<const char*>(&offset), 4);
         out.write(reinterpret_cast<const char*>(&size), 4);
@@ -601,6 +767,19 @@ TEST_CASE("BigArchive In-Memory Single-File Extraction and Lifecycle", "[big_unp
         REQUIRE_THROWS_AS(archive.read_entry("fileB.txt"), BigArchiveError);
     }
 
+    SECTION("Positive scenario: Stream entry reads payload safely without massive allocation") {
+        env.write_big_file("BIG4", { { "fileA.txt", "ABCDEFGH" } });
+        BigArchive archive(env.test_file);
+
+        std::string collected;
+        archive.stream_entry("fileA.txt", [&](std::span<const uint8_t> chunk) -> bool {
+            collected.append(reinterpret_cast<const char*>(chunk.data()), chunk.size());
+            return true;
+            });
+
+        REQUIRE(collected == "ABCDEFGH");
+    }
+
     SECTION("Negative scenario: Entry bounds exceeding physical file size throws BigFormatError") {
         env.write_big_file("BIG4", { { "test.txt", "data" } });
 
@@ -661,6 +840,9 @@ TEST_CASE("BigArchive Selective Glob Extraction", "[big_unpack][filter]") {
         // Universal wildcard
         REQUIRE(archive.get_entries("*").size() == 5);
 
+        // $O(1) hash map validation
+        REQUIRE_NOTHROW(archive.read_entry("DATA/ini/WeApON.ini"));
+
         // Multi-segment star backtracking and forward-slash normalization
         auto ini_entries = archive.get_entries("DATA/ini/*.INI");
         REQUIRE(ini_entries.size() == 2);
@@ -679,8 +861,9 @@ TEST_CASE("BigArchive Selective Glob Extraction", "[big_unpack][filter]") {
 
     SECTION("Positive scenario: extract_all with filter_pattern extracts only matching entries") {
         std::vector<std::string> extracted;
-        archive.extract_all(env.out_dir, [&](std::string_view name) {
-            extracted.emplace_back(name);
+        archive.extract_all(env.out_dir, [&](const ProgressReport& report) -> bool {
+            extracted.emplace_back(report.entry_name);
+            return true;
             }, "data/ini/*.ini");
 
         REQUIRE(extracted.size() == 2);
@@ -688,5 +871,10 @@ TEST_CASE("BigArchive Selective Glob Extraction", "[big_unpack][filter]") {
         REQUIRE(std::filesystem::exists(env.out_dir / "data" / "ini" / "armor.ini"));
         REQUIRE_FALSE(std::filesystem::exists(env.out_dir / "readme.txt"));
         REQUIRE_FALSE(std::filesystem::exists(env.out_dir / "art" / "textures" / "hero01.dds"));
+    }
+
+    SECTION("Negative scenario: extract_all respects create_directories strict mode") {
+        std::filesystem::path missing_out = env.root_dir / "missing_strict";
+        REQUIRE_THROWS_AS(archive.extract_all(missing_out, {}, "", false), std::invalid_argument);
     }
 }

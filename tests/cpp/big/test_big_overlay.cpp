@@ -123,11 +123,17 @@ TEST_CASE("BigOverlay Load-Order Resolution and Override Semantics", "[big_overl
     SECTION("Positive scenario: from_archives respects explicit custom mount order") {
         // Mount in reverse order: arc3 first, then arc1 overrides it
         auto overlay = BigOverlay::from_archives({ arc3, arc1 });
+
+        REQUIRE_FALSE(overlay.is_closed());
         REQUIRE(overlay.get_mounted_archives().size() == 2);
 
         auto weapon_bytes = overlay.read_entry("data/ini/weapon.ini");
         REQUIRE(std::string(weapon_bytes.begin(), weapon_bytes.end()) == "Damage=10");
         REQUIRE(overlay.resolve("data/ini/weapon.ini").source_archive == arc1);
+
+        overlay.close();
+        REQUIRE(overlay.is_closed());
+        REQUIRE_THROWS_AS(overlay.resolve("data/ini/weapon.ini"), BigArchiveError);
     }
 
     SECTION("Negative scenarios: Missing directory or unresolvable entry throws appropriate exception") {
@@ -136,5 +142,11 @@ TEST_CASE("BigOverlay Load-Order Resolution and Override Semantics", "[big_overl
         auto overlay = BigOverlay::from_archives({ arc1 });
         REQUIRE_THROWS_AS(overlay.resolve("missing/file.ini"), BigArchiveError);
         REQUIRE_THROWS_AS(overlay.read_entry("missing/file.ini"), BigArchiveError);
+    }
+
+    SECTION("Negative scenario: Mounting to a closed overlay throws BigArchiveError") {
+        auto overlay = BigOverlay::from_archives({ arc1 });
+        overlay.close();
+        REQUIRE_THROWS_AS(overlay.mount(arc2), BigArchiveError);
     }
 }

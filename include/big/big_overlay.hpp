@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <compare>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
@@ -26,6 +27,9 @@ namespace lotm::big {
         BigEntry entry;
         std::filesystem::path source_archive;
         uint32_t override_count{ 0 };
+
+        bool operator==(const BigOverlayEntry&) const = default;
+        auto operator<=>(const BigOverlayEntry&) const = default;
     };
 
     class BigOverlay {
@@ -53,7 +57,17 @@ namespace lotm::big {
         // Reads the effective winning entry payload directly into memory
         [[nodiscard]] std::vector<uint8_t> read_entry(std::string_view entry_name) const;
 
+        // Streams the effective winning entry payload in chunks to the provided callback
+        void stream_entry(std::string_view entry_name, ChunkCallback chunk_cb) const;
+
+        // Releases the in-memory index and marks the overlay as closed
+        void close() noexcept;
+
+        [[nodiscard]] bool is_closed() const noexcept;
+
     private:
+        bool is_closed_{ false };
+
         struct OverlayRecord {
             BigEntry entry;
             std::size_t archive_index{ 0 };
@@ -65,3 +79,13 @@ namespace lotm::big {
     };
 
 } // namespace lotm::big
+
+template <>
+struct std::hash<lotm::big::BigOverlayEntry> {
+    std::size_t operator()(const lotm::big::BigOverlayEntry& e) const noexcept {
+        std::size_t h1 = std::hash<lotm::big::BigEntry>{}(e.entry);
+        std::size_t h2 = std::filesystem::hash_value(e.source_archive);
+        std::size_t h3 = std::hash<uint32_t>{}(e.override_count);
+        return h1 ^ (h2 << 1) ^ (h3 << 2);
+    }
+};

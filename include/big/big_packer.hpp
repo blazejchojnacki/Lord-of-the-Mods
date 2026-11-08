@@ -9,9 +9,11 @@
 
 #pragma once
 
+#include <big/types.hpp>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -36,17 +38,34 @@ namespace lotm::big {
         static void pack_from_directory(
             const std::filesystem::path& source_dir,
             const std::filesystem::path& output_file,
-            std::function<void(std::string_view)> progress_callback = {}
+            ProgressCallback progress_callback = {}
         );
 
         [[nodiscard]] static std::vector<uint8_t> pack_to_memory(
             const std::filesystem::path& source_dir,
-            std::function<void(std::string_view)> progress_callback = {}
+            ProgressCallback progress_callback = {}
+        );
+
+        static void pack_to_memory(
+            const std::filesystem::path& source_dir,
+            const BufferAllocator& allocator,
+            ProgressCallback progress_callback = {}
+        );
+
+        [[nodiscard]] static std::vector<uint8_t> pack_to_memory(
+            std::span<const std::pair<std::string, std::span<const uint8_t>>> files,
+            ProgressCallback progress_callback = {}
+        );
+
+        static void pack_to_memory(
+            std::span<const std::pair<std::string, std::span<const uint8_t>>> files,
+            const BufferAllocator& allocator,
+            ProgressCallback progress_callback = {}
         );
 
         [[nodiscard]] static std::vector<uint8_t> pack_to_memory(
             const std::vector<std::pair<std::string, std::vector<uint8_t>>>& files,
-            std::function<void(std::string_view)> progress_callback = {}
+            ProgressCallback progress_callback = {}
         );
     };
 

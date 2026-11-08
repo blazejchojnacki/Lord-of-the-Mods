@@ -51,7 +51,15 @@ namespace lotm::big {
             const BigArchive& base_archive,
             const BigArchive& target_archive,
             std::string_view filter_pattern = {},
-            std::function<void(std::string_view)> progress_callback = {}
+            ProgressCallback progress_callback = {}
+        );
+
+        static void create_patch_to_memory(
+            const BigArchive& base_archive,
+            const BigArchive& target_archive,
+            const BufferAllocator& allocator,
+            std::string_view filter_pattern = {},
+            ProgressCallback progress_callback = {}
         );
 
         // Opens two BIG4 archives from disk and packs only added and modified entries into memory
@@ -59,7 +67,15 @@ namespace lotm::big {
             const std::filesystem::path& base_path,
             const std::filesystem::path& target_path,
             std::string_view filter_pattern = {},
-            std::function<void(std::string_view)> progress_callback = {}
+            ProgressCallback progress_callback = {}
+        );
+
+        static void create_patch_to_memory(
+            const std::filesystem::path& base_path,
+            const std::filesystem::path& target_path,
+            const BufferAllocator& allocator,
+            std::string_view filter_pattern = {},
+            ProgressCallback progress_callback = {}
         );
 
         // Packs only added and modified entries from target_archive into a standalone patch archive on disk
@@ -68,7 +84,7 @@ namespace lotm::big {
             const BigArchive& target_archive,
             const std::filesystem::path& output_file,
             std::string_view filter_pattern = {},
-            std::function<void(std::string_view)> progress_callback = {}
+            ProgressCallback progress_callback = {}
         );
 
         // Opens two BIG4 archives from disk and writes a standalone delta patch archive to output_file
@@ -77,7 +93,7 @@ namespace lotm::big {
             const std::filesystem::path& target_path,
             const std::filesystem::path& output_file,
             std::string_view filter_pattern = {},
-            std::function<void(std::string_view)> progress_callback = {}
+            ProgressCallback progress_callback = {}
         );
     };
 

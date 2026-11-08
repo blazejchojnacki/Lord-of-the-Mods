@@ -35,6 +35,16 @@ namespace lotm::big {
             return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
         }
 
+        inline std::filesystem::path from_utf8(std::string_view sv) {
+            try {
+                return std::filesystem::path(std::u8string_view(
+                    reinterpret_cast<const char8_t*>(sv.data()), sv.size()));
+            }
+            catch (const std::exception&) {
+                throw BigSecurityError("Invalid UTF-8 or unmappable characters in entry path: " + std::string(sv));
+            }
+        }
+
         // Case-insensitive glob matcher supporting '*' and '?' with normalized path separators
         bool matches_glob(std::string_view text, std::string_view pattern) noexcept {
             if (pattern.empty() || pattern == "*") {
@@ -144,12 +154,22 @@ namespace lotm::big {
             }
 
             if (base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" ||
-                base == "CONIN$" || base == "CONOUT$") {
+                base == "CONIN$" || base == "CONOUT$" || base == "CLOCK$") {
                 return true;
             }
-            if (base.size() == 4 && (base.starts_with("COM") || base.starts_with("LPT"))) {
-                if (base[3] >= '1' && base[3] <= '9') {
-                    return true;
+            if (base.starts_with("COM") || base.starts_with("LPT")) {
+                if (base.size() == 4) {
+                    const auto digit = static_cast<unsigned char>(base[3]);
+                    if ((digit >= '0' && digit <= '9') ||
+                        digit == 0xB9 || digit == 0xB2 || digit == 0xB3) {
+                        return true;
+                    }
+                }
+                else if (base.size() == 5 && static_cast<unsigned char>(base[3]) == 0xC2) {
+                    const auto sup = static_cast<unsigned char>(base[4]);
+                    if (sup == 0xB9 || sup == 0xB2 || sup == 0xB3) {
+                        return true;
+                    }
                 }
             }
             return false;
@@ -165,10 +185,15 @@ namespace lotm::big {
         }
 
         // Header reading
-        char magic[5] = { 0 };
+        char magic[4] = { 0 };
         file.read(magic, 4);
-        if (!file || std::string_view(magic) != BIG4_MAGIC) {
-            throw BigFormatError(std::string("Not a valid BIG4 file! Found: ") + magic);
+        if (!file || std::string_view(magic, 4) != BIG4_MAGIC) {
+            std::string safe_magic;
+            safe_magic.reserve(4);
+            for (unsigned char c : magic) {
+                safe_magic.push_back((c >= 32 && c < 127) ? static_cast<char>(c) : '?');
+            }
+            throw BigFormatError("Not a valid BIG4 file! Found: " + safe_magic);
         }
 
         // Total size (Little Endian - '<I')
@@ -189,14 +214,15 @@ namespace lotm::big {
 
         // Prevent memory exhaustion from malicious/corrupted num_files claims
         std::error_code ec;
-        auto physical_size = std::filesystem::file_size(file_path_, ec);
+        physical_size_ = std::filesystem::file_size(file_path_, ec);
         if (ec) {
             throw BigArchiveError("Cannot read physical file size: " + to_utf8(file_path_));
         }
 
         if (header_size_ < HEADER_BASE_SIZE ||
-            header_size_ > physical_size ||
-            static_cast<uintmax_t>(num_files) * 8 > physical_size) {
+            header_size_ > physical_size_ ||
+            total_size_ < header_size_ ||
+            static_cast<uintmax_t>(num_files) * 8 > header_size_ - HEADER_BASE_SIZE) {
             throw BigFormatError("Corrupted BIG4 index: Claims more files than physically possible.");
         }
 
@@ -224,10 +250,10 @@ namespace lotm::big {
             std::size_t remaining_header = static_cast<std::size_t>(
                 std::min<uintmax_t>(header_size_ - static_cast<uintmax_t>(current_pos), MAX_ENTRY_PATH_LENGTH));
 
-            // Read file name until null byte
+            // Read non-empty file name until null byte
             entry.name = read_null_terminated_string(file, remaining_header);
 
-            if (!file) {
+            if (!file || entry.name.empty()) {
                 throw BigFormatError("Truncated BIG4 string table.");
             }
 
@@ -238,14 +264,25 @@ namespace lotm::big {
                 }
             }
 
+            std::string lower_name = entry.name;
+            for (char& c : lower_name) {
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            }
+
             entries_.push_back(std::move(entry));
+            index_map_.emplace(std::move(lower_name), entries_.size() - 1);
         }
+    }
+
+    const std::filesystem::path& BigArchive::file_path() const noexcept {
+        return file_path_;
     }
 
     void BigArchive::close() noexcept {
         is_closed_ = true;
         entries_.clear();
         entries_.shrink_to_fit();
+        index_map_.clear();
     }
 
     bool BigArchive::is_closed() const noexcept {
@@ -337,22 +374,68 @@ namespace lotm::big {
         return buffer;
     }
 
-    void BigArchive::extract_all(
-        const std::filesystem::path& output_dir,
-        std::function<void(std::string_view)> progress_callback,
-        std::string_view filter_pattern
-    ) const {
+    void BigArchive::stream_entry(std::string_view entry_name, ChunkCallback chunk_cb) const {
         if (is_closed_) {
-            throw BigArchiveError("Cannot extract from a closed archive.");
+            throw BigArchiveError("Cannot read from a closed archive.");
+        }
+        if (!chunk_cb) return;
+
+        std::string normalized_name(entry_name);
+        for (char& c : normalized_name) {
+            if (c == '\\' || c == '/') c = static_cast<char>(std::filesystem::path::preferred_separator);
+            else c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         }
 
-        std::error_code ec;
-        const auto physical_size = std::filesystem::file_size(file_path_, ec);
-        if (ec) {
-            throw BigArchiveError("Cannot open file for extraction: " + to_utf8(file_path_));
+        auto it = index_map_.find(normalized_name);
+        if (it == index_map_.end()) {
+            throw BigArchiveError("Entry not found in archive: " + std::string(entry_name));
         }
 
-        const uintmax_t max_extraction_quota = physical_size * MAX_AMPLIFICATION_RATIO;
+        stream_entry(entries_[it->second], std::move(chunk_cb));
+    }
+
+    void BigArchive::stream_entry(const BigEntry& entry, ChunkCallback chunk_cb) const {
+        if (is_closed_) {
+            throw BigArchiveError("Cannot read from a closed archive.");
+        }
+        if (!chunk_cb) return;
+
+        if (static_cast<uintmax_t>(entry.offset) + entry.size > physical_size_) {
+            throw BigFormatError("Extraction bounds exceeded for file: " + entry.name);
+        }
+
+        std::ifstream file(file_path_, std::ios::binary);
+        if (!file.is_open()) throw BigArchiveError("Cannot open file for reading: " + to_utf8(file_path_));
+
+        if (entry.size > 0) {
+            file.seekg(entry.offset, std::ios::beg);
+            if (!file) throw BigArchiveError("Failed to seek to offset for file: " + entry.name);
+
+            std::vector<uint8_t> buffer(EXTRACT_CHUNK_SIZE);
+            uint32_t remaining = entry.size;
+            while (remaining > 0) {
+                const auto chunk_size = static_cast<std::streamsize>(
+                    std::min<std::size_t>(remaining, buffer.size()));
+                file.read(reinterpret_cast<char*>(buffer.data()), chunk_size);
+                if (!file || file.gcount() != chunk_size) {
+                    throw BigArchiveError("Failed to read payload for file: " + entry.name);
+                }
+                if (!chunk_cb(std::span<const uint8_t>(buffer.data(), static_cast<std::size_t>(chunk_size)))) {
+                    break;
+                }
+                remaining -= static_cast<uint32_t>(chunk_size);
+            }
+        }
+        else {
+            chunk_cb(std::span<const uint8_t>());
+        }
+    }
+
+    uintmax_t BigArchive::validate_extraction_quota(std::string_view filter_pattern) const {
+        if (is_closed_) {
+            throw BigArchiveError("Cannot access closed archive.");
+        }
+        const uintmax_t max_extraction_quota = physical_size_ * MAX_AMPLIFICATION_RATIO;
 
         // Upfront quota evaluation across all entries to prevent amplification / zip-bomb attacks
         uintmax_t total_extracted_bytes = 0;
@@ -366,11 +449,31 @@ namespace lotm::big {
             total_extracted_bytes += entry.size;
         }
 
-        if (!std::filesystem::exists(output_dir)) {
-            std::filesystem::create_directories(output_dir);
+        return physical_size_;
+    }
+
+    void BigArchive::extract_all(
+        const std::filesystem::path& output_dir,
+        ProgressCallback progress_callback,
+        std::string_view filter_pattern,
+        bool create_directories
+    ) const {
+        if (is_closed_) {
+            throw BigArchiveError("Cannot extract from a closed archive.");
         }
 
+        if (!std::filesystem::exists(output_dir)) {
+            if (create_directories) {
+                std::filesystem::create_directories(output_dir);
+            }
+            else {
+                throw std::invalid_argument("Target output directory does not exist: " + to_utf8(output_dir));
+            }
+        }
+
+        const uintmax_t physical_size = validate_extraction_quota(filter_pattern);
         const std::filesystem::path canonical_output_dir = std::filesystem::weakly_canonical(output_dir);
+        uint64_t total_archive_size = 0;
 
         // Pre-flight security and bounds validation pass
         // PRE-FLIGHT VALIDATION LOOP
@@ -392,7 +495,7 @@ namespace lotm::big {
                 throw BigSecurityError("Directory traversal via Windows drive-relative path detected in entry: " + entry.name);
             }
 
-            std::filesystem::path entry_rel_path(entry.name);
+            std::filesystem::path entry_rel_path = from_utf8(entry.name);
             if (entry_rel_path.empty() ||
                 entry_rel_path.is_absolute() ||
                 entry_rel_path.has_root_name() ||
@@ -407,7 +510,7 @@ namespace lotm::big {
                 if (part == "..") {
                     throw BigSecurityError("Directory traversal (..) detected in entry: " + entry.name);
                 }
-                if (is_unsafe_filename(part.string())) {
+                if (is_unsafe_filename(to_utf8(part))) {
                     throw BigSecurityError("Unsafe Windows device name or ADS stream in path: " + entry.name);
                 }
 
@@ -427,6 +530,12 @@ namespace lotm::big {
             if (mismatch_pair.first != canonical_output_dir.end() || target_path == canonical_output_dir) {
                 throw BigSecurityError("Path traversal attempt detected for file: " + entry.name);
             }
+
+            total_archive_size += entry.size;
+        }
+
+        if (!std::filesystem::exists(output_dir)) {
+            std::filesystem::create_directories(output_dir);
         }
 
         std::ifstream file(file_path_, std::ios::binary);
@@ -435,6 +544,7 @@ namespace lotm::big {
         }
 
         std::vector<char> buffer(EXTRACT_CHUNK_SIZE);
+        uint64_t total_bytes_transferred = 0;
 
         // SAFE EXTRACTION LOOP
         for (const auto& entry : entries_) {
@@ -442,7 +552,7 @@ namespace lotm::big {
                 continue;
             }
 
-            std::filesystem::path entry_rel_path(entry.name);
+            std::filesystem::path entry_rel_path = from_utf8(entry.name);
             std::filesystem::path target_path = canonical_output_dir / entry_rel_path;
             std::filesystem::path target_subdir = target_path.parent_path();
 
@@ -463,6 +573,7 @@ namespace lotm::big {
 
                 // Stream payload through reusable chunk buffer
                 uint32_t remaining = entry.size;
+                uint64_t file_bytes_transferred = 0;
                 while (remaining > 0) {
                     const auto chunk_size = static_cast<std::streamsize>(
                         std::min<std::size_t>(remaining, buffer.size()));
@@ -478,6 +589,24 @@ namespace lotm::big {
                     }
 
                     remaining -= static_cast<uint32_t>(chunk_size);
+                    file_bytes_transferred += static_cast<uint64_t>(chunk_size);
+                    total_bytes_transferred += static_cast<uint64_t>(chunk_size);
+
+                    if (progress_callback) {
+                        const ProgressReport report{
+                            entry.name,
+                            file_bytes_transferred,
+                            entry.size,
+                            total_bytes_transferred,
+                            total_archive_size
+                        };
+                        if (!progress_callback(report)) {
+                            out_file.close();
+                            std::error_code rm_ec;
+                            std::filesystem::remove(target_path, rm_ec);
+                            throw BigArchiveError("Operation cancelled by progress callback.");
+                        }
+                    }
                 }
             }
 
@@ -486,8 +615,20 @@ namespace lotm::big {
                 throw BigArchiveError("Failed to flush extracted file: " + to_utf8(target_path));
             }
 
-            if (progress_callback) {
-                progress_callback(entry.name);
+            if (entry.size == 0 && progress_callback) {
+                const ProgressReport report{
+                    entry.name,
+                    0,
+                    0,
+                    total_bytes_transferred,
+                    total_archive_size
+                };
+                if (!progress_callback(report)) {
+                    out_file.close();
+                    std::error_code rm_ec;
+                    std::filesystem::remove(target_path, rm_ec);
+                    throw BigArchiveError("Operation cancelled by progress callback.");
+                }
             }
         }
     }

@@ -9,7 +9,10 @@
 
 #pragma once
 
+#include <compare>
 #include <cstdint>
+#include <functional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -24,6 +27,21 @@ namespace lotm::big {
         uint32_t offset{ 0 };
         uint32_t size{ 0 };
         std::string name;
+
+        bool operator==(const BigEntry&) const = default;
+        auto operator<=>(const BigEntry&) const = default;
     };
+
+    struct ProgressReport {
+        std::string entry_name;
+        uint64_t bytes_transferred{ 0 };
+        uint64_t file_size{ 0 };
+        uint64_t total_bytes_transferred{ 0 };
+        uint64_t total_archive_size{ 0 };
+    };
+
+    using ProgressCallback = std::function<bool(const ProgressReport&)>;
+    using ChunkCallback = std::function<bool(std::span<const uint8_t>)>;
+    using BufferAllocator = std::function<uint8_t* (std::size_t)>;
 
 } // namespace lotm::big

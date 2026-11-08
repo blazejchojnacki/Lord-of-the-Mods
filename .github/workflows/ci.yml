@@ -96,5 +96,9 @@ jobs:
       - name: Test Installed Wheel
         run: |
           pip install (Get-Item dist/*.whl).FullName
-          lotm-big-pack --help
-          lotm-big-unpack --help
+          lotm-big --help
+          lotm-big pack --help
+          lotm-big unpack --help
+          lotm-big diff --help
+          lotm-big overlay --help
+          python -m lotm.big --help

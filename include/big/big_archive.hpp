@@ -14,6 +14,7 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 #include <cstdint>
 
@@ -27,8 +28,9 @@ namespace lotm::big {
         // Extracts all files to the output directory
         void extract_all(
             const std::filesystem::path& output_dir,
-            std::function<void(std::string_view)> progress_callback = {},
-            std::string_view filter_pattern = {}
+            ProgressCallback progress_callback = {},
+            std::string_view filter_pattern = {},
+            bool create_directories = true
         ) const;
 
         // Reads a single archive entry into memory by its internal path
@@ -36,6 +38,18 @@ namespace lotm::big {
 
         // Reads a single archive entry into memory using its metadata record
         [[nodiscard]] std::vector<uint8_t> read_entry(const BigEntry& entry) const;
+
+        // Streams an entry's payload in chunks to the provided callback
+        void stream_entry(std::string_view entry_name, ChunkCallback chunk_cb) const;
+
+        // Streams an entry's payload in chunks to the provided callback using its metadata record
+        void stream_entry(const BigEntry& entry, ChunkCallback chunk_cb) const;
+
+        // Validates that the cumulative size of matching entries does not exceed the amplification ratio
+        uintmax_t validate_extraction_quota(std::string_view filter_pattern = {}) const;
+
+        // Returns the underlying archive file path
+        [[nodiscard]] const std::filesystem::path& file_path() const noexcept;
 
         // Releases the in-memory index and marks the archive as closed
         void close() noexcept;
@@ -47,9 +61,21 @@ namespace lotm::big {
     private:
         std::filesystem::path file_path_;
         std::vector<BigEntry> entries_;
+        std::unordered_map<std::string, std::size_t> index_map_;
+        uintmax_t physical_size_{ 0 };
         uint32_t total_size_{ 0 };
         uint32_t header_size_{ 0 };
         bool is_closed_{ false };
     };
 
 } // namespace lotm::big
+
+template <>
+struct std::hash<lotm::big::BigEntry> {
+    std::size_t operator()(const lotm::big::BigEntry& e) const noexcept {
+        std::size_t h1 = std::hash<uint32_t>{}(e.offset);
+        std::size_t h2 = std::hash<uint32_t>{}(e.size);
+        std::size_t h3 = std::hash<std::string>{}(e.name);
+        return h1 ^ (h2 << 1) ^ (h3 << 2);
+    }
+};

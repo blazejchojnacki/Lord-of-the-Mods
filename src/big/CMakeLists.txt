@@ -14,6 +14,7 @@ add_library(lotm_big STATIC
 
 set_target_properties(lotm_big PROPERTIES
     POSITION_INDEPENDENT_CODE ON
+    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
 )
 
 target_compile_options(lotm_big PRIVATE

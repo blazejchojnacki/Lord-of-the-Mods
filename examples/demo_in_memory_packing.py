@@ -2,12 +2,16 @@
 from pathlib import Path
 import lotm.big as big
 
+
 def main():
     # Define virtual mod files completely in memory
+    # lotm supports zero-copy Buffer Protocol objects (bytes, bytearray, memoryview) natively.
+    raw_buffer = bytearray(b"HEADER_PADDING_Damage=150\nRadius=50_FOOTER")
+    
     virtual_mod = {
-        "data/ini/weapon.ini": b"Damage=150\nRadius=50",
+        "data/ini/weapon.ini": memoryview(raw_buffer)[15:36],  # Sliced without copying
         "data/ini/armor.ini": b"Armor=Heavy\nHealth=2000",
-        "art/textures/hero.dds": b"DDS_HEADER_DATA_...",
+        "art/textures/hero.dds": bytearray(b"DDS_HEADER_DATA_..."),
         "readme.txt": b"Lord of the Mods in-memory packing demo."
     }
 
@@ -27,6 +31,9 @@ def main():
     with big.BigArchive(archive_path) as arc:
         for entry in arc.get_entries():
             print(f" - {entry.name} (Offset: {entry.offset}, Size: {entry.size})")
+            
+    archive_path.unlink(missing_ok=True)
+
 
 if __name__ == "__main__":
     main()

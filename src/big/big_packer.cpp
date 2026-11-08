@@ -19,6 +19,7 @@
 #include <fstream>
 #include <functional>
 #include <limits>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -35,10 +36,87 @@ namespace lotm::big {
             return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
         }
 
+        bool is_unsafe_pack_component(std::string_view name) {
+            if (name.empty() || name == "." || name == ".." ||
+                name.back() == ' ' || name.back() == '.') {
+                return true;
+            }
+
+            std::string upper_name;
+            upper_name.reserve(name.size());
+            for (char c : name) {
+                const auto uc = static_cast<unsigned char>(c);
+                if (uc < 32 || c == ':' || c == '<' || c == '>' ||
+                    c == '"' || c == '|' || c == '?' || c == '*') {
+                    return true;
+                }
+                upper_name.push_back(static_cast<char>(std::toupper(uc)));
+            }
+
+            auto dot_pos = upper_name.find('.');
+            std::string_view base = (dot_pos != std::string_view::npos)
+                ? std::string_view(upper_name).substr(0, dot_pos)
+                : upper_name;
+
+            while (!base.empty() && (base.back() == ' ' || base.back() == '.')) {
+                base.remove_suffix(1);
+            }
+
+            if (base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" ||
+                base == "CONIN$" || base == "CONOUT$" || base == "CLOCK$") {
+                return true;
+            }
+            if (base.starts_with("COM") || base.starts_with("LPT")) {
+                if (base.size() == 4) {
+                    const auto digit = static_cast<unsigned char>(base[3]);
+                    if ((digit >= '0' && digit <= '9') ||
+                        digit == 0xB9 || digit == 0xB2 || digit == 0xB3) {
+                        return true;
+                    }
+                }
+                else if (base.size() == 5 && static_cast<unsigned char>(base[3]) == 0xC2) {
+                    const auto sup = static_cast<unsigned char>(base[4]);
+                    if (sup == 0xB9 || sup == 0xB2 || sup == 0xB3) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        void validate_pack_rel_path(std::string_view rel_path) {
+            if (rel_path.empty() ||
+                rel_path.find('\0') != std::string_view::npos ||
+                rel_path.front() == '\\' ||
+                rel_path.front() == '/' ||
+                rel_path.back() == '\\' ||
+                rel_path.back() == '/') {
+                throw std::invalid_argument("Invalid or unsafe archive entry path: " + std::string(rel_path));
+            }
+
+            std::size_t start = 0;
+            while (start < rel_path.size()) {
+                std::size_t end = rel_path.find_first_of("\\/", start);
+                std::string_view segment = (end == std::string_view::npos)
+                    ? rel_path.substr(start)
+                    : rel_path.substr(start, end - start);
+
+                if (is_unsafe_pack_component(segment)) {
+                    throw std::invalid_argument("Invalid or unsafe archive entry path: " + std::string(rel_path));
+                }
+
+                if (end == std::string_view::npos) {
+                    break;
+                }
+                start = end + 1;
+            }
+        }
+
         // Computes header size, validates 32-bit format bounds, and writes the BIG4 header into a pre-allocated buffer
-        std::vector<uint8_t> allocate_and_write_header(
+        uint8_t* allocate_and_write_header(
             std::vector<detail::PackSourceRecord>& file_list,
             uintmax_t total_payload_size,
+            const BufferAllocator& allocator,
             std::vector<std::size_t>* out_original_indices = nullptr
         ) {
             detail::sort_and_validate_entries(file_list);
@@ -54,7 +132,7 @@ namespace lotm::big {
 
             // Guard against total archive size exceeding 32-bit limits (4GB overflow)
             if (header_size_calc + total_payload_size > std::numeric_limits<uint32_t>::max()) {
-                throw std::length_error("Total archive size exceeds the 32-bit (4GB) BIG4 format limit.");
+                throw BigFormatError("Total archive size exceeds the 32-bit (4GB) BIG4 format limit.");
             }
 
             if (out_original_indices) {
@@ -72,11 +150,13 @@ namespace lotm::big {
             }
 
             uint32_t total_size = current_offset;
-            std::vector<uint8_t> buffer(total_size);
+            uint8_t* buffer = allocator(total_size);
+            if (!buffer) throw std::bad_alloc();
+
             std::size_t write_pos = 0;
 
-            auto append_bytes = [&buffer, &write_pos](const void* data, std::size_t len) {
-                std::memcpy(buffer.data() + write_pos, data, len);
+            auto append_bytes = [buffer, &write_pos](const void* data, std::size_t len) {
+                std::memcpy(buffer + write_pos, data, len);
                 write_pos += len;
                 };
 
@@ -116,6 +196,8 @@ namespace lotm::big {
 
             std::unordered_set<std::string> seen_paths;
             for (const auto& f : entries) {
+                validate_pack_rel_path(f.rel_path);
+
                 std::string lower_path = f.rel_path;
                 std::transform(lower_path.begin(), lower_path.end(), lower_path.begin(),
                     [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -130,7 +212,7 @@ namespace lotm::big {
     void BigPacker::pack_from_directory(
         const std::filesystem::path& source_dir,
         const std::filesystem::path& output_file,
-        std::function<void(std::string_view)> progress_callback
+        ProgressCallback progress_callback
     ) {
         if (!std::filesystem::exists(source_dir) || !std::filesystem::is_directory(source_dir)) {
             throw std::invalid_argument("Source directory does not exist or is not a directory.");
@@ -155,6 +237,13 @@ namespace lotm::big {
                 "Target output archive cannot reside inside the source directory: " + to_utf8(output_file));
         }
 
+        if (std::filesystem::exists(output_file)) {
+            std::fstream probe(output_file, std::ios::in | std::ios::out | std::ios::binary);
+            if (!probe.is_open()) {
+                throw BigArchiveError("Cannot create output file: " + to_utf8(output_file));
+            }
+        }
+
         std::vector<detail::PackSourceRecord> file_list;
         uintmax_t total_payload_size = 0;
 
@@ -173,7 +262,7 @@ namespace lotm::big {
 
                 // Guard against individual files exceeding 32-bit limits
                 if (fsize > std::numeric_limits<uint32_t>::max()) {
-                    throw std::length_error("File '" + pack_entry.rel_path + "' exceeds the 4GB format limit.");
+                    throw BigFormatError("File '" + pack_entry.rel_path + "' exceeds the 4GB format limit.");
                 }
 
                 pack_entry.size = static_cast<uint32_t>(fsize);
@@ -196,7 +285,7 @@ namespace lotm::big {
 
         // Guard against total archive size exceeding 32-bit limits (4GB overflow)
         if (header_size_calc + total_payload_size > std::numeric_limits<uint32_t>::max()) {
-            throw std::length_error("Total archive size exceeds the 32-bit (4GB) BIG4 format limit.");
+            throw BigFormatError("Total archive size exceeds the 32-bit (4GB) BIG4 format limit.");
         }
 
         uint32_t header_size = static_cast<uint32_t>(header_size_calc);
@@ -208,22 +297,27 @@ namespace lotm::big {
 
         uint32_t total_size = current_offset;
 
+        std::filesystem::path temp_file = output_file;
+        temp_file += ".lotm_tmp";
+
+        std::ofstream out(temp_file, std::ios::binary);
+        if (!out.is_open()) {
+            throw BigArchiveError("Cannot create output file: " + to_utf8(output_file));
+        }
+
         bool pack_successful = false;
         struct CleanupGuard {
+            std::ofstream& stream;
             std::filesystem::path path;
             bool& success;
             ~CleanupGuard() {
                 if (!success) {
+                    stream.close();
                     std::error_code ec;
                     std::filesystem::remove(path, ec);
                 }
             }
-        } guard{ output_file, pack_successful };
-
-        std::ofstream out(output_file, std::ios::binary);
-        if (!out.is_open()) {
-            throw BigArchiveError("Cannot create output file: " + to_utf8(output_file));
-        }
+        } guard{ out, temp_file, pack_successful };
 
         out.write(BIG4_MAGIC.data(), 4);
 
@@ -251,6 +345,8 @@ namespace lotm::big {
         out.write(EA_PADDING_TAG.data(), EA_PADDING_SIZE);
 
         std::vector<char> chunk(1024 * 1024);
+        uint64_t total_bytes_transferred = 0;
+
         for (const auto& f : file_list) {
             std::ifstream src(f.full_path, std::ios::binary);
             if (!src.is_open()) {
@@ -267,6 +363,20 @@ namespace lotm::big {
                         throw BigArchiveError("Failed writing data to archive: " + to_utf8(output_file));
                     }
                     bytes_copied += static_cast<uintmax_t>(bytes_read);
+                    total_bytes_transferred += static_cast<uint64_t>(bytes_read);
+
+                    if (progress_callback) {
+                        const ProgressReport report{
+                            f.rel_path,
+                            static_cast<uint64_t>(bytes_copied),
+                            f.size,
+                            total_bytes_transferred,
+                            static_cast<uint64_t>(total_payload_size)
+                        };
+                        if (!progress_callback(report)) {
+                            throw BigArchiveError("Operation cancelled by progress callback.");
+                        }
+                    }
                 }
             }
 
@@ -274,8 +384,17 @@ namespace lotm::big {
                 throw BigArchiveError("Byte count mismatch while packing file: " + f.rel_path);
             }
 
-            if (progress_callback) {
-                progress_callback(f.rel_path);
+            if (f.size == 0 && progress_callback) {
+                const ProgressReport report{
+                    f.rel_path,
+                    0,
+                    0,
+                    total_bytes_transferred,
+                    static_cast<uint64_t>(total_payload_size)
+                };
+                if (!progress_callback(report)) {
+                    throw BigArchiveError("Operation cancelled by progress callback.");
+                }
             }
         }
 
@@ -283,13 +402,33 @@ namespace lotm::big {
         if (!out.good()) {
             throw BigArchiveError("Failed writing data to archive: " + to_utf8(output_file));
         }
+        out.close();
+
+        std::error_code rename_ec;
+        std::filesystem::rename(temp_file, output_file, rename_ec);
+        if (rename_ec) {
+            throw BigArchiveError("Cannot commit output file: " + to_utf8(output_file));
+        }
 
         pack_successful = true;
     }
 
     std::vector<uint8_t> BigPacker::pack_to_memory(
         const std::filesystem::path& source_dir,
-        std::function<void(std::string_view)> progress_callback
+        ProgressCallback progress_callback
+    ) {
+        std::vector<uint8_t> result;
+        pack_to_memory(source_dir, [&](std::size_t size) {
+            result.resize(size);
+            return result.data();
+            }, std::move(progress_callback));
+        return result;
+    }
+
+    void BigPacker::pack_to_memory(
+        const std::filesystem::path& source_dir,
+        const BufferAllocator& allocator,
+        ProgressCallback progress_callback
     ) {
         if (!std::filesystem::exists(source_dir) || !std::filesystem::is_directory(source_dir)) {
             throw std::invalid_argument("Source directory does not exist or is not a directory.");
@@ -313,7 +452,7 @@ namespace lotm::big {
 
                 // Guard against individual files exceeding 32-bit limits
                 if (fsize > std::numeric_limits<uint32_t>::max()) {
-                    throw std::length_error("File '" + pack_entry.rel_path + "' exceeds the 4GB format limit.");
+                    throw BigFormatError("File '" + pack_entry.rel_path + "' exceeds the 4GB format limit.");
                 }
 
                 pack_entry.size = static_cast<uint32_t>(fsize);
@@ -322,7 +461,8 @@ namespace lotm::big {
             }
         }
 
-        std::vector<uint8_t> buffer = allocate_and_write_header(file_list, total_payload_size);
+        uint8_t* buffer = allocate_and_write_header(file_list, total_payload_size, allocator);
+        uint64_t total_bytes_transferred = 0;
 
         for (const auto& f : file_list) {
             std::ifstream src(f.full_path, std::ios::binary);
@@ -331,23 +471,45 @@ namespace lotm::big {
             }
 
             if (f.size > 0) {
-                src.read(reinterpret_cast<char*>(buffer.data() + f.offset), static_cast<std::streamsize>(f.size));
+                src.read(reinterpret_cast<char*>(buffer + f.offset), static_cast<std::streamsize>(f.size));
                 if (src.bad() || static_cast<uint32_t>(src.gcount()) != f.size) {
                     throw BigArchiveError("Byte count mismatch while packing file: " + f.rel_path);
                 }
             }
 
+            total_bytes_transferred += f.size;
+
             if (progress_callback) {
-                progress_callback(f.rel_path);
+                const ProgressReport report{
+                    f.rel_path,
+                    f.size,
+                    f.size,
+                    total_bytes_transferred,
+                    static_cast<uint64_t>(total_payload_size)
+                };
+                if (!progress_callback(report)) {
+                    throw BigArchiveError("Operation cancelled by progress callback.");
+                }
             }
         }
-
-        return buffer;
     }
 
     std::vector<uint8_t> BigPacker::pack_to_memory(
-        const std::vector<std::pair<std::string, std::vector<uint8_t>>>& files,
-        std::function<void(std::string_view)> progress_callback
+        std::span<const std::pair<std::string, std::span<const uint8_t>>> files,
+        ProgressCallback progress_callback
+    ) {
+        std::vector<uint8_t> result;
+        pack_to_memory(files, [&](std::size_t size) {
+            result.resize(size);
+            return result.data();
+            }, std::move(progress_callback));
+        return result;
+    }
+
+    void BigPacker::pack_to_memory(
+        std::span<const std::pair<std::string, std::span<const uint8_t>>> files,
+        const BufferAllocator& allocator,
+        ProgressCallback progress_callback
     ) {
         std::vector<detail::PackSourceRecord> file_list;
         file_list.reserve(files.size());
@@ -365,8 +527,11 @@ namespace lotm::big {
                 if (c == '/') c = '\\';
             }
 
-            pack_entry.size = static_cast<uint32_t>(
-                std::min<std::size_t>(payload.size(), std::numeric_limits<uint32_t>::max()));
+            if (payload.size() > std::numeric_limits<uint32_t>::max()) {
+                throw BigFormatError("File '" + pack_entry.rel_path + "' exceeds the 4GB format limit.");
+            }
+
+            pack_entry.size = static_cast<uint32_t>(payload.size());
             // Store original index temporarily in offset prior to alphabetical sorting
             pack_entry.offset = static_cast<uint32_t>(i);
             total_payload_size += payload.size();
@@ -374,21 +539,46 @@ namespace lotm::big {
         }
 
         std::vector<std::size_t> sorted_indices;
-        std::vector<uint8_t> buffer = allocate_and_write_header(file_list, total_payload_size, &sorted_indices);
+        uint8_t* buffer = allocate_and_write_header(file_list, total_payload_size, allocator, &sorted_indices);
+        uint64_t total_bytes_transferred = 0;
 
         for (std::size_t i = 0; i < file_list.size(); ++i) {
             const auto& f = file_list[i];
             const auto& payload = files[sorted_indices[i]].second;
             if (!payload.empty()) {
-                std::memcpy(buffer.data() + f.offset, payload.data(), payload.size());
+                std::memcpy(buffer + f.offset, payload.data(), payload.size());
             }
+
+            total_bytes_transferred += f.size;
 
             if (progress_callback) {
-                progress_callback(f.rel_path);
+                const ProgressReport report{
+                    f.rel_path,
+                    f.size,
+                    f.size,
+                    total_bytes_transferred,
+                    static_cast<uint64_t>(total_payload_size)
+                };
+                if (!progress_callback(report)) {
+                    throw BigArchiveError("Operation cancelled by progress callback.");
+                }
             }
         }
+    }
 
-        return buffer;
+    std::vector<uint8_t> BigPacker::pack_to_memory(
+        const std::vector<std::pair<std::string, std::vector<uint8_t>>>& files,
+        ProgressCallback progress_callback
+    ) {
+        std::vector<std::pair<std::string, std::span<const uint8_t>>> span_files;
+        span_files.reserve(files.size());
+        for (const auto& [raw_path, payload] : files) {
+            span_files.emplace_back(raw_path, std::span<const uint8_t>(payload.data(), payload.size()));
+        }
+        return pack_to_memory(
+            std::span<const std::pair<std::string, std::span<const uint8_t>>>(span_files),
+            std::move(progress_callback)
+        );
     }
 
 } // namespace lotm::big

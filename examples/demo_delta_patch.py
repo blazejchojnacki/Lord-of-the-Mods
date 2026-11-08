@@ -3,6 +3,13 @@ from pathlib import Path
 import lotm.big as big
 
 
+def on_patch_progress(report: big.ProgressReport) -> bool:
+    """Demonstrates byte-level telemetry during patch generation."""
+    percent = (report.total_bytes_transferred / report.total_archive_size) * 100 if report.total_archive_size else 100
+    print(f"Patching [{percent:5.1f}%] : {report.entry_name} ({report.bytes_transferred}/{report.file_size} B)")
+    return True  # Return False to cancel cooperatively
+
+
 def main() -> None:
     base_path = Path("vanilla_release.big")
     target_path = Path("modded_release.big")
@@ -30,9 +37,9 @@ def main() -> None:
     patch_bytes = big.create_patch_to_memory(base_path, target_path)
     print(f"Serialized patch size in memory: {len(patch_bytes)} bytes")
 
-    # Generate a standalone delta patch directly to disk
+    # Generate a standalone delta patch directly to disk with telemetry
     print(f"\n=== Generating Disk Delta Patch ({patch_disk_path.name}) ===")
-    big.create_patch(base_path, target_path, patch_disk_path)
+    big.create_patch(base_path, target_path, patch_disk_path, progress_callback=on_patch_progress)
     print(f"Saved delta patch to: {patch_disk_path.resolve()}")
 
     # Inspect the generated patch contents to verify inclusion criteria
