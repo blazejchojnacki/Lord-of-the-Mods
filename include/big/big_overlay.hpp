@@ -53,6 +53,9 @@ namespace lotm::big {
         // Reads the effective winning entry payload directly into memory
         [[nodiscard]] std::vector<uint8_t> read_entry(std::string_view entry_name) const;
 
+        // Streams the effective winning entry payload in chunks to the provided callback
+        void stream_entry(std::string_view entry_name, ChunkCallback chunk_cb) const;
+
     private:
         struct OverlayRecord {
             BigEntry entry;

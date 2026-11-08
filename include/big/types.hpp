@@ -36,5 +36,7 @@ namespace lotm::big {
     };
 
     using ProgressCallback = std::function<bool(const ProgressReport&)>;
+    using ChunkCallback = std::function<bool(std::span<const uint8_t>)>;
+    using BufferAllocator = std::function<uint8_t* (std::size_t)>;
 
 } // namespace lotm::big

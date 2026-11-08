@@ -367,6 +367,71 @@ namespace lotm::big {
         return buffer;
     }
 
+    void BigArchive::stream_entry(std::string_view entry_name, ChunkCallback chunk_cb) const {
+        if (is_closed_) {
+            throw BigArchiveError("Cannot read from a closed archive.");
+        }
+        if (!chunk_cb) return;
+
+        std::string normalized_name(entry_name);
+        for (char& c : normalized_name) {
+            if (c == '\\' || c == '/') c = static_cast<char>(std::filesystem::path::preferred_separator);
+        }
+
+        auto it = std::find_if(entries_.begin(), entries_.end(),
+            [&normalized_name](const BigEntry& e) {
+                if (e.name.size() != normalized_name.size()) return false;
+                return std::equal(e.name.begin(), e.name.end(), normalized_name.begin(),
+                    [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
+            });
+
+        if (it == entries_.end()) {
+            throw BigArchiveError("Entry not found in archive: " + std::string(entry_name));
+        }
+        stream_entry(*it, std::move(chunk_cb));
+    }
+
+    void BigArchive::stream_entry(const BigEntry& entry, ChunkCallback chunk_cb) const {
+        if (is_closed_) {
+            throw BigArchiveError("Cannot read from a closed archive.");
+        }
+        if (!chunk_cb) return;
+
+        std::error_code ec;
+        const auto physical_size = std::filesystem::file_size(file_path_, ec);
+        if (ec) throw BigArchiveError("Cannot open file for reading: " + to_utf8(file_path_));
+
+        if (static_cast<uintmax_t>(entry.offset) + entry.size > physical_size) {
+            throw BigFormatError("Extraction bounds exceeded for file: " + entry.name);
+        }
+
+        std::ifstream file(file_path_, std::ios::binary);
+        if (!file.is_open()) throw BigArchiveError("Cannot open file for reading: " + to_utf8(file_path_));
+
+        if (entry.size > 0) {
+            file.seekg(entry.offset, std::ios::beg);
+            if (!file) throw BigArchiveError("Failed to seek to offset for file: " + entry.name);
+
+            std::vector<uint8_t> buffer(EXTRACT_CHUNK_SIZE);
+            uint32_t remaining = entry.size;
+            while (remaining > 0) {
+                const auto chunk_size = static_cast<std::streamsize>(
+                    std::min<std::size_t>(remaining, buffer.size()));
+                file.read(reinterpret_cast<char*>(buffer.data()), chunk_size);
+                if (!file || file.gcount() != chunk_size) {
+                    throw BigArchiveError("Failed to read payload for file: " + entry.name);
+                }
+                if (!chunk_cb(std::span<const uint8_t>(buffer.data(), static_cast<std::size_t>(chunk_size)))) {
+                    break;
+                }
+                remaining -= static_cast<uint32_t>(chunk_size);
+            }
+        }
+        else {
+            chunk_cb(std::span<const uint8_t>());
+        }
+    }
+
     uintmax_t BigArchive::validate_extraction_quota(std::string_view filter_pattern) const {
         std::error_code ec;
         const auto physical_size = std::filesystem::file_size(file_path_, ec);

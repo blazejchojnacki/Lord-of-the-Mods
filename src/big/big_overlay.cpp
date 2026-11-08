@@ -167,4 +167,15 @@ namespace lotm::big {
         return archives_[rec.archive_index].second.read_entry(rec.entry);
     }
 
+    void BigOverlay::stream_entry(std::string_view entry_name, ChunkCallback chunk_cb) const {
+        const std::string key = normalize_lookup_key(entry_name);
+        auto it = index_map_.find(key);
+        if (it == index_map_.end()) {
+            throw BigArchiveError("Entry not found in overlay: " + std::string(entry_name));
+        }
+
+        const auto& rec = it->second;
+        archives_[rec.archive_index].second.stream_entry(rec.entry, std::move(chunk_cb));
+    }
+
 } // namespace lotm::big
