@@ -79,8 +79,21 @@ def test_unpack_missing_archive_raises_error(tmp_path: Path):
     missing_file = tmp_path / "ghost.big"
     out_dir = tmp_path / "out"
 
-    with pytest.raises(FileNotFoundError, match="Archive not found"):
-        big.unpack(missing_file, out_dir)def test_progress_report_lifetime_retention(standard_mod_directory: Path, tmp_path: Path):
+with pytest.raises(FileNotFoundError, match="Archive not found"):
+        big.unpack(missing_file, out_dir)
+
+
+def test_unpack_missing_output_dir_strict_mode(standard_mod_directory: Path, tmp_path: Path):
+    """Verify that unpack() respects create_directories=False."""
+    archive_path = tmp_path / "mod.big"
+    big.pack(standard_mod_directory, archive_path)
+
+    missing_out = tmp_path / "missing_strict"
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        big.unpack(archive_path, missing_out, create_directories=False)
+
+
+def test_progress_report_lifetime_retention(standard_mod_directory: Path, tmp_path: Path):
     """Verify ProgressReport objects can be safely retained and accessed after operations."""
     archive_path = tmp_path / "retention.big"
 
@@ -317,6 +330,13 @@ def test_in_memory_read_entry_and_buffer_protocol(standard_mod_directory: Path, 
 
     with big.BigArchive(archive_path) as arc:
         assert not arc.closed
+        assert arc.file_path == archive_path
+
+        # Test value semantics (set deduplication)
+        entries_set = set(arc.get_entries())
+        assert len(entries_set) == 3
+        # Ensure __eq__ overrides pointer identity
+        assert arc.get_entries()[0] == arc.get_entries()[0]
 
         # Read by normalized case-insensitive path string
         raw_ini = arc.read_entry("DATA/weapon.ini")
@@ -657,10 +677,21 @@ def test_load_overlay_from_directory_and_archive_sequence(tmp_path: Path):
     assert "overrides=1" in repr(resolved)
     assert overlay_dir.read_entry("data/weapon.ini") == b"Damage=99"
 
-    # 2. Load from explicit sequence in reverse order (02_patch.big -> 01_ini.big)
-    overlay_seq = big.load_overlay([arc2, arc1])
-    assert overlay_seq.read_entry("data/weapon.ini") == b"Damage=50"
-    assert overlay_seq.resolve("data/weapon.ini").source_archive == arc1
+# 2. Load from explicit sequence in reverse order (02_patch.big -> 01_ini.big)
+    with big.load_overlay([arc2, arc1]) as overlay_seq:
+        assert overlay_seq.read_entry("data/weapon.ini") == b"Damage=50"
+        assert overlay_seq.resolve("data/weapon.ini").source_archive == arc1
+
+        # Verify value semantics and case-insensitive ordering on overlay
+        entries = overlay_seq.get_entries()
+        assert entries[0].name == "art\\icon.dds"
+        assert entries[1].name == "data\\weapon.ini"
+
+        entries_set = set(entries)
+        assert len(entries_set) == 3
+        assert entries[0] == entries[0]
+
+    assert overlay_seq.closed
 
     # 3. Error handling
     with pytest.raises(NotADirectoryError, match="does not exist"):

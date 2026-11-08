@@ -837,6 +837,9 @@ TEST_CASE("BigArchive Selective Glob Extraction", "[big_unpack][filter]") {
         // Universal wildcard
         REQUIRE(archive.get_entries("*").size() == 5);
 
+        // $O(1) hash map validation
+        REQUIRE_NOTHROW(archive.read_entry("DATA/ini/WeApON.ini"));
+
         // Multi-segment star backtracking and forward-slash normalization
         auto ini_entries = archive.get_entries("DATA/ini/*.INI");
         REQUIRE(ini_entries.size() == 2);
@@ -865,5 +868,10 @@ TEST_CASE("BigArchive Selective Glob Extraction", "[big_unpack][filter]") {
         REQUIRE(std::filesystem::exists(env.out_dir / "data" / "ini" / "armor.ini"));
         REQUIRE_FALSE(std::filesystem::exists(env.out_dir / "readme.txt"));
         REQUIRE_FALSE(std::filesystem::exists(env.out_dir / "art" / "textures" / "hero01.dds"));
+    }
+
+    SECTION("Negative scenario: extract_all respects create_directories strict mode") {
+        std::filesystem::path missing_out = env.root_dir / "missing_strict";
+        REQUIRE_THROWS_AS(archive.extract_all(missing_out, {}, "", false), std::invalid_argument);
     }
 }
