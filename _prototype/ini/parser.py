@@ -50,12 +50,14 @@ class CommentNode:
 class StatementNode:
     """Represents a standard property assignment or value line."""
     text: str
+    comment: str = ""
 
 
 @dataclass
 class IncludeNode:
     """Represents a #include preprocessor directive."""
     text: str
+    comment: str = ""
 
 
 AstNode = Union[CommentNode, StatementNode, IncludeNode, 'ConstructLevel']
@@ -89,6 +91,13 @@ def _format_indented_text(text: str, level: int) -> str:
         lines = [f"{indent}{line.lstrip()}" for line in text.split('\n')]
         return '\n'.join(lines) + '\n'
     return f"{indent}{text}\n"
+
+
+def _combine_text_and_comment(text: str, comment: str) -> str:
+    """Combines a node's code text and optional inline comment onto a single line."""
+    if text and comment:
+        return f"{text} {comment}"
+    return text or comment
 
 
 def load_delimiters() -> None:
@@ -196,22 +205,29 @@ class StrEntry:
     category: str
     identifier: str
     comment: str = ""
+    header_comment: str = ""
     end_token: str = "End"
+    end_comment: str = ""
     items: List[Union[CommentNode, StatementNode]] = field(default_factory=list)
 
     def print(self) -> str:
         output = ''
         if self.comment:
-            output += f"{self.comment}\n"
+            output += _format_indented_text(self.comment, 0)
 
         header = f"{self.category}:{self.identifier}" if self.identifier else self.category
+        header = _combine_text_and_comment(header, self.header_comment)
         output += f"{header}\n"
 
         for item in self.items:
-            output += _format_indented_text(item.text, 1)
+            if isinstance(item, StatementNode):
+                output += _format_indented_text(_combine_text_and_comment(item.text, item.comment), 1)
+            else:
+                output += _format_indented_text(item.text, 1)
 
         if self.end_token:
-            output += f"{self.end_token}\n"
+            end_line = _combine_text_and_comment(self.end_token, self.end_comment)
+            output += f"{end_line}\n"
         return output
 
 
@@ -227,7 +243,9 @@ class StrDocument:
         for entry in self.entries:
             if isinstance(entry, StrEntry):
                 output += entry.print()
-            elif isinstance(entry, (CommentNode, StatementNode)):
+            elif isinstance(entry, StatementNode):
+                output += _format_indented_text(_combine_text_and_comment(entry.text, entry.comment), 0)
+            elif isinstance(entry, CommentNode):
                 output += _format_indented_text(entry.text, 0)
             output += '\n'
         return output
@@ -249,10 +267,10 @@ class StrParser:
         lines = _read_file_lines(file_path)
         for line_num, raw_line in enumerate(lines, start=1):
             lexed = lex_line(raw_line)
-            if lexed.comment:
-                last_comment += ('\n' if last_comment else '') + lexed.comment
 
             if not lexed.words:
+                if lexed.comment:
+                    last_comment += ('\n' if last_comment else '') + lexed.comment
                 if last_comment and raw_line.strip() == '':
                     if active_entry is not None:
                         active_entry.items.append(CommentNode(text=last_comment))
@@ -269,9 +287,17 @@ class StrParser:
                         category=matched_rule.raw,
                         identifier=' '.join(remaining),
                         comment=last_comment,
+                        header_comment=lexed.comment,
                     )
                     last_comment = ''
                     continue
+
+            if last_comment:
+                if active_entry is not None:
+                    active_entry.items.append(CommentNode(text=last_comment))
+                else:
+                    doc.entries.append(CommentNode(text=last_comment))
+                last_comment = ''
 
             if lexed.words[0] in INI_ENDS:
                 if active_entry is None:
@@ -282,24 +308,26 @@ class StrParser:
                     doc.errors.append(err_msg)
                     if strict:
                         raise IniParseError(err_msg)
-                    if last_comment:
-                        doc.entries.append(CommentNode(text=last_comment))
-                        last_comment = ''
-                    doc.entries.append(StatementNode(text=' '.join(lexed.words)))
+                    doc.entries.append(StatementNode(text=' '.join(lexed.words), comment=lexed.comment))
                 else:
-                    if last_comment:
-                        active_entry.items.append(CommentNode(text=last_comment))
-                        last_comment = ''
                     active_entry.end_token = ' '.join(lexed.words)
+                    active_entry.end_comment = lexed.comment
                     doc.entries.append(active_entry)
                     active_entry = None
                 continue
 
-            stmt = StatementNode(text=' '.join(lexed.words_signs))
+            stmt = StatementNode(text=' '.join(lexed.words_signs), comment=lexed.comment)
             if active_entry is not None:
                 active_entry.items.append(stmt)
             else:
                 doc.entries.append(stmt)
+
+        if last_comment:
+            if active_entry is not None:
+                active_entry.items.append(CommentNode(text=last_comment))
+            else:
+                doc.entries.append(CommentNode(text=last_comment))
+            last_comment = ''
 
         if active_entry is not None:
             doc.entries.append(active_entry)
@@ -314,7 +342,9 @@ class ConstructLevel:
     name: str = ""
     identifier: str = ""
     comment: str = ""
+    header_comment: str = ""
     end_token: str = ""
+    end_comment: str = ""
     items: List[AstNode] = field(default_factory=list, init=False)
 
     def __iter__(self) -> Iterator[AstNode]:
@@ -332,23 +362,26 @@ class ConstructLevel:
     def print(self, level: int = 0, file_type: str = '.ini') -> str:
         output = ''
         if self.comment:
-            output += f"{LEVEL_INDENT * level}{self.comment}\n"
+            output += _format_indented_text(self.comment, level)
 
         sep = ' ' if file_type in ['.ini', '.inc'] else ':'
         header_parts = [part for part in (self._class, self.name, self.identifier) if part]
         if header_parts:
-            header_line = f"{LEVEL_INDENT * level}{sep.join(header_parts)}"
+            header_line = _combine_text_and_comment(sep.join(header_parts), self.header_comment)
             output += _format_indented_text(header_line.lstrip(), level)
 
         inner_level = level + 1
         for item in self.items:
             if isinstance(item, ConstructLevel):
                 output += item.print(level=inner_level, file_type=file_type)
-            elif isinstance(item, (CommentNode, StatementNode, IncludeNode)):
+            elif isinstance(item, (StatementNode, IncludeNode)):
+                output += _format_indented_text(_combine_text_and_comment(item.text, item.comment), inner_level)
+            elif isinstance(item, CommentNode):
                 output += _format_indented_text(item.text, inner_level)
 
         if self.end_token:
-            output += f"{LEVEL_INDENT * level}{self.end_token}\n"
+            end_line = _combine_text_and_comment(self.end_token, self.end_comment)
+            output += f"{LEVEL_INDENT * level}{end_line}\n"
 
         return output
 
@@ -414,6 +447,10 @@ class ConstructFile:
         for line_num, raw_line in enumerate(lines, start=1):
             self._parse_line(raw_line, line_num)
 
+        if self.last_comment:
+            self.context_stack[-1].append(CommentNode(text=self.last_comment))
+            self.last_comment = ''
+
     def _get_lookup_level(self) -> int:
         """Calculates schema depth, shifting by 1 when inside a transparent ReplaceModule wrapper."""
         shift = sum(
@@ -424,25 +461,19 @@ class ConstructFile:
 
     def _parse_line(self, raw_line: str, line_num: int = 0) -> None:
         lexed = lex_line(raw_line)
-        if lexed.comment:
-            self.last_comment += ('\n' if self.last_comment else '') + lexed.comment
 
         if not lexed.words:
+            if lexed.comment:
+                self.last_comment += ('\n' if self.last_comment else '') + lexed.comment
             self._handle_empty_line(raw_line)
             return
 
-        if self._handle_block_start(lexed.words, lexed.line_tokens):
+        if self._handle_block_start(lexed.words, lexed.line_tokens, lexed.comment):
             return
 
-        if self._handle_block_end(lexed.words, line_num, raw_line):
-            return
-
-        if self._handle_directives(lexed.words, lexed.words_signs):
-            return
-
-        # If we are at the base level and didn't match a block start, end, or directive,
-        # it might be a new block from a different schema group. Scan for it.
-        if self.current_level == self.start_level:
+        # If we are at the base level and didn't match a block start in the current schema group,
+        # it might be a new block from a different schema group. Scan for it before flushing last_comment.
+        if self.current_level == self.start_level and lexed.words[0] not in INI_ENDS and not lexed.words[0].startswith('#'):
             for group_idx, group_rules in enumerate(INI_DELIMITER_RULES):
                 if len(group_rules) > 0:
                     if _match_delimiter_rule(lexed.line_tokens, group_rules[0]) is not None:
@@ -453,17 +484,27 @@ class ConstructFile:
                         empty_rule_list: List[DelimiterRule] = []
                         self.active_rules = list(group_rules) + [empty_rule_list]
                         # We found a new schema group, process it immediately as a block start
-                        if self._handle_block_start(lexed.words, lexed.line_tokens):
+                        if self._handle_block_start(lexed.words, lexed.line_tokens, lexed.comment):
                             return
 
-        self._handle_statement(lexed.words_signs)
+        if self.last_comment:
+            self.context_stack[-1].append(CommentNode(text=self.last_comment))
+            self.last_comment = ''
+
+        if self._handle_block_end(lexed.words, line_num, raw_line, lexed.comment):
+            return
+
+        if self._handle_directives(lexed.words, lexed.words_signs, lexed.comment):
+            return
+
+        self._handle_statement(lexed.words_signs, lexed.comment)
 
     def _handle_empty_line(self, raw_line: str) -> None:
         if self.last_comment and raw_line.strip() == '':
             self.context_stack[-1].append(CommentNode(text=self.last_comment))
             self.last_comment = ''
 
-    def _handle_block_start(self, words: List[str], line_tokens: List[str]) -> bool:
+    def _handle_block_start(self, words: List[str], line_tokens: List[str], inline_comment: str = "") -> bool:
         lookup_level = self._get_lookup_level()
         if lookup_level < len(self.active_rules):
             matched_rule = _match_delimiter_rule(line_tokens, self.active_rules[lookup_level])
@@ -488,6 +529,7 @@ class ConstructFile:
                     name=block_name,
                     identifier=block_identifier,
                     comment=self.last_comment,
+                    header_comment=inline_comment,
                 )
                 self.context_stack[-1].append(new_block)
                 self.context_stack.append(new_block)
@@ -497,7 +539,13 @@ class ConstructFile:
                 return True
         return False
 
-    def _handle_block_end(self, words: List[str], line_num: int = 0, raw_line: str = "") -> bool:
+    def _handle_block_end(
+        self,
+        words: List[str],
+        line_num: int = 0,
+        raw_line: str = "",
+        inline_comment: str = "",
+    ) -> bool:
         if words[0] in INI_ENDS:
             self.current_level -= 1
             if self.current_level < 0:
@@ -512,30 +560,27 @@ class ConstructFile:
 
             active_container = self.context_stack[-1]
 
-            if self.last_comment:
-                active_container.append(CommentNode(text=self.last_comment))
-                self.last_comment = ''
-
             end_str = ' '.join(words)
             if len(self.context_stack) > 1 and isinstance(active_container, ConstructLevel):
                 active_container.end_token = end_str
+                active_container.end_comment = inline_comment
                 self.context_stack.pop()
             else:
-                active_container.append(StatementNode(text=end_str))
+                active_container.append(StatementNode(text=end_str, comment=inline_comment))
             return True
         return False
 
-    def _handle_directives(self, words: List[str], words_signs: List[str]) -> bool:
+    def _handle_directives(self, words: List[str], words_signs: List[str], inline_comment: str = "") -> bool:
         if words[0] == '#define':
-            self.defines.append(' '.join(words_signs))
+            self.defines.append(_combine_text_and_comment(' '.join(words_signs), inline_comment))
             return True
         if words[0] == '#include':
-            self.context_stack[-1].append(IncludeNode(text=' '.join(words_signs)))
+            self.context_stack[-1].append(IncludeNode(text=' '.join(words_signs), comment=inline_comment))
             return True
         return False
 
-    def _handle_statement(self, words_signs: List[str]) -> None:
-        self.context_stack[-1].append(StatementNode(text=' '.join(words_signs)))
+    def _handle_statement(self, words_signs: List[str], inline_comment: str = "") -> None:
+        self.context_stack[-1].append(StatementNode(text=' '.join(words_signs), comment=inline_comment))
 
     def print(self) -> str:
         output = ''
@@ -548,7 +593,9 @@ class ConstructFile:
                 output += item.print()
             elif isinstance(item, ConstructLevel):
                 output += item.print(self.start_level, self.name[-4:])
-            elif isinstance(item, (CommentNode, StatementNode, IncludeNode)):
+            elif isinstance(item, (StatementNode, IncludeNode)):
+                output += _format_indented_text(_combine_text_and_comment(item.text, item.comment), self.start_level)
+            elif isinstance(item, CommentNode):
                 output += _format_indented_text(item.text, self.start_level)
             output += '\n'
         return output
