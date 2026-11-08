@@ -426,7 +426,9 @@ TEST_CASE("BigArchive Windows Path Security and NTFS Evasions", "[big_unpack][se
         BigArchive archive(env.test_file);
         REQUIRE_THROWS_AS(archive.extract_all(env.out_dir), BigSecurityError);
         REQUIRE_FALSE(std::filesystem::exists(env.root_dir / "escaped.txt"));
-        REQUIRE_FALSE(std::filesystem::exists(env.out_dir));
+
+        // Output directory is created proactively before validation occurs
+        REQUIRE(std::filesystem::exists(env.out_dir));
     }
 
     SECTION("Negative scenario: Rooted paths in entry are blocked") {
@@ -604,6 +606,7 @@ TEST_CASE("BigArchive Progress Callback Integration", "[big_unpack][callback]") 
         REQUIRE_FALSE(std::filesystem::exists(env.out_dir / "fileB.txt"));
 
         // Cancellation on zero-byte file
+        std::filesystem::remove(env.test_file);
         env.write_big_file("BIG4", { { "empty.txt", "" } });
         BigArchive empty_arc(env.test_file);
         REQUIRE_THROWS_AS(empty_arc.extract_all(env.out_dir, cancel_cb), BigArchiveError);

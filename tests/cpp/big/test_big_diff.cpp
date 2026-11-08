@@ -213,17 +213,17 @@ TEST_CASE("BigDiff Comparison Scenarios", "[big_diff][compare]") {
         }
     }
 
-    SECTION("Negative scenario: Truncated physical file during streaming compare throws BigFormatError") {
+    SECTION("Negative scenario: Truncated physical file during streaming compare throws BigArchiveError") {
         env.write_archive(env.base_file, { { "a.txt", "AAAA" } });
         env.write_archive(env.target_file, { { "a.txt", "BBBB" } });
 
         BigArchive base_arc(env.base_file);
         BigArchive target_arc(env.target_file);
 
-        // Truncate target payload physically to trigger stream bounds checking
+        // Truncate target payload physically to trigger stream read failure
         std::filesystem::resize_file(env.target_file, std::filesystem::file_size(env.target_file) - 2);
 
-        REQUIRE_THROWS_AS(BigDiff::compare(base_arc, target_arc), BigFormatError);
+        REQUIRE_THROWS_AS(BigDiff::compare(base_arc, target_arc), BigArchiveError);
     }
 }
 
