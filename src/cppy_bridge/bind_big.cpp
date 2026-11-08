@@ -462,9 +462,9 @@ namespace lotm::python {
                 nb::call_guard<nb::gil_scoped_release>(),
                 "Resolves the winning BigOverlayEntry for a specific internal path")
             .def("read_entry", [](const lotm::big::BigOverlay& self, std::string_view entry_name) {
-            const auto entry = self.resolve(entry_name);
+            const auto overlay_entry = self.resolve(entry_name);
             PythonBytesAllocator allocator;
-            allocator.allocate(entry.size);
+            allocator.allocate(overlay_entry.entry.size);
             char* buffer = reinterpret_cast<char*>(PyBytes_AS_STRING(allocator.bytes_obj));
             std::size_t write_pos = 0;
             {
