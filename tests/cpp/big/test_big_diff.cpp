@@ -198,6 +198,33 @@ TEST_CASE("BigDiff Comparison Scenarios", "[big_diff][compare]") {
         REQUIRE_THROWS_AS(BigDiff::compare(env.base_file, env.target_file), BigSecurityError);
         REQUIRE_THROWS_AS(BigDiff::create_patch_to_memory(env.base_file, env.target_file), BigSecurityError);
     }
+
+    SECTION("Negative scenario: File I/O locks during streaming compare throw BigArchiveError") {
+        env.write_archive(env.base_file, { { "a.txt", "AAAA" } });
+        env.write_archive(env.target_file, { { "a.txt", "BBBB" } });
+
+        BigArchive base_arc(env.base_file);
+        BigArchive target_arc(env.target_file);
+
+        FILE* locked_target = _fsopen(env.target_file.string().c_str(), "rb", 0x10);
+        if (locked_target) {
+            REQUIRE_THROWS_AS(BigDiff::compare(base_arc, target_arc), BigArchiveError);
+            fclose(locked_target);
+        }
+    }
+
+    SECTION("Negative scenario: Truncated physical file during streaming compare throws BigFormatError") {
+        env.write_archive(env.base_file, { { "a.txt", "AAAA" } });
+        env.write_archive(env.target_file, { { "a.txt", "BBBB" } });
+
+        BigArchive base_arc(env.base_file);
+        BigArchive target_arc(env.target_file);
+
+        // Truncate target payload physically to trigger stream bounds checking
+        std::filesystem::resize_file(env.target_file, std::filesystem::file_size(env.target_file) - 2);
+
+        REQUIRE_THROWS_AS(BigDiff::compare(base_arc, target_arc), BigFormatError);
+    }
 }
 
 TEST_CASE("BigDiff Delta Patch Generation", "[big_diff][patch]") {
@@ -336,5 +363,20 @@ TEST_CASE("BigDiff Delta Patch Generation", "[big_diff][patch]") {
         std::ifstream verify_in(env.patch_file, std::ios::binary);
         std::string preserved((std::istreambuf_iterator<char>(verify_in)), std::istreambuf_iterator<char>());
         REQUIRE(preserved == "locked");
+    }
+
+    SECTION("Positive scenario: ProgressReport objects safely outlive callback execution") {
+        std::vector<ProgressReport> retained_reports;
+        BigDiff::create_patch_to_memory(
+            env.base_file, env.target_file, "", [&](const ProgressReport& report) -> bool {
+                retained_reports.push_back(report); // Copy the struct
+                return true;
+            }
+        );
+
+        REQUIRE(retained_reports.size() == 2);
+        // Validates ownership fix: entry_name (std::string) persists safely after C++ transient vectors drop out of scope
+        REQUIRE(retained_reports[0].entry_name == "art\\added.dds");
+        REQUIRE(retained_reports[1].entry_name == "data\\modified.ini");
     }
 }

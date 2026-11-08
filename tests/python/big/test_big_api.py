@@ -80,7 +80,44 @@ def test_unpack_missing_archive_raises_error(tmp_path: Path):
     out_dir = tmp_path / "out"
 
     with pytest.raises(FileNotFoundError, match="Archive not found"):
-        big.unpack(missing_file, out_dir)
+        big.unpack(missing_file, out_dir)def test_progress_report_lifetime_retention(standard_mod_directory: Path, tmp_path: Path):
+    """Verify ProgressReport objects can be safely retained and accessed after operations."""
+    archive_path = tmp_path / "retention.big"
+
+    reports: list[big.ProgressReport] = []
+    def pack_cb(report: big.ProgressReport) -> bool:
+        reports.append(report)
+        return True
+
+    big.pack(standard_mod_directory, archive_path, progress_callback=pack_cb)
+
+    # Accessing entry_name on retained objects must not crash (UAF) and must return correct strings
+    assert len(reports) == 3
+    entry_names = [r.entry_name for r in reports]
+    assert "data\\weapon.ini" in entry_names
+    assert "art\\texture.dds" in entry_names
+    assert "readme.txt" in entry_names
+
+    # Check string representation uses the safe retained memory
+    for r in reports:
+        assert "ProgressReport" in repr(r)
+        assert str(r.bytes_transferred) in repr(r)
+
+
+def test_diff_streaming_io_and_bounds_failures(tmp_path: Path):
+    """Verify streaming diff propagates native IO and Format errors safely to Python."""
+    base_path = tmp_path / "base.big"
+    target_path = tmp_path / "target.big"
+
+    base_path.write_bytes(big.pack_to_memory({"data/same_size.ini": b"1234"}))
+    target_path.write_bytes(big.pack_to_memory({"data/same_size.ini": b"5678"}))
+
+    # Truncate the target file physically to trigger streaming bounds check failure
+    with open(target_path, "ab") as f:
+        f.truncate(target_path.stat().st_size - 2)
+
+    with pytest.raises(big.BigFormatError, match="Extraction bounds exceeded"):
+        big.diff(base_path, target_path)
 
 
 def test_cpp_api_raises_big_format_error_on_corrupt_magic(tmp_path: Path):
