@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import List, Tuple
 
 try:
-    from parser import ConstructFile
+    from parser import ConstructFile, IniParseError
 except ImportError:
-    from _prototype.ini.parser import ConstructFile
+    from _prototype.ini.parser import ConstructFile, IniParseError
 
 
 @dataclass(frozen=True)
@@ -316,9 +316,12 @@ if __name__ == "__main__":
     INPUT_PATH = Path(r"L:\Lord-of-the-Mods_test\copied_aotr_ini\ini\object\neutral\aotrbalroglair.ini")
     OUTPUT_PATH = Path(r"L:/Lord-of-the-Mods/_prototype/ini/file-reformat.ini")
 
-    verify_file_roundtrip(
-        input_file=INPUT_PATH,
-        output_file=OUTPUT_PATH,
-        strict=False,
-        max_reported_hunks=30,
-    )
+    try:
+        verify_file_roundtrip(
+            input_file=INPUT_PATH,
+            output_file=OUTPUT_PATH,
+            strict=False,
+            max_reported_hunks=30,
+        )
+    except IniParseError as e:
+        print(f"Parsing failed: {e}")

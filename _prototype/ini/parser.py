@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Tuple, Union, cast
 
-from ._delimiters import INI_DELIMITERS, STR_DELIMITERS
+from _delimiters import INI_DELIMITERS, STR_DELIMITERS
 
 class IniParseError(ValueError):
     """Domain-specific exception for parsing errors."""
@@ -447,6 +447,12 @@ class ConstructFile:
         if self.last_comment:
             self.context_stack[-1].append(CommentNode(text=self.last_comment))
             self.last_comment = ''
+
+        if self.current_level != self.start_level:
+            raise IniParseError(
+                f"Unexpected EOF in {self.name}: unclosed block(s) remain "
+                f"(current_level {self.current_level} != start_level {self.start_level})."
+            )
 
     def _get_lookup_level(self) -> int:
         """Calculates schema depth, shifting by 1 when inside a transparent ReplaceModule wrapper."""
