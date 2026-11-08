@@ -15,8 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Cooperative preemption: returning `false` (or `Python False`) from `progress_callback` immediately aborts operations with `BigArchiveError` and triggers RAII cleanup.
 - **Zero-Copy Buffer Protocol Integration**:
   - `BigPacker.pack_to_memory` and high-level `pack_to_memory` now accept zero-copy Python Buffer Protocol objects (`bytes`, `bytearray`, `memoryview`) via RAII `Py_buffer` pinning.
+  - Introduced `BufferAllocator` and `PythonBytesAllocator` to write serialized archive buffers directly into Python `bytes` heap memory without intermediate C++ vector duplication.
+- **Single-Asset Chunk Streaming**:
+  - Added `stream_entry` to `BigArchive` and `BigOverlay` to stream large asset payloads (e.g. multi-gigabyte video or map files) in 1 MB chunks directly to callbacks without memory spikes.
+- **Lookup Performance & Value Semantics**:
+  - Optimized `BigArchive` path resolution from $O(N)$ to $O(1)$ via internal lowercase hash indexing.
+  - Implemented C++20 value semantics (`operator==`, `operator<=>`) and Python magic methods (`__eq__`, `__lt__`, `__hash__`) for `BigEntry` and `BigOverlayEntry`.
+  - Added lifecycle controls (`close()`, `closed`, context manager) to `BigOverlay`.
+  - Added `create_directories` strict directory creation flag to `BigArchive::extract_all` and `lotm.big.unpack`.
 
 ### Security & Hardening
+- **Static CRT & Stable ABI Linkage**:
+  - Statically linked MSVC runtime libraries (`/MT`) in Release mode to eliminate external `MSVCP140.dll` dependencies on clean Windows 11 machines.
+  - Enabled Python 3.12+ `STABLE_ABI` for forward binary compatibility across Python minor versions.
 - **Atomic File Serialization**:
   - Replaced direct in-place output truncation with atomic writes to temporary sibling files (`.lotm_tmp`) followed by `std::filesystem::rename` commits, ensuring pre-existing archives are never corrupted or destroyed on mid-stream exceptions.
 - **Header & 32-Bit Limit Hardening**:

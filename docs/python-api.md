@@ -61,16 +61,17 @@ archive_bytes = pack_to_memory(virtual_mod)
 
 ## `lotm.big.unpack`
 
-### `unpack(big_path: str | os.PathLike[str], output_dir: str | os.PathLike[str], filter_pattern: str | None = None, progress_callback: Callable[[ProgressReport], bool | None] | None = None) -> list[lotm.big.BigEntry]`
-Extracts the contents of a BIG4 archive into a designated folder. Raises FileNotFoundError if the target extraction directory does not exist. Exposed directly from `lotm.big` (implemented in `lotm.big.unpacker`).
+### `unpack(big_path: str | os.PathLike[str], output_dir: str | os.PathLike[str], filter_pattern: str | None = None, progress_callback: Callable[[ProgressReport], bool | None] | None = None, create_directories: bool = True) -> list[lotm.big.BigEntry]`
+Extracts the contents of a BIG4 archive into a designated folder. Exposed directly from `lotm.big` (implemented in `lotm.big.unpacker`).
 
 * **`big_path`**: `str | os.PathLike[str]` pointing to the source `.big` archive to read.
 * **`output_dir`**: `str | os.PathLike[str]` indicating the target extraction directory.
 * **`filter_pattern`**: Optional glob string (e.g. `"data/ini/*.ini"`) to extract only matching files.
 * **`progress_callback`**: Optional callable receiving a `ProgressReport` instance. Returning `False` cancels the operation and triggers cleanup of partial extractions.
+* **`create_directories`**: If `True`, automatically creates the output directory tree. If `False`, raises `FileNotFoundError` if `output_dir` does not exist prior to extraction.
 * **Returns**: A list of `BigEntry` objects containing `name`, `size`, and `offset` metadata for each extracted entry.
 * **Exceptions**:
-  * `FileNotFoundError`: Raised if the source `.big` file or target output directory cannot be found.
+  * `FileNotFoundError`: Raised if the source `.big` file cannot be found, or if the target output directory cannot be found when `create_directories` is `False`.
   * `lotm.big.BigFormatError` (Native): Raised if the BIG4 magic header is missing, corrupted, or if physical archive bounds are breached.
   * `lotm.big.BigSecurityError` (Native): Raised if the archive contains directory traversals (Zip-Slip), Windows DOS device names, Alternate Data Streams (`:`), directory symlinks, or amplification (Zip-Bomb) structures.
   * `lotm.big.BigArchiveError` (Native): Raised if standard OS file stream operations fail or the operation is cancelled.
@@ -102,19 +103,26 @@ For advanced use cases, the native `BigArchive` class provides object-oriented a
 from lotm.big import BigArchive
 
 with BigArchive("my_mod.big") as arc:
+    print(f"Archive is bound to {arc.file_path}")
     entries = arc.get_entries("*.dds")
     print(f"Archive contains {len(entries)} texture files.")
 # arc is now closed, memory is freed, and further calls will raise BigArchiveError.
 ```
 
-### `read_entry(entry: str | BigEntry) -> bytes`
+### `read_entry(entry: str | os.PathLike[str] | BigEntry) -> bytes`
 Reads a single archive entry directly into memory as a `bytes` object (fully supporting the Python Buffer Protocol) without unpacking the entire archive to disk. The GIL is safely released during physical I/O.
 
-* **`entry`**: A `str` (the internal path inside the archive, matched case-insensitively using standard SAGE rules) or a `BigEntry` object obtained from `get_entries()`.
+* **`entry`**: A string/Path object (internal path matched case-insensitively using standard SAGE rules) or a `BigEntry` object obtained from `get_entries()`.
 * **Returns**: A `bytes` object containing the binary file payload.
 * **Exceptions**:
   * `lotm.big.BigArchiveError` (Native): Raised if the archive is closed, the file is unreadable, or the requested entry does not exist.
   * `lotm.big.BigFormatError` (Native): Raised if the physical bounds of the archive are breached during the read.
+
+### `stream_entry(entry: str | os.PathLike[str] | BigEntry, chunk_callback: Callable[[memoryview], bool | None]) -> None`
+Streams an entry payload strictly from the source archive through reusable buffers without materializing the entire file in RAM. Recommended for large assets (`.vp6`, `.map`, `.w3d`).
+
+* **`entry`**: A string/Path object or a `BigEntry` object.
+* **`chunk_callback`**: Callable invoked sequentially with each memoryview chunk (up to 1MB). Return `False` to abort streaming.
 
 **Usage Example:**
 ```python
@@ -122,16 +130,15 @@ from lotm.big import BigArchive, BigArchiveError
 
 try:
     with BigArchive("downloaded_mod.big") as arc:
-        # Read via case-insensitive path string
-        ini_data = arc.read_entry("data/weapon.ini")
-        
-        # Zero-copy memoryview parsing
-        with memoryview(ini_data) as mv:
-            header = mv[:10].tobytes()
-            print(f"Header: {header}")
+        # Zero-copy streaming for large video assets
+        def _process_video(chunk: memoryview) -> bool:
+            # Send chunk bytes to decoder or disk sink
+            return True
+            
+        arc.stream_entry("data/movies/intro.vp6", _process_video)
             
 except BigArchiveError as err:
-    print(f"Failed to read entry: {err}")
+    print(f"Failed to stream entry: {err}")
 ```
 
 ---
@@ -140,17 +147,10 @@ except BigArchiveError as err:
 
 The `BigDiff` engine compares two archives structurally and byte-by-byte.
 
-### `diff(base_archive, target_archive, filter_pattern=None) -> BigDiffResult`
+### `diff(base: str | Path | BigArchive, target: str | Path | BigArchive, filter_pattern=None) -> BigDiffResult`
 Outputs a `BigDiffResult` categorizing files into `added`, `removed`, `modified`, and `unchanged`.
-```python
-from lotm.big import diff
 
-result = diff("vanilla.big", "modded.big")
-if result.has_differences:
-    print(f"Modified {len(result.modified)} files.")
-```
-
-### `create_patch(base_archive, target_archive, output_file, filter_pattern=None, progress_callback=None) -> None`
+### `create_patch(base, target, output_file, filter_pattern=None, progress_callback=None) -> None`
 Automatically packs only the added and modified entries into a minimal, standalone patch archive. An in-memory variant (`create_patch_to_memory`) is also available.
 
 ---
@@ -160,13 +160,16 @@ Automatically packs only the added and modified entries into a minimal, standalo
 Simulates the SAGE engine's load-order to resolve the effective virtual file tree across multiple `.big` files.
 
 ### `load_overlay(source: Path | Iterable[Path]) -> BigOverlay`
+`BigOverlay` exposes `read_entry(name)` and `stream_entry(name, cb)` matching `BigArchive` semantics. It also supports context managers to release memory deterministically.
+
 ```python
 from lotm.big import load_overlay
 
 # Pass a directory to load all enclosed archives alphabetically, or pass a specific sequence list.
-overlay = load_overlay(["base.big", "patch.big", "mod.big"])
-
-# Resolve the winning payload after all overrides are calculated
-resolved = overlay.resolve("data/weapon.ini")
-print(f"Weapon stats sourced from: {resolved.source_archive.name}")
+with load_overlay(["base.big", "patch.big", "mod.big"]) as overlay:
+    # Resolve the winning payload after all overrides are calculated
+    resolved = overlay.resolve("data/weapon.ini")
+    print(f"Weapon stats sourced from: {resolved.source_archive.name}")
+    
+    weapon_bytes = overlay.read_entry("data/weapon.ini")
 ```
