@@ -51,7 +51,12 @@ INI_DELIMITERS: Tuple[Tuple[Tuple[str, ...], ...], ...] = (
     (
         ("Object", "ChildObject", "ObjectReskin", "CrateData", "FormationAssistant", "FXParticleSystem", "FXList"),
         ("Draw", "Body", "ArmorSet", "WeaponSet", "LocomotorSet", "UnitSpecificSounds", "Flammability", "ThreatBreakdown", "ClientUpdate", "ClientBehavior", "Behavior", "AutoResolveArmor", "AutoResolveWeapon", "AddModule", "ReplaceModule", "InheritableModule", "FormationPreviewDecal", "FormationPreviewItemDecal", "UnitDefinition", "FormationTemplate", "FormationSelection", "Alpha", "Update", "Physics", "EmissionVelocity", "EmissionVolume", "Event", "Emitter", "Wind", "System", "Color", "Sound", "ParticleSystem", "DynamicDecal", "TerrainScorch", "BuffNugget", "ViewShake", "CameraShakerVolume", "TintDrawable", "FXListAtBonePos", "LightPulse", "EvaEvent", "AttachedModel"),
-        ("LodOptions", "DefaultModelConditionState", "ModelConditionState", "IdleAnimationState", "AnimationState", "TransitionState", "SoundState", "ProductionModifier", "FireWeaponNugget", "InvisibilityNugget", "FloodMember", "SoundUpgrade", "Turret", "ReplaceObject", "Radius", "Opacity", "Angle", "DecalTemplate", "GridDecalTemplate", "MeleeBehavior", "Behavior", "Body", "ClientBehavior", "ObjectStatusOfContained =", "Rows", "AddEmotion = OVERRIDE"),
+        ("LodOptions", "DefaultModelConditionState", "ModelConditionState", "IdleAnimationState", "AnimationState",
+         "TransitionState", "SoundState", "ProductionModifier", "FireWeaponNugget", "InvisibilityNugget", "FloodMember",
+         "SoundUpgrade", "Turret", "ReplaceObject",
+         # "Radius",  # not found in AotR INI using ^\s*Radius\b[ \t]*(?:(?:;|//).*)?$. collides with Radius = property.
+         "Opacity", "Angle", "DecalTemplate", "GridDecalTemplate", "MeleeBehavior", "Behavior", "Body",
+         "ClientBehavior", "ObjectStatusOfContained =", "Rows", "AddEmotion = OVERRIDE"),
         ("Animation", "BeginScript", "MeleeBehavior", "UnitSpecificSounds"),
     ),
     (
