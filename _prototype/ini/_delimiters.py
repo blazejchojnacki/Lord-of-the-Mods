@@ -1,0 +1,184 @@
+"""Delimiters in INI, INC and STR files. Statically defined tuples for direct mapping to C++ constexpr arrays"""
+
+from typing import Tuple
+
+
+INI_DELIMITERS: Tuple[Tuple[Tuple[str, ...], ...], ...] = (
+    (
+        (
+            "AudioEvent", "Multisound", "StreamedSound", "AmbientStream", "Animation",
+            "Armor", "AudioSettings", "AnimationSoundClientBehaviorGlobalSetting",
+            "ModifierList", "BannerType", "ButtonSet", "CommandButton", "CommandMap",
+            "DebugCommandMap", "CommandSet", "ControlBarResizer", "SpecialPower",
+            "DamageFX", "DrawGroupInfo", "EmotionNugget", "SkyboxTextureSet",
+            "GlowEffect", "RingEffect", "FireEffect", "CloudEffect", "ShadowMap",
+            "Fire", "FontDefaultSettings", "FontSubstitution", "GameData",
+            "StaticGameLOD", "DynamicGameLOD", "AudioLOD", "HouseColor",
+            "LargeGroupAudioUnusedKnownKeys", "LightPointLevel", "LivingWorldSound",
+            "LivingWorldObject", "LivingWorldAnimObject", "LivingWorldAITemplate",
+            "AutoResolveArmor", "AutoResolveBody", "AutoResolveCombatChain",
+            "AutoResolveHandicapLevel", "AutoResolveReinforcementSchedule",
+            "AutoResolveWeapon", "LivingWorldPlayerTemplate", "Locomotor",
+            "MappedImage", "MeshNameMatches", "MiscAudio", "Mouse", "MouseCursor",
+            "OnlineChatColors", "MultiplayerSettings", "MultiplayerColor",
+            "MusicTrack", "OptionGroup", "ParticleSystem", "Pathfinder",
+            "PlayerAIType", "PlayerTemplate", "Rank", "Bridge", "Road",
+            "ShellMenuScheme", "Science", "ScoredKillEvaAnnouncer", "SpecialPower",
+            "DialogEvent", "Terrain", "Upgrade", "VictorySystemData",
+            "FactionVictoryData", "Video", "WaterSet", "WaterTransparency",
+            "WaterTextureList", "Weather", "WeatherData", "WebpageURL", "AIBase",
+            "AIDozerAssignment", "LoadSubsystem", "SpawnArmy", "ConcurrentRegionBonus",
+            "Credits",
+        ),
+    ),
+    (
+        ("AptButtonTooltipMap",),
+        ("ButtonMap",),
+    ),
+    (
+        ("ArmySummaryDescription",),
+        ("UnitCategory",),
+    ),
+    (
+        ("AwardSystem",),
+        ("ObjectAward", "ThingStat"),
+        ("Trigger",),
+    ),
+    (
+        ("ControlBarScheme",),
+        ("ImagePart",),
+    ),
+    (
+        ("Object", "ChildObject", "ObjectReskin", "CrateData", "FormationAssistant", "FXParticleSystem", "FXList"),
+        ("Draw", "Body", "ArmorSet", "WeaponSet", "LocomotorSet", "UnitSpecificSounds", "Flammability", "ThreatBreakdown", "ClientUpdate", "ClientBehavior", "Behavior", "AutoResolveArmor", "AutoResolveWeapon", "AddModule", "ReplaceModule", "InheritableModule", "FormationPreviewDecal", "FormationPreviewItemDecal", "UnitDefinition", "FormationTemplate", "FormationSelection", "Alpha", "Update", "Physics", "EmissionVelocity", "EmissionVolume", "Event", "Emitter", "Wind", "System", "Color", "Sound", "ParticleSystem", "DynamicDecal", "TerrainScorch", "BuffNugget", "ViewShake", "CameraShakerVolume", "TintDrawable", "FXListAtBonePos", "LightPulse", "EvaEvent", "AttachedModel"),
+        ("LodOptions", "DefaultModelConditionState", "ModelConditionState", "IdleAnimationState", "AnimationState", "TransitionState", "SoundState", "ProductionModifier", "FireWeaponNugget", "InvisibilityNugget", "FloodMember", "SoundUpgrade", "Turret", "ReplaceObject", "Radius", "Opacity", "Angle", "DecalTemplate", "GridDecalTemplate", "MeleeBehavior", "Behavior", "Body", "ClientBehavior", "ObjectStatusOfContained =", "Rows", "AddEmotion = OVERRIDE"),
+        ("Animation", "BeginScript", "MeleeBehavior", "UnitSpecificSounds"),
+    ),
+    (
+        ("CreateAHeroSystem",),
+        ("CreateAHeroBlingBinder", "CreateAHeroBling", "CreateAHeroClass"),
+        ("SubClass",),
+        ("Attribute", "ViewInfo"),
+    ),
+    (
+        ("CrowdResponse",),
+        ("Threshold",),
+        ("UnitSpecificSounds",),
+    ),
+    (
+        ("AIData",),
+        ("SideInfo", "SkirmishBuildList", "AttackPriority"),
+        ("Structure",),
+    ),
+    (
+        ("PredefinedEvaEvent", "NewEvaEvent", "MiscEvaData"),
+        ("SideSound",),
+    ),
+    (
+        ("ExperienceScalarTable", "ExperienceLevel"),
+        ("SelectionDecal",),
+    ),
+    (
+        ("FireLogicSystem",),
+        ("TerrainCellType",),
+    ),
+    (
+        ("FormationAssistant",),
+        ("UnitDefinition", "FormationTemplate", "FormationSelection"),
+        ("Rows",),
+    ),
+    (
+        ("InGameNotificationBox",),
+        ("NotificationType",),
+    ),
+    (
+        ("InGameUI",),
+        ("RadiusCursorTemplate",),
+    ),
+    (
+        ("LargeGroupAudioMap", "LargeGroupAudioUnusedKnownKeys"),
+        ("Sound",),
+    ),
+    (
+        ("LinearCampaign",),
+        ("Mission",),
+    ),
+    (
+        ("LivingWorldMapInfo", "LivingWorldArmyIcon", "LivingWorldSound", "LivingWorldObject", "LivingWorldAnimObject", "LivingWorldBuildingIcon", "LivingWorldBuildPlotIcon"),
+        ("Object",),
+    ),
+    (
+        ("AutoResolveLeadership",),
+        ("BonusForLevel",),
+    ),
+    (
+        ("LivingWorldAutoResolveResourceBonus", "LivingWorldAutoResolveSciencePurchasePointBonus"),
+        ("Bonus",),
+    ),
+    (
+        ("LivingWorldBuilding",),
+        ("BuildingNugget",),
+        ("ArmyToSpawn",),
+    ),
+    (
+        ("LivingWorldRegionEffects",),
+        ("BordersEffect", "FilledOwnershipEffect", "MouseoverEffectFlareup", "MouseoutEffectFlareup", "HomeRegionHighlight", "RegionSelectionEffect", "UnifiedEffect"),
+        ("ColorIntensityControlPoint",),
+    ),
+    (
+        ("ObjectCreationList",),
+        ("CreateObject", "CreateDebris", "FireWeapon"),
+    ),
+    (
+        ("StanceTemplate",),
+        ("Stance",),
+        ("MeleeBehavior",),
+    ),
+    (
+        ("StrategicHUD",),
+        ("ArmyDetailsPanel", "BattleResolver", "BuildQueueDetailsPanel", "CancelArmyMemberMoveButton", "CancelArmyMoveButton", "Checklist", "DestroyBuildingButton", "CancelBuildingConstructionButton", "DisbandArmyMemberButton", "DynamicAutoResolveDialog", "OptionsButton", "ObjectivesButton", "RegionDetailsPanelStructuresPage", "RegionDisplay", "StatsDisplay", "ToggleSelectionDetailsButton", "TypeImages", "UpgradeUnitButton"),
+    ),
+    (
+        ("Weapon",),
+        ("DamageNugget", "DamageFieldNugget", "DOTNugget", "AttributeModifierNugget", "StealMoneyNugget", "ProjectileNugget", "MetaImpactNugget", "SlaveAttackNugget", "EmotionWeaponNugget", "FireLogicNugget", "WeaponOCLNugget", "HordeAttackNugget", "DamageContainedNugget", "LuaEventNugget", "ParalyzeNugget", "SpawnAndFadeNugget", "GrabNugget", "SpecialModelConditionNugget", "OpenGateNugget"),
+    ),
+    (
+        ("WindowTransition",),
+        ("Window",),
+        ("Transition",),
+    ),
+    (
+        ("SkirmishAIData",),
+        ("CombatChainDefinition", "BrutalDifficultyCheats", "DifficultyTuning"),
+    ),
+    (
+        ("ArmyDefinition",),
+        ("AIEconomyAssigment", "AIWallNodeAssignment", "ArmyMemberDefinition"),
+    ),
+    (
+        ("LivingWorldRegionCampaign", "RegionCampain"),
+        ("Region", "LivingWorldPlayerArmy"),
+        ("Connection", "RestrictBuildings", "ArmyEntry"),
+    ),
+    (
+        ("LivingWorldCampaign",),
+        ("Scenario", "Act", "AddPlayer", "Tutorial", "LivingWorldVictoryType"),
+        ("PlayerDefeatCondition", "TeamDefeatCondition", "TeamVictoryCondition", "EyeTowerPoints", "OwnershipSet", "Turn", "SpawnArmy", "StartingRestriction"),
+        ("SpawnBuildings", "SpawnArmies", "Phase"),
+        ("Session",),
+        ("TaskAfterAudio",),
+    ),
+)
+
+STR_DELIMITERS: Tuple[str, ...] = (
+    "LETTER", "NUMBER", "TIME", "Color", "Team", "MSG", "GUI", "APT", "Apt", "URL",
+    "TOOLTIP", "ToolTip", "Tooltip", "MOTD", "ERROR", "Buddy", "QM", "FTP",
+    "FtpError", "WOL", "CHAT", "Chat", "LAN", "Network", "INI", "SIDE", "KEYBOARD",
+    "MapTransfer", "CAMPAIGN", "DOZER", "UPGRADE", "Upgrade", "Mouse", "SCRIPT",
+    "SCIENCE", "CONTROLBAR", "CONTROLBar", "Controlbar", "RADAR", "OBJECT",
+    "Object", "CampaignName", "MAP", "Map", "DIALOGEVENT", "Audio", "LABEL",
+    "MESSAGE", "ThingTemplate", "CREDITS", "STAT", "Stat", "LW", "LWScenario",
+    "LWA", "WOTR", "WOTRTutorial", "WOTRSCRIPT", "BANNERUI", "SUBTITLE",
+    "BONUSROUND", "FESL", "APPDATA", "RULE", "VALUE", "CAH", "CreateAHero",
+    "WIZARD", "STRATEGICHUD", "HUD", "CP", "Award", "CLAN", "Version",
+)

@@ -8,11 +8,12 @@ SPDX-License-Identifier: GPL-3.0-or-later
 """
 
 import os
-import json
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Tuple, Union, cast
+
+from ._delimiters import INI_DELIMITERS, STR_DELIMITERS
 
 class IniParseError(ValueError):
     """Domain-specific exception for parsing errors."""
@@ -20,7 +21,6 @@ class IniParseError(ValueError):
 
 LEVEL_INDENT = ' ' * 4
 INI_ENDS = ('End', 'END', 'EndScript')
-THIS_DIR = Path(__file__).parent.resolve()
 
 
 @dataclass(frozen=True)
@@ -62,8 +62,6 @@ class IncludeNode:
 
 AstNode = Union[CommentNode, StatementNode, IncludeNode, 'ConstructLevel']
 
-INI_DELIMITERS: List[List[List[str]]] = []
-STR_DELIMITERS: List[str] = []
 INI_DELIMITER_RULES: List[List[List[DelimiterRule]]] = []
 STR_DELIMITER_RULES: List[DelimiterRule] = []
 
@@ -101,28 +99,15 @@ def _combine_text_and_comment(text: str, comment: str) -> str:
 
 
 def load_delimiters() -> None:
-    global INI_DELIMITERS, STR_DELIMITERS, INI_DELIMITER_RULES, STR_DELIMITER_RULES
+    global INI_DELIMITER_RULES, STR_DELIMITER_RULES
     if INI_DELIMITER_RULES and STR_DELIMITER_RULES:
         return
 
-    ini_path = THIS_DIR / '_delimiters_ini.json'
-    str_path = THIS_DIR / '_delimiters_str.json'
-
-    for delimiter_path in (ini_path, str_path):
-        if delimiter_path.is_file():
-            with open(delimiter_path, 'r', encoding='utf-8') as delimiters_buffer:
-                if '_ini' in delimiter_path.name:
-                    INI_DELIMITERS = cast(List[List[List[str]]], json.load(delimiters_buffer))
-                elif '_str' in delimiter_path.name:
-                    STR_DELIMITERS = cast(List[str], json.load(delimiters_buffer))
-        else:
-            raise IniParseError(f"delimiters file not found: {delimiter_path}")
-
     INI_DELIMITER_RULES = [
-        [_compile_delimiter_rules(level_list) for level_list in group]
+        [_compile_delimiter_rules(list(level_list)) for level_list in group]
         for group in INI_DELIMITERS
     ]
-    STR_DELIMITER_RULES = _compile_delimiter_rules(STR_DELIMITERS)
+    STR_DELIMITER_RULES = _compile_delimiter_rules(list(STR_DELIMITERS))
 
 
 def _read_file_lines(file_path: str, file_content: str | None = None) -> List[str]:
