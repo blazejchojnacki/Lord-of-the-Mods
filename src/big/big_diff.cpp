@@ -352,34 +352,35 @@ namespace lotm::big {
                 }
             }
         }
+    }
 
-        std::vector<uint8_t> BigDiff::create_patch_to_memory(
-            const std::filesystem::path& base_path,
-            const std::filesystem::path& target_path,
-            std::string_view filter_pattern,
-            ProgressCallback progress_callback
-        ) {
-            std::vector<uint8_t> result;
-            create_patch_to_memory(base_path, target_path, [&](std::size_t size) {
-                result.resize(size);
-                return result.data();
-                }, filter_pattern, std::move(progress_callback));
-            return result;
-        }
+    std::vector<uint8_t> BigDiff::create_patch_to_memory(
+        const std::filesystem::path& base_path,
+        const std::filesystem::path& target_path,
+        std::string_view filter_pattern,
+        ProgressCallback progress_callback
+    ) {
+        std::vector<uint8_t> result;
+        create_patch_to_memory(base_path, target_path, [&](std::size_t size) {
+            result.resize(size);
+            return result.data();
+            }, filter_pattern, std::move(progress_callback));
+        return result;
+    }
 
-        void BigDiff::create_patch_to_memory(
-            const std::filesystem::path& base_path,
-            const std::filesystem::path& target_path,
-            const BufferAllocator& allocator,
-            std::string_view filter_pattern,
-            ProgressCallback progress_callback
-        ) {
-            const BigArchive base_archive(base_path);
-            const BigArchive target_archive(target_path);
-            create_patch_to_memory(base_archive, target_archive, allocator, filter_pattern, std::move(progress_callback));
-        }
+    void BigDiff::create_patch_to_memory(
+        const std::filesystem::path& base_path,
+        const std::filesystem::path& target_path,
+        const BufferAllocator& allocator,
+        std::string_view filter_pattern,
+        ProgressCallback progress_callback
+    ) {
+        const BigArchive base_archive(base_path);
+        const BigArchive target_archive(target_path);
+        create_patch_to_memory(base_archive, target_archive, allocator, filter_pattern, std::move(progress_callback));
+    }
 
-        void BigDiff::create_patch(
+    void BigDiff::create_patch(
         const BigArchive& base_archive,
         const BigArchive& target_archive,
         const std::filesystem::path& output_file,
