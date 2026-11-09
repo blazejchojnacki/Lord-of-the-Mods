@@ -57,8 +57,13 @@ class StatementNode:
 @dataclass
 class IncludeNode:
     """Represents a #include preprocessor directive."""
-    text: str
+    raw_path: str
     comment: str = ""
+
+    @property
+    def clean_path(self) -> str:
+        """Normalized path with quotes stripped and forward slashes."""
+        return self.raw_path.strip(' \t"\'').replace('\\', '/')
 
 
 @dataclass
@@ -225,7 +230,7 @@ def _serialize_iterative(items: List[Any], start_level: int, file_type: str) -> 
         if isinstance(item, ConstructLevel):
             if item.comment:
                 output.append(_format_indented_text(item.comment, level))
-
+            
             header_parts = [part for part in (item._class, item.name, item.identifier) if part]
             if header_parts:
                 header_line = _combine_text_and_comment(sep.join(header_parts), item.header_comment)
@@ -239,7 +244,7 @@ def _serialize_iterative(items: List[Any], start_level: int, file_type: str) -> 
         elif isinstance(item, ScriptNode):
             if item.comment:
                 output.append(_format_indented_text(item.comment, level))
-
+            
             header_line = _combine_text_and_comment(f"{item.name} {item.identifier}".strip(), item.header_comment)
             output.append(_format_indented_text(header_line.lstrip(), level))
 
@@ -266,9 +271,13 @@ def _serialize_iterative(items: List[Any], start_level: int, file_type: str) -> 
             for child in reversed(item.items):
                 stack.append((child, 1, False))
 
-        elif isinstance(item, (StatementNode, IncludeNode)):
+        elif isinstance(item, StatementNode):
             output.append(_format_indented_text(_combine_text_and_comment(item.text, item.comment), level))
 
+        elif isinstance(item, IncludeNode):
+            directive_text = f'#include {item.raw_path}'
+            output.append(_format_indented_text(_combine_text_and_comment(directive_text, item.comment), level))
+        
         elif isinstance(item, CommentNode):
             output.append(_format_indented_text(item.text, level))
 
@@ -415,6 +424,24 @@ class ConstructLevel:
 
     def print(self, level: int = 0, file_type: str = '.ini') -> str:
         return _serialize_iterative([self], level, file_type)
+
+
+def validate_include(node: IncludeNode, current_file: Path, virtual_root: Path) -> Path:
+    """Resolves target path within the virtual root jail; raises IniParseError on escape."""
+    target_rel = Path(node.clean_path)
+    
+    candidate = (current_file.parent / target_rel).resolve()
+    
+    if not candidate.is_file():
+        candidate = (virtual_root / target_rel).resolve()
+
+    if not candidate.is_relative_to(virtual_root.resolve()):
+        raise IniParseError(f"Security violation: {node.raw_path} escapes virtual root {virtual_root}")
+
+    if not candidate.is_file():
+        raise IniParseError(f"Include file not found: {node.raw_path}")
+
+    return candidate
 
 
 @dataclass
@@ -673,7 +700,8 @@ class ConstructFile:
             self.defines.append(_combine_text_and_comment(' '.join(words_signs), inline_comment))
             return True
         if words[0] == '#include':
-            self.context_stack[-1].append(IncludeNode(text=' '.join(words_signs), comment=inline_comment))
+            raw_path = ' '.join(words_signs[1:]) if len(words_signs) > 1 else ''
+            self.context_stack[-1].append(IncludeNode(raw_path=raw_path, comment=inline_comment))
             return True
         return False
 
