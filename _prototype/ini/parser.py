@@ -11,7 +11,7 @@ import os
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Tuple, Union, cast
+from typing import Any, List, Tuple, Union, cast
 
 from _delimiters import INI_DELIMITERS, STR_DELIMITERS
 
@@ -21,6 +21,7 @@ class IniParseError(ValueError):
 
 LEVEL_INDENT = ' ' * 4
 INI_ENDS = ('End', 'END', 'end')
+MAX_INI_DEPTH = 16
 
 
 @dataclass(frozen=True)
@@ -72,27 +73,7 @@ class ScriptNode:
     content: List[str] = field(default_factory=list)
 
     def print(self, level: int = 0, file_type: str = '.ini') -> str:
-        output = ''
-        if self.comment:
-            output += _format_indented_text(self.comment, level)
-        
-        header_line = _combine_text_and_comment(
-            f"{self.name} {self.identifier}".strip(), self.header_comment
-        )
-        output += _format_indented_text(header_line.lstrip(), level)
-
-        inner_level = level + 1
-        for line in self.content:
-            if line:
-                output += _format_indented_text(line, inner_level)
-            else:
-                output += '\n'
-
-        if self.end_token:
-            end_line = _combine_text_and_comment(self.end_token, self.end_comment)
-            output += f"{LEVEL_INDENT * level}{end_line}\n"
-
-        return output
+        return _serialize_iterative([self], level, file_type)
 
 
 AstNode = Union[CommentNode, StatementNode, IncludeNode, ScriptNode, 'ConstructLevel']
@@ -221,6 +202,79 @@ def recognize_structure(file_path: str, file_content: str | None = None) -> Tupl
     return [], 0
 
 
+def _serialize_iterative(items: List[Any], start_level: int, file_type: str) -> str:
+    """Flattens AST serialization into a stable iterative stack, avoiding Python RecursionError."""
+    output: List[str] = []
+    sep = ' ' if file_type in ['.ini', '.inc'] else ':'
+
+    # Stack stores (item, current_depth_level, is_closing_phase)
+    stack = [(item, start_level, False) for item in reversed(items)]
+
+    while stack:
+        item, level, is_closing = stack.pop()
+
+        if is_closing:
+            if isinstance(item, ConstructLevel) and item.end_token:
+                end_line = _combine_text_and_comment(item.end_token, item.end_comment)
+                output.append(f"{LEVEL_INDENT * level}{end_line}\n")
+            elif isinstance(item, StrEntry) and item.end_token:
+                end_line = _combine_text_and_comment(item.end_token, item.end_comment)
+                output.append(f"{end_line}\n")
+            continue
+
+        if isinstance(item, ConstructLevel):
+            if item.comment:
+                output.append(_format_indented_text(item.comment, level))
+
+            header_parts = [part for part in (item._class, item.name, item.identifier) if part]
+            if header_parts:
+                header_line = _combine_text_and_comment(sep.join(header_parts), item.header_comment)
+                output.append(_format_indented_text(header_line.lstrip(), level))
+
+            stack.append((item, level, True))
+            inner_level = level + 1
+            for child in reversed(item.items):
+                stack.append((child, inner_level, False))
+
+        elif isinstance(item, ScriptNode):
+            if item.comment:
+                output.append(_format_indented_text(item.comment, level))
+
+            header_line = _combine_text_and_comment(f"{item.name} {item.identifier}".strip(), item.header_comment)
+            output.append(_format_indented_text(header_line.lstrip(), level))
+
+            inner_level = level + 1
+            for line in item.content:
+                if line:
+                    output.append(_format_indented_text(line, inner_level))
+                else:
+                    output.append('\n')
+
+            if item.end_token:
+                end_line = _combine_text_and_comment(item.end_token, item.end_comment)
+                output.append(f"{LEVEL_INDENT * level}{end_line}\n")
+
+        elif isinstance(item, StrEntry):
+            if item.comment:
+                output.append(_format_indented_text(item.comment, 0))
+
+            header = f"{item.category}:{item.identifier}" if item.identifier else item.category
+            header_line = _combine_text_and_comment(header, item.header_comment)
+            output.append(f"{header_line}\n")
+
+            stack.append((item, level, True))
+            for child in reversed(item.items):
+                stack.append((child, 1, False))
+
+        elif isinstance(item, (StatementNode, IncludeNode)):
+            output.append(_format_indented_text(_combine_text_and_comment(item.text, item.comment), level))
+
+        elif isinstance(item, CommentNode):
+            output.append(_format_indented_text(item.text, level))
+
+    return ''.join(output)
+
+
 @dataclass
 class StrEntry:
     """Represents a single localized string entry inside a SAGE .str file."""
@@ -233,24 +287,7 @@ class StrEntry:
     items: List[Union[CommentNode, StatementNode]] = field(default_factory=list)
 
     def print(self) -> str:
-        output = ''
-        if self.comment:
-            output += _format_indented_text(self.comment, 0)
-
-        header = f"{self.category}:{self.identifier}" if self.identifier else self.category
-        header = _combine_text_and_comment(header, self.header_comment)
-        output += f"{header}\n"
-
-        for item in self.items:
-            if isinstance(item, StatementNode):
-                output += _format_indented_text(_combine_text_and_comment(item.text, item.comment), 1)
-            else:
-                output += _format_indented_text(item.text, 1)
-
-        if self.end_token:
-            end_line = _combine_text_and_comment(self.end_token, self.end_comment)
-            output += f"{end_line}\n"
-        return output
+        return _serialize_iterative([self], 0, '.str')
 
 
 @dataclass
@@ -263,12 +300,7 @@ class StrDocument:
     def print(self) -> str:
         output = ''
         for entry in self.entries:
-            if isinstance(entry, StrEntry):
-                output += entry.print()
-            elif isinstance(entry, StatementNode):
-                output += _format_indented_text(_combine_text_and_comment(entry.text, entry.comment), 0)
-            elif isinstance(entry, CommentNode):
-                output += _format_indented_text(entry.text, 0)
+            output += _serialize_iterative([entry], 0, '.str')
             output += '\n'
         return output
 
@@ -382,30 +414,7 @@ class ConstructLevel:
         self.items.append(item)
 
     def print(self, level: int = 0, file_type: str = '.ini') -> str:
-        output = ''
-        if self.comment:
-            output += _format_indented_text(self.comment, level)
-
-        sep = ' ' if file_type in ['.ini', '.inc'] else ':'
-        header_parts = [part for part in (self._class, self.name, self.identifier) if part]
-        if header_parts:
-            header_line = _combine_text_and_comment(sep.join(header_parts), self.header_comment)
-            output += _format_indented_text(header_line.lstrip(), level)
-
-        inner_level = level + 1
-        for item in self.items:
-            if isinstance(item, (ConstructLevel, ScriptNode)):
-                output += item.print(level=inner_level, file_type=file_type)
-            elif isinstance(item, (StatementNode, IncludeNode)):
-                output += _format_indented_text(_combine_text_and_comment(item.text, item.comment), inner_level)
-            elif isinstance(item, CommentNode):
-                output += _format_indented_text(item.text, inner_level)
-
-        if self.end_token:
-            end_line = _combine_text_and_comment(self.end_token, self.end_comment)
-            output += f"{LEVEL_INDENT * level}{end_line}\n"
-
-        return output
+        return _serialize_iterative([self], level, file_type)
 
 
 @dataclass
@@ -521,6 +530,9 @@ class ConstructFile:
             return
 
         if lexed.words[0].lower() == 'beginscript':
+            if self.current_level >= MAX_INI_DEPTH:
+                raise IniParseError(f"Security abort: Maximum INI depth ({MAX_INI_DEPTH}) exceeded in {self.name}.")
+
             new_script = ScriptNode(
                 name=lexed.words[0],
                 identifier=' '.join(lexed.words[1:]),
@@ -535,6 +547,9 @@ class ConstructFile:
 
         # Intercept for dynamically keyed FCurve blocks (e.g. "Alpha = FCurve")
         if len(lexed.line_tokens) >= 3 and lexed.line_tokens[1] == '=' and lexed.line_tokens[2].lower() == 'fcurve':
+            if self.current_level >= MAX_INI_DEPTH:
+                raise IniParseError(f"Security abort: Maximum INI depth ({MAX_INI_DEPTH}) exceeded in {self.name}.")
+
             new_fcurve = ConstructLevel(
                 _class=f"{lexed.words[0]} =",
                 name=lexed.words[1],
@@ -589,6 +604,9 @@ class ConstructFile:
         if lookup_level < len(self.active_rules):
             matched_rule = _match_delimiter_rule(line_tokens, self.active_rules[lookup_level])
             if matched_rule is not None:
+                if self.current_level >= MAX_INI_DEPTH:
+                    raise IniParseError(f"Security abort: Maximum INI depth ({MAX_INI_DEPTH}) exceeded in {self.name}.")
+
                 remaining_words = words[matched_rule.word_count:]
 
                 block_name = ""
@@ -668,15 +686,9 @@ class ConstructFile:
             for line in self.defines:
                 output += f'{line}\n'
 
+        file_type = self.name[-4:] if self.name else '.ini'
         for item in self.items:
-            if isinstance(item, StrEntry):
-                output += item.print()
-            elif isinstance(item, (ConstructLevel, ScriptNode)):
-                output += item.print(self.start_level, self.name[-4:])
-            elif isinstance(item, (StatementNode, IncludeNode)):
-                output += _format_indented_text(_combine_text_and_comment(item.text, item.comment), self.start_level)
-            elif isinstance(item, CommentNode):
-                output += _format_indented_text(item.text, self.start_level)
+            output += _serialize_iterative([item], self.start_level, file_type)
             output += '\n'
         return output
 
