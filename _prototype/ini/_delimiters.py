@@ -27,13 +27,9 @@ INI_DELIMITERS: Tuple[Tuple[Tuple[str, ...], ...], ...] = (
             "DialogEvent", "Terrain", "Upgrade", "VictorySystemData",
             "FactionVictoryData", "Video", "WaterSet", "WaterTransparency",
             "WaterTextureList", "Weather", "WeatherData", "WebpageURL", "AIBase",
-            "AIDozerAssignment", "LoadSubsystem", "SpawnArmy", "ConcurrentRegionBonus",
-            "Credits",
+            "AIDozerAssignment", "LoadSubsystem", "SpawnArmy",
+            "Credits", "AptButtonTooltipMap"
         ),
-    ),
-    (
-        ("AptButtonTooltipMap",),
-        ("ButtonMap",),
     ),
     (
         ("ArmySummaryDescription",),
@@ -50,14 +46,20 @@ INI_DELIMITERS: Tuple[Tuple[Tuple[str, ...], ...], ...] = (
     ),
     (
         ("Object", "ChildObject", "ObjectReskin", "CrateData", "FormationAssistant", "FXParticleSystem", "FXList"),
-        ("Draw", "Body", "ArmorSet", "WeaponSet", "LocomotorSet", "UnitSpecificSounds", "Flammability", "ThreatBreakdown", "ClientUpdate", "ClientBehavior", "Behavior", "AutoResolveArmor", "AutoResolveWeapon", "AddModule", "ReplaceModule", "InheritableModule", "FormationPreviewDecal", "FormationPreviewItemDecal", "UnitDefinition", "FormationTemplate", "FormationSelection", "Alpha", "Update", "Physics", "EmissionVelocity", "EmissionVolume", "Event", "Emitter", "Wind", "System", "Color", "Sound", "ParticleSystem", "DynamicDecal", "TerrainScorch", "BuffNugget", "ViewShake", "CameraShakerVolume", "TintDrawable", "FXListAtBonePos", "LightPulse", "EvaEvent", "AttachedModel"),
+        ("Draw", "Body", "ArmorSet", "WeaponSet", "LocomotorSet", "UnitSpecificSounds", "Flammability",
+         "ThreatBreakdown", "ClientUpdate", "ClientBehavior", "Behavior", "AutoResolveArmor", "AutoResolveWeapon",
+         "AddModule", "ReplaceModule", "InheritableModule", "FormationPreviewDecal", "FormationPreviewItemDecal",
+         "UnitDefinition", "FormationTemplate", "FormationSelection", "Alpha", "Update", "Physics", "EmissionVelocity",
+         "EmissionVolume", "Event", "Emitter", "Wind", "System", "Color", "Sound", "ParticleSystem", "DynamicDecal",
+         "TerrainScorch", "BuffNugget", "ViewShake", "CameraShakerVolume", "TintDrawable", "FXListAtBonePos",
+         "LightPulse", "EvaEvent", "AttachedModel"),
         ("LodOptions", "DefaultModelConditionState", "ModelConditionState", "IdleAnimationState", "AnimationState",
          "TransitionState", "SoundState", "ProductionModifier", "FireWeaponNugget", "InvisibilityNugget", "FloodMember",
-         "SoundUpgrade", "Turret", "ReplaceObject",
-         # "Radius",  # not found in AotR INI using ^\s*Radius\b[ \t]*(?:(?:;|//).*)?$. collides with Radius = property.
-         "Opacity", "Angle", "DecalTemplate", "GridDecalTemplate", "MeleeBehavior", "Behavior", "Body",
-         "ClientBehavior", "ObjectStatusOfContained =", "Rows", "AddEmotion = OVERRIDE"),
-        ("Animation", "BeginScript", "MeleeBehavior", "UnitSpecificSounds"),
+         "SoundUpgrade", "Turret", "ReplaceObject", "DecalTemplate", "GridDecalTemplate", "MeleeBehavior", "Behavior",
+         "Body", "ClientBehavior",
+         "Rows", "AddEmotion = OVERRIDE"),
+        ("Animation",  # comes both with and without = sign as delimiter. See crate.ini / demotest.ini
+         "BeginScript", "MeleeBehavior", "UnitSpecificSounds"),
     ),
     (
         ("CreateAHeroSystem",),
@@ -162,7 +164,7 @@ INI_DELIMITERS: Tuple[Tuple[Tuple[str, ...], ...], ...] = (
     ),
     (
         ("LivingWorldRegionCampaign", "RegionCampain"),
-        ("Region", "LivingWorldPlayerArmy"),
+        ("Region", "LivingWorldPlayerArmy", "ConcurrentRegionBonus"),
         ("Connection", "RestrictBuildings", "ArmyEntry"),
     ),
     (
