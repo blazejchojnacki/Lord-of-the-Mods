@@ -484,10 +484,13 @@ class ConstructFile:
             self.last_comment = ''
 
         if self.current_level != self.start_level:
-            raise IniParseError(
+            err_msg = (
                 f"Unexpected EOF in {self.name}: unclosed block(s) remain "
                 f"(current_level {self.current_level} != start_level {self.start_level})."
             )
+            self.errors.append(err_msg)
+            if self.strict:
+                raise IniParseError(err_msg)
 
     def _get_lookup_level(self) -> int:
         """Calculates schema depth, shifting by 1 when inside a transparent ReplaceModule wrapper."""
