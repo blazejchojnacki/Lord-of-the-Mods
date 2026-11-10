@@ -1,5 +1,5 @@
 """
-@file scripts/fuzz_ini_parser.py
+@file _prototype/ini/fuzz_ini_parser.py
 @brief Batch scanner to test lotm.ini.parser against a directory of SAGE engine files.
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
@@ -10,7 +10,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 import argparse
 import sys
 from pathlib import Path
-from lotm.ini import scan_file_for_errors
+from parser import scan_file_for_errors
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Scan SAGE config files for delimiter mismatches.")
