@@ -14,6 +14,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 # Require Python and nanobind before processing subdirectories
+set(Python_FIND_VIRTUALENV FIRST)
+set(Python_FIND_REGISTRY NEVER)
 find_package(Python 3.12 COMPONENTS Interpreter Development.Module Development.SABIModule REQUIRED)
 
 # Automatically resolve nanobind CMake directory if not explicitly provided
@@ -45,4 +47,10 @@ option(BUILD_TESTING "Build the test suite" OFF)
 if(BUILD_TESTING)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+# tools
+option(LOTM_BUILD_TOOLS "Build internal development and verification tools" OFF)
+if(LOTM_BUILD_TOOLS)
+    add_subdirectory(tools)
 endif()
