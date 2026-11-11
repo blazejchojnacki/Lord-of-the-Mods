@@ -485,24 +485,36 @@ namespace lotm::ini {
                 return;
             }
 
-            if (!active_entry.has_value()) {
-                const DelimiterRule* matched_rule = match_delimiter_rule(lexed.line_tokens, STR_DELIMITER_RULES);
-                if (matched_rule != nullptr) {
-                    const auto remaining = std::span<const std::string_view>{ lexed.words }.subspan(
-                        std::min(matched_rule->word_count, lexed.words.size())
-                    );
-                    active_entry = StrEntry{
-                        std::string{ matched_rule->raw },
-                        join_views(remaining),
-                        std::move(last_comment),
-                        lexed.comment,
-                        "End",
-                        "",
-                        {}
-                    };
-                    last_comment.clear();
-                    return;
+            const DelimiterRule* matched_rule = match_delimiter_rule(lexed.line_tokens, STR_DELIMITER_RULES);
+            if (matched_rule != nullptr) {
+                if (active_entry.has_value()) {
+                    const std::string active_id = active_entry->identifier.empty()
+                        ? active_entry->category
+                        : (active_entry->category + ":" + active_entry->identifier);
+                    std::string err_msg = "Delimiter mismatch: unclosed entry '" + active_id +
+                        "' before starting new entry at " + std::string{ file_path } + ":" + std::to_string(line_num);
+                    doc.errors.push_back(err_msg);
+                    if (strict) {
+                        throw IniParseError(err_msg);
+                    }
+                    doc.entries.emplace_back(std::move(*active_entry));
+                    active_entry.reset();
                 }
+
+                const auto remaining = std::span<const std::string_view>{ lexed.words }.subspan(
+                    std::min(matched_rule->word_count, lexed.words.size())
+                );
+                active_entry = StrEntry{
+                    std::string{ matched_rule->raw },
+                    join_views(remaining),
+                    std::move(last_comment),
+                    lexed.comment,
+                    "End",
+                    "",
+                    {}
+                };
+                last_comment.clear();
+                return;
             }
 
             if (!last_comment.empty()) {
@@ -541,6 +553,13 @@ namespace lotm::ini {
                 active_entry->items.emplace_back(std::move(stmt));
             }
             else {
+                std::string err_msg = "Unexpected statement outside entry at " +
+                    std::string{ file_path } + ":" + std::to_string(line_num) +
+                    ": " + std::string{ detail::trim_view(raw_line) };
+                doc.errors.push_back(err_msg);
+                if (strict) {
+                    throw IniParseError(err_msg);
+                }
                 doc.entries.emplace_back(std::move(stmt));
             }
             });
@@ -556,6 +575,15 @@ namespace lotm::ini {
         }
 
         if (active_entry.has_value()) {
+            const std::string active_id = active_entry->identifier.empty()
+                ? active_entry->category
+                : (active_entry->category + ":" + active_entry->identifier);
+            std::string err_msg = "Unexpected EOF in " + std::string{ file_path } +
+                ": unclosed entry '" + active_id + "' remains.";
+            doc.errors.push_back(err_msg);
+            if (strict) {
+                throw IniParseError(err_msg);
+            }
             doc.entries.emplace_back(std::move(*active_entry));
         }
 

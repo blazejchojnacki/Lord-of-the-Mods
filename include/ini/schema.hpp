@@ -148,7 +148,7 @@ namespace lotm::ini {
             if (k > 0 && token_count >= k) {
                 bool matched = true;
                 for (std::size_t i = 0; i < k; ++i) {
-                    if (line_tokens[i] != rule.match_tokens[i]) {
+                    if (!detail::iequals_ascii(line_tokens[i], rule.match_tokens[i])) {
                         matched = false;
                         break;
                     }
