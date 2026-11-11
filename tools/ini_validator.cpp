@@ -9,6 +9,7 @@
 
 #include "ini/parser.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -16,15 +17,16 @@
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace fs = std::filesystem;
 
 static bool is_config_file(const fs::path& path) {
     const std::string ext = path.extension().string();
-    return ext == ".ini" || ext == ".INI" ||
-        ext == ".inc" || ext == ".INC" ||
-        ext == ".str" || ext == ".STR";
+    return lotm::ini::detail::iequals_ascii(ext, ".ini") ||
+        lotm::ini::detail::iequals_ascii(ext, ".inc") ||
+        lotm::ini::detail::iequals_ascii(ext, ".str");
 }
 
 int main(int argc, char* argv[]) {
@@ -61,18 +63,26 @@ int main(int argc, char* argv[]) {
         files.push_back(target);
     }
     else {
-        for (const auto& entry : fs::recursive_directory_iterator(target)) {
-            if (entry.is_regular_file() && is_config_file(entry.path())) {
+        std::error_code ec;
+        for (const auto& entry : fs::recursive_directory_iterator(
+            target,
+            fs::directory_options::skip_permission_denied,
+            ec
+        )) {
+            if (entry.is_regular_file(ec) && is_config_file(entry.path())) {
                 files.push_back(entry.path());
             }
         }
     }
+
+    std::ranges::sort(files);
 
     std::cout << "Testing lotm::ini against " << files.size() << " files...\n";
 
     std::size_t passed = 0;
     std::size_t failed = 0;
     std::size_t roundtrip_mismatches = 0;
+    std::vector<std::pair<std::string, std::vector<std::string>>> files_with_errors;
 
     const auto start_time = std::chrono::steady_clock::now();
 
@@ -82,9 +92,14 @@ int main(int argc, char* argv[]) {
             lotm::ini::ConstructFile parsed{ path_str, strict };
 
             if (!parsed.errors.empty()) {
+                files_with_errors.emplace_back(path_str, parsed.errors);
                 std::cerr << "[PARSE WARNING/ERROR] " << path_str << ":\n";
                 for (const auto& err : parsed.errors) {
                     std::cerr << "  - " << err << '\n';
+                }
+                if (strict) {
+                    ++failed;
+                    continue;
                 }
             }
 
@@ -123,13 +138,26 @@ int main(int argc, char* argv[]) {
         std::chrono::steady_clock::now() - start_time
     ).count();
 
+    const std::size_t clean_passes = (passed >= files_with_errors.size())
+        ? (passed - files_with_errors.size())
+        : 0;
+
     std::cout << "\n================ VALIDATION REPORT ================\n"
         << "Scanned Files:        " << files.size() << '\n'
-        << "Passed:               " << passed << '\n'
+        << "Passed (Clean):       " << clean_passes << '\n'
+        << "Files with Warnings:  " << files_with_errors.size() << '\n'
         << "Failed:               " << failed << '\n'
         << "Roundtrip Mismatches: " << roundtrip_mismatches << '\n'
-        << "Elapsed Time:         " << elapsed << " ms\n"
-        << "===================================================\n";
+        << "Elapsed Time:         " << elapsed << " ms\n";
+
+    if (!files_with_errors.empty()) {
+        std::cout << "\nFiles with delimiter or structural errors:\n";
+        for (const auto& [file, errs] : files_with_errors) {
+            std::cout << "  - " << file << " (" << errs.size() << " error"
+                << (errs.size() > 1 ? "s" : "") << ")\n";
+        }
+    }
+    std::cout << "===================================================\n";
 
     return (failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
