@@ -39,6 +39,7 @@ find_package(nanobind CONFIG REQUIRED)
 add_subdirectory(src/core)
 add_subdirectory(src/big)
 add_subdirectory(src/cppy_bridge)
+add_subdirectory(src/ini)
 
 
 # tests
