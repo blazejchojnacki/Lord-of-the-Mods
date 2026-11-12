@@ -7,10 +7,10 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
-from collections.abc import Buffer, Callable, Sequence
+from collections.abc import Buffer, Callable, Iterator, Sequence
 import os
 from pathlib import Path
-from typing import overload
+from typing import TypeAlias, overload
 
 class big:
     class BigArchiveError(RuntimeError): ...
@@ -189,3 +189,191 @@ class big:
         def resolve(self, entry_name: str | os.PathLike[str]) -> 'big.BigOverlayEntry': ...
         def read_entry(self, entry_name: str | os.PathLike[str]) -> bytes: ...
         def stream_entry(self, entry_name: str | os.PathLike[str], chunk_callback: Callable[[memoryview], bool | None]) -> None: ...
+
+class ini:
+    LEVEL_INDENT: str
+    INI_ENDS: tuple[str, ...]
+    MAX_INI_DEPTH: int
+
+    class IniParseError(ValueError): ...
+
+    class CommentNode:
+        text: str
+        def __init__(self, text: str = "") -> None: ...
+        def __eq__(self, other: object) -> bool: ...
+        def __repr__(self) -> str: ...
+
+    class StatementNode:
+        text: str
+        comment: str
+        def __init__(self, text: str = "", comment: str = "") -> None: ...
+        def __eq__(self, other: object) -> bool: ...
+        def __repr__(self) -> str: ...
+
+    class IncludeNode:
+        raw_path: str
+        comment: str
+        def __init__(self, raw_path: str = "", comment: str = "") -> None: ...
+        @property
+        def clean_path(self) -> str: ...
+        def __eq__(self, other: object) -> bool: ...
+        def __repr__(self) -> str: ...
+
+    class ScriptNode:
+        name: str
+        identifier: str
+        comment: str
+        header_comment: str
+        end_token: str
+        end_comment: str
+        content: list[str]
+        def __init__(
+            self,
+            name: str = "BeginScript",
+            identifier: str = "",
+            comment: str = "",
+            header_comment: str = "",
+            end_token: str = "EndScript",
+            end_comment: str = "",
+            content: Sequence[str] = (),
+        ) -> None: ...
+        def print(self, level: int = 0, file_type: str = ".ini") -> str: ...
+        def __eq__(self, other: object) -> bool: ...
+        def __repr__(self) -> str: ...
+
+    AstNode: TypeAlias = (
+        CommentNode | StatementNode | IncludeNode | ScriptNode | 'ini.ConstructLevel'
+    )
+    StrChildNode: TypeAlias = CommentNode | StatementNode
+
+    class ConstructLevel:
+        _class: str
+        name: str
+        identifier: str
+        comment: str
+        header_comment: str
+        end_token: str
+        end_comment: str
+        items: list['ini.AstNode']
+        def __init__(
+            self,
+            _class: str = "",
+            name: str = "",
+            identifier: str = "",
+            comment: str = "",
+            header_comment: str = "",
+            end_token: str = "",
+            end_comment: str = "",
+        ) -> None: ...
+        def append(self, item: 'ini.AstNode') -> None: ...
+        def __len__(self) -> int: ...
+        def __getitem__(self, index: int) -> 'ini.AstNode': ...
+        def __setitem__(self, index: int, item: 'ini.AstNode') -> None: ...
+        def __iter__(self) -> Iterator['ini.AstNode']: ...
+        def print(self, level: int = 0, file_type: str = ".ini") -> str: ...
+        def __eq__(self, other: object) -> bool: ...
+        def __repr__(self) -> str: ...
+
+    class StrEntry:
+        category: str
+        identifier: str
+        comment: str
+        header_comment: str
+        end_token: str
+        end_comment: str
+        items: list['ini.StrChildNode']
+        def __init__(
+            self,
+            category: str,
+            identifier: str,
+            comment: str = "",
+            header_comment: str = "",
+            end_token: str = "End",
+            end_comment: str = "",
+            items: Sequence['ini.StrChildNode'] = (),
+        ) -> None: ...
+        def print(self) -> str: ...
+        def __eq__(self, other: object) -> bool: ...
+        def __repr__(self) -> str: ...
+
+    StrDocEntry: TypeAlias = StrEntry | CommentNode | StatementNode
+    RootItem: TypeAlias = AstNode | StrEntry
+
+    class StrDocument:
+        name: str
+        entries: list['ini.StrDocEntry']
+        errors: list[str]
+        def __init__(
+            self,
+            name: str = "",
+            entries: Sequence['ini.StrDocEntry'] = (),
+            errors: Sequence[str] = (),
+        ) -> None: ...
+        def print(self) -> str: ...
+        def __repr__(self) -> str: ...
+
+    class StrParser:
+        @staticmethod
+        def parse_file(
+            file_path: str | os.PathLike[str],
+            strict: bool = False,
+            file_content: str | None = None,
+        ) -> 'ini.StrDocument': ...
+
+    class ConstructFile:
+        name: str
+        comment: str
+        defines: list[str]
+        delimiters: list[list[str]]
+        start_level: int
+        strict: bool
+        file_content: str | None
+        items: list['ini.RootItem']
+        current_level: int
+        last_comment: str
+        errors: list[str]
+        @overload
+        def __init__(
+            self,
+            name: str | os.PathLike[str] = "",
+            strict: bool = False,
+            file_content: str | None = None,
+        ) -> None: ...
+        @overload
+        def __init__(
+            self,
+            name: str | os.PathLike[str],
+            comment: str,
+            defines: Sequence[str] = (),
+            delimiters: Sequence[Sequence[str]] = (),
+            start_level: int = 0,
+            strict: bool = False,
+            file_content: str | None = None,
+        ) -> None: ...
+        def construct(self) -> None: ...
+        def append(self, item: 'ini.RootItem') -> None: ...
+        def __len__(self) -> int: ...
+        def __getitem__(self, index: int) -> 'ini.RootItem': ...
+        def __setitem__(self, index: int, item: 'ini.RootItem') -> None: ...
+        def __iter__(self) -> Iterator['ini.RootItem']: ...
+        def print(self) -> str: ...
+        def __repr__(self) -> str: ...
+
+    @staticmethod
+    def recognize_structure(
+        file_path: str | os.PathLike[str],
+        file_content: str | None = None,
+    ) -> tuple[list[list[str]], int]: ...
+
+    @staticmethod
+    def validate_include(
+        node: IncludeNode,
+        current_file: str | os.PathLike[str],
+        virtual_root: str | os.PathLike[str],
+    ) -> Path: ...
+
+    @staticmethod
+    def load_file(full_path: str | os.PathLike[str]) -> tuple[str, list[list[str]]]: ...
+
+    @staticmethod
+    def scan_file_for_errors(file_path: str | os.PathLike[str]) -> list[str]: ...
