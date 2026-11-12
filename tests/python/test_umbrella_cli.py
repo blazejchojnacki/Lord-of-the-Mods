@@ -48,6 +48,18 @@ def test_umbrella_cli_big_pack_execution(tmp_path: Path, capsys: pytest.CaptureF
     assert "Packed archive:" in stdout
 
 
+def test_umbrella_cli_ini_inspect_execution(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Verify that lotm routes 'ini inspect' commands correctly through the umbrella parser."""
+    ini_file = tmp_path / "weapon.ini"
+    ini_file.write_text("Weapon GondorSword\n    Damage = 40\nEnd\n", encoding="utf-8")
+
+    argv = ["ini", "inspect", str(ini_file)]
+
+    assert cli.main(argv) == cli.EXIT_SUCCESS
+    stdout, _ = capsys.readouterr()
+    assert "Weapon: 1" in stdout
+
+
 def test_umbrella_cli_missing_domain_exits_with_error(capsys: pytest.CaptureFixture[str]) -> None:
     """Verify that lotm fails cleanly when an invalid top-level domain is provided."""
     argv = ["unknown_domain", "pack"]
