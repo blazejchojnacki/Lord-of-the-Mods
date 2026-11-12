@@ -504,9 +504,14 @@ namespace lotm::ini {
                 const auto remaining = std::span<const std::string_view>{ lexed.words }.subspan(
                     std::min(matched_rule->word_count, lexed.words.size())
                 );
+
+                std::string cat{ matched_rule->raw };
+                std::string ident = join_views(remaining);
+                validate_sage_bounds(cat, ident);
+
                 active_entry = StrEntry{
-                    std::string{ matched_rule->raw },
-                    join_views(remaining),
+                    std::move(cat),
+                    std::move(ident),
                     std::move(last_comment),
                     lexed.comment,
                     "End",
@@ -748,9 +753,14 @@ namespace lotm::ini {
             }
 
             const auto ident_span = std::span<const std::string_view>{ lexed.words }.subspan(1);
+
+            std::string n{ lexed.words[0] };
+            std::string ident = join_views(ident_span);
+            validate_sage_bounds(n, ident);
+
             ScriptNode new_script{
-                std::string{ lexed.words[0] },
-                join_views(ident_span),
+                std::move(n),
+                std::move(ident),
                 std::move(last_comment),
                 lexed.comment,
                 "EndScript",
@@ -792,10 +802,15 @@ namespace lotm::ini {
                 ? std::span<const std::string_view>{lexed.words}.subspan(2)
                 : std::span<const std::string_view>{};
 
+            std::string class_str = std::string{ lexed.words[0] } + " =";
+            std::string block_name = lexed.words.size() >= 2 ? std::string{ lexed.words[1] } : std::string{};
+            std::string ident = join_views(ident_span);
+            validate_sage_bounds(block_name, ident);
+
             ConstructLevel new_fcurve{
-                std::string{ lexed.words[0] } + " =",
-                lexed.words.size() >= 2 ? std::string{ lexed.words[1] } : std::string{},
-                join_views(ident_span),
+                std::move(class_str),
+                std::move(block_name),
+                std::move(ident),
                 std::move(last_comment),
                 lexed.comment
             };
@@ -903,6 +918,8 @@ namespace lotm::ini {
         if (next_idx < line_tokens.size() && line_tokens[next_idx] == "=" && !class_token.ends_with('=')) {
             class_token.append(" =");
         }
+
+        validate_sage_bounds(block_name, block_identifier);
 
         ConstructLevel new_block{
             std::move(class_token),

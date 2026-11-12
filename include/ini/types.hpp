@@ -33,6 +33,25 @@ namespace lotm::ini {
     inline constexpr std::array<std::string_view, 3> INI_ENDS = { "End", "END", "end" };
     inline constexpr std::size_t MAX_INI_DEPTH = 16;
 
+    // Legacy 32-bit SAGE Engine string buffer limits for AST builders
+    inline constexpr std::size_t SAGE_MAX_BLOCK_NAME_LEN = 256;
+    inline constexpr std::size_t SAGE_MAX_IDENTIFIER_LEN = 512;
+
+    /**
+     * @brief Validates string lengths against legacy SAGE engine buffer limits.
+     * @throws IniParseError if bounds are exceeded.
+     */
+    inline void validate_sage_bounds(std::string_view name, std::string_view identifier = "") {
+        if (name.size() > SAGE_MAX_BLOCK_NAME_LEN) {
+            throw IniParseError("Security abort: Block name length (" + std::to_string(name.size()) +
+                ") exceeds SAGE engine limit (" + std::to_string(SAGE_MAX_BLOCK_NAME_LEN) + ")");
+        }
+        if (identifier.size() > SAGE_MAX_IDENTIFIER_LEN) {
+            throw IniParseError("Security abort: Identifier length (" + std::to_string(identifier.size()) +
+                ") exceeds SAGE engine limit (" + std::to_string(SAGE_MAX_IDENTIFIER_LEN) + ")");
+        }
+    }
+
     /**
      * @brief Checks whether a token matches any valid SAGE block closing keyword ("End", "END", "end").
      */
@@ -104,6 +123,27 @@ namespace lotm::ini {
         std::string end_token{ "EndScript" };
         std::string end_comment{};
         std::vector<std::string> content{};
+
+        ScriptNode() = default;
+
+        explicit ScriptNode(
+            std::string n,
+            std::string ident = "",
+            std::string cmt = "",
+            std::string hdr_cmt = "",
+            std::string end_tok = "EndScript",
+            std::string end_cmt = "",
+            std::vector<std::string> cont = {}
+        )
+            : name(std::move(n)),
+            identifier(std::move(ident)),
+            comment(std::move(cmt)),
+            header_comment(std::move(hdr_cmt)),
+            end_token(std::move(end_tok)),
+            end_comment(std::move(end_cmt)),
+            content(std::move(cont)) {
+            validate_sage_bounds(name, identifier);
+        }
 
         [[nodiscard]] std::string print(int level = 0, std::string_view file_type = ".ini") const;
 
@@ -191,6 +231,7 @@ namespace lotm::ini {
         header_comment(std::move(hdr_cmt)),
         end_token(std::move(end_tok)),
         end_comment(std::move(end_cmt)) {
+        validate_sage_bounds(name, identifier);
     }
 
     inline ConstructLevel::~ConstructLevel() = default;
@@ -215,6 +256,27 @@ namespace lotm::ini {
         std::string end_token{ "End" };
         std::string end_comment{};
         std::vector<StrChildNode> items{};
+
+        StrEntry() = default;
+
+        explicit StrEntry(
+            std::string cat,
+            std::string ident,
+            std::string cmt = "",
+            std::string hdr_cmt = "",
+            std::string end_tok = "End",
+            std::string end_cmt = "",
+            std::vector<StrChildNode> itms = {}
+        )
+            : category(std::move(cat)),
+            identifier(std::move(ident)),
+            comment(std::move(cmt)),
+            header_comment(std::move(hdr_cmt)),
+            end_token(std::move(end_tok)),
+            end_comment(std::move(end_cmt)),
+            items(std::move(itms)) {
+            validate_sage_bounds(category, identifier);
+        }
 
         [[nodiscard]] std::string print() const;
 
