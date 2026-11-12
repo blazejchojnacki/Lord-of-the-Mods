@@ -717,6 +717,44 @@ TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth secu
         }
         CHECK_THROWS_AS(ConstructFile("overflow_block.ini", true, overflow_block), IniParseError);
     }
+
+    SECTION("Enforces legacy 32-bit SAGE Engine string buffer limits on names and identifiers") {
+        const std::string valid_256(256, 'A');
+        const std::string invalid_257(257, 'A');
+        const std::string valid_512(512, 'B');
+        const std::string invalid_513(513, 'B');
+
+        // ConstructLevel
+        CHECK_NOTHROW(ConstructLevel{ "Object", valid_256, valid_512 });
+        CHECK_THROWS_AS(ConstructLevel("Object", invalid_257, ""), IniParseError);
+        CHECK_THROWS_AS(ConstructLevel("Object", "", invalid_513), IniParseError);
+
+        // ScriptNode
+        CHECK_NOTHROW(ScriptNode{ valid_256, valid_512 });
+        CHECK_THROWS_AS(ScriptNode(invalid_257, ""), IniParseError);
+        CHECK_THROWS_AS(ScriptNode("BeginScript", invalid_513), IniParseError);
+
+        // StrEntry
+        CHECK_NOTHROW(StrEntry{ valid_256, valid_512 });
+        CHECK_THROWS_AS(StrEntry(invalid_257, ""), IniParseError);
+        CHECK_THROWS_AS(StrEntry("GUI", invalid_513), IniParseError);
+
+        // Parser enforcement on INI blocks, BeginScript, FCurve, and STR entries
+        const std::string overlong_ini_block = "Object " + invalid_257 + "\nEnd\n";
+        CHECK_THROWS_AS(ConstructFile("bounds_block.ini", true, overlong_ini_block), IniParseError);
+
+        const std::string overlong_ini_ident = "Object ValidName " + invalid_513 + "\nEnd\n";
+        CHECK_THROWS_AS(ConstructFile("bounds_ident.ini", true, overlong_ini_ident), IniParseError);
+
+        const std::string overlong_script = "BeginScript " + invalid_513 + "\nEndScript\n";
+        CHECK_THROWS_AS(ConstructFile("bounds_script.ini", true, overlong_script), IniParseError);
+
+        const std::string overlong_fcurve = "Alpha = FCurve " + invalid_513 + "\nEnd\n";
+        CHECK_THROWS_AS(ConstructFile("bounds_fcurve.ini", true, overlong_fcurve), IniParseError);
+
+        const std::string overlong_str = "OBJECT:" + invalid_513 + "\n    \"Text\"\nEnd\n";
+        CHECK_THROWS_AS(StrParser::parse_file("bounds.str", true, overlong_str), IniParseError);
+    }
 }
 
 TEST_CASE("File loading, error scanning, and deterministic I/O lock handling", "[ini][io]") {
