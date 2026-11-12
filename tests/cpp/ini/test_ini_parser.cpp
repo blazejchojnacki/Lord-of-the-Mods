@@ -330,7 +330,7 @@ TEST_CASE("Compile-time and runtime delimiter schema rules", "[ini][schema]") {
         const auto rules = compile_delimiter_rules(raw_list);
 
         const auto lex1 = lex_line("addemotion = override ModuleTag_01");
-        const DelimiterRule* m1 = match_delimiter_rule(l1_tokens: lex1.line_tokens, rules);
+        const DelimiterRule* m1 = match_delimiter_rule(lex1.line_tokens, rules);
         REQUIRE(m1 != nullptr);
         CHECK(m1->raw == "AddEmotion = OVERRIDE");
 
@@ -379,7 +379,7 @@ TEST_CASE("Iterative serialization covers all AST and STR node variations", "[in
             "    EndScript ; scr end\n"
             "    Body ActiveBody ModTag_Body\n"
             "        MaxHealth = 2000\n"
-            "        End\n"
+            "    End\n"
             "End ; root end\n";
         CHECK(printed == expected);
 
