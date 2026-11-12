@@ -16,6 +16,7 @@ from typing import NoReturn
 
 from lotm import __version__
 from lotm.big import cli as big_cli
+from lotm.ini import cli as ini_cli
 
 EXIT_SUCCESS = 0
 EXIT_ERROR = 1
@@ -36,6 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="domain", required=True)
 
     big_cli.register_subparser(subparsers)
+    ini_cli.register_subparser(subparsers)
 
     return parser
 

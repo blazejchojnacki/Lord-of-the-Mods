@@ -27,7 +27,7 @@ validate_include = ini.validate_include
 load_file = ini.load_file
 scan_file_for_errors = ini.scan_file_for_errors
 
-from .parser-api import (
+from .parser_api import (
      SUPPORTED_EXTENSIONS,
     AstNode,
     IniInspectionReport,
