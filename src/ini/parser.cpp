@@ -14,6 +14,12 @@
 #include <iterator>
 #include <sstream>
 
+
+// Windows specific. Change for POSIX
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+
 namespace lotm::ini {
 
     namespace {
@@ -96,22 +102,83 @@ namespace lotm::ini {
             out.push_back('\n');
         }
 
-        [[nodiscard]] std::string read_file_bytes(const std::filesystem::path& path) {
-            std::ifstream file(path, std::ios::binary | std::ios::ate);
-            if (!file.is_open()) {
-                throw IniParseError("file " + path.string() + " invalid.");
+        /**
+         * @brief RAII Memory Mapped File for zero-copy file reading on Windows.
+         */
+        class MMapFile {
+        public:
+            explicit MMapFile(const std::filesystem::path& path) {
+                // Windows specific. Change for POSIX
+                file_handle_ = CreateFileW(
+                    path.c_str(),
+                    GENERIC_READ,
+                    FILE_SHARE_READ,
+                    nullptr,
+                    OPEN_EXISTING,
+                    FILE_ATTRIBUTE_NORMAL,
+                    nullptr
+                );
+                if (file_handle_ == INVALID_HANDLE_VALUE) {
+                    throw IniParseError("Failed to open file for mapping: " + path.string());
+                }
+
+                LARGE_INTEGER size;
+                if (!GetFileSizeEx(file_handle_, &size)) {
+                    CloseHandle(file_handle_);
+                    throw IniParseError("Failed to get file size: " + path.string());
+                }
+                size_ = static_cast<std::size_t>(size.QuadPart);
+
+                if (size_ > 0) {
+                    map_handle_ = CreateFileMappingW(
+                        file_handle_,
+                        nullptr,
+                        PAGE_READONLY,
+                        0,
+                        0,
+                        nullptr
+                    );
+                    if (map_handle_ == nullptr) {
+                        CloseHandle(file_handle_);
+                        throw IniParseError("Failed to create file mapping: " + path.string());
+                    }
+
+                    data_ = static_cast<const char*>(MapViewOfFile(
+                        map_handle_,
+                        FILE_MAP_READ,
+                        0,
+                        0,
+                        0
+                    ));
+                    if (data_ == nullptr) {
+                        CloseHandle(map_handle_);
+                        CloseHandle(file_handle_);
+                        throw IniParseError("Failed to map view of file: " + path.string());
+                    }
+                }
             }
-            const auto end_pos = file.tellg();
-            if (end_pos < 0) {
-                throw IniParseError("failed to read file size: " + path.string());
+
+            ~MMapFile() {
+                // Windows specific. Change for POSIX
+                if (data_) UnmapViewOfFile(data_);
+                if (map_handle_) CloseHandle(map_handle_);
+                if (file_handle_ != INVALID_HANDLE_VALUE) CloseHandle(file_handle_);
             }
-            std::string buffer(static_cast<std::size_t>(end_pos), '\0');
-            file.seekg(0, std::ios::beg);
-            if (!buffer.empty() && !file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()))) {
-                throw IniParseError("failed to read file contents: " + path.string());
+
+            MMapFile(const MMapFile&) = delete;
+            MMapFile& operator=(const MMapFile&) = delete;
+
+            [[nodiscard]] std::string_view view() const noexcept {
+                return { data_ ? data_ : "", size_ };
             }
-            return buffer;
-        }
+
+        private:
+            std::size_t size_{ 0 };
+            const char* data_{ nullptr };
+            // Windows specific. Change for POSIX
+            HANDLE file_handle_{ INVALID_HANDLE_VALUE };
+            HANDLE map_handle_{ nullptr };
+        };
 
         [[nodiscard]] std::vector<std::vector<std::string>> materialize_delimiter_group(
             std::span<const std::span<const std::string_view>> group
@@ -145,14 +212,10 @@ namespace lotm::ini {
                     return false;
                 }
                 if (*cand_it != *root_it) {
-                    // Case-insensitive component comparison on Windows, exact on POSIX
-#ifdef _WIN32
+                    // Case-insensitive component comparison on Windows. Does not need the if on POSIX
                     if (!detail::iequals_ascii(cand_it->string(), root_it->string())) {
                         return false;
                     }
-#else
-                    return false;
-#endif
                 }
                 ++cand_it;
                 ++root_it;
@@ -358,14 +421,14 @@ namespace lotm::ini {
         }
 
         if (ends_with_ci(file_path, ".ini") || ends_with_ci(file_path, ".inc")) {
-            std::string owned_buffer;
+            std::optional<MMapFile> mmap;
             std::string_view content_view;
             if (file_content.has_value()) {
                 content_view = *file_content;
             }
             else {
-                owned_buffer = read_file_bytes(std::filesystem::path{ file_path });
-                content_view = owned_buffer;
+                mmap.emplace(std::filesystem::path{ file_path });
+                content_view = mmap->view();
             }
 
             const bool is_ini = ends_with_ci(file_path, ".ini");
@@ -446,14 +509,14 @@ namespace lotm::ini {
             throw IniParseError("file " + std::string{ file_path } + " invalid.");
         }
 
-        std::string owned_buffer;
+        std::optional<MMapFile> mmap;
         std::string_view content_view;
         if (file_content.has_value()) {
             content_view = *file_content;
         }
         else {
-            owned_buffer = read_file_bytes(std::filesystem::path{ file_path });
-            content_view = owned_buffer;
+            mmap.emplace(std::filesystem::path{ file_path });
+            content_view = mmap->view();
         }
 
         StrDocument doc;
@@ -608,6 +671,24 @@ namespace lotm::ini {
         }
     }
 
+    ConstructFile::ConstructFile(
+        std::string file_name,
+        bool is_strict,
+        std::span<const uint8_t> buffer
+    )
+        : name(std::move(file_name)),
+        strict(is_strict) {
+        if (!buffer.empty()) {
+            file_content = std::string(
+                reinterpret_cast<const char*>(buffer.data()),
+                buffer.size()
+            );
+        }
+        if (!name.empty()) {
+            construct();
+        }
+    }
+
     void ConstructFile::construct() {
         if (!is_supported_config_ext(name) ||
             (!file_content.has_value() && !std::filesystem::is_regular_file(std::filesystem::path{ name }))) {
@@ -651,14 +732,14 @@ namespace lotm::ini {
             return;
         }
 
-        std::string owned_buffer;
+        std::optional<MMapFile> mmap;
         std::string_view content_view;
         if (file_content.has_value()) {
             content_view = *file_content;
         }
         else {
-            owned_buffer = read_file_bytes(std::filesystem::path{ name });
-            content_view = owned_buffer;
+            mmap.emplace(std::filesystem::path{ name });
+            content_view = mmap->view();
         }
 
         auto [recognized_delims, recognized_start] = recognize_structure(name, content_view);
@@ -1044,20 +1125,28 @@ namespace lotm::ini {
                 ConstructFile file_object{ std::string{ full_path }, false };
                 std::string printed = file_object.print();
                 if (printed.empty()) {
-                    return { read_file_bytes(fs_path),{} };
+                    std::optional<MMapFile> mmap;
+                    mmap.emplace(fs_path);
+                    return { std::string(mmap->view()),{} };
                 }
                 return { std::move(printed), std::move(file_object.delimiters) };
             }
             catch (const IniParseError&) {
-                return { read_file_bytes(fs_path),{} };
+                std::optional<MMapFile> mmap;
+                mmap.emplace(fs_path);
+                return { std::string(mmap->view()),{} };
             }
             catch (const std::out_of_range&) {
-                return { read_file_bytes(fs_path),{} };
+                std::optional<MMapFile> mmap;
+                mmap.emplace(fs_path);
+                return { std::string(mmap->view()),{} };
             }
         }
 
         if (ends_with_ci(full_path, ".txt")) {
-            return { read_file_bytes(fs_path),{} };
+            std::optional<MMapFile> mmap;
+            mmap.emplace(fs_path);
+            return { std::string(mmap->view()),{} };
         }
 
         throw IniParseError("wrong path or unsupported file type: " + std::string{ full_path });

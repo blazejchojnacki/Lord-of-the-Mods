@@ -14,6 +14,7 @@
 #include "ini/types.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <span>
@@ -89,6 +90,12 @@ namespace lotm::ini {
             std::string file_name,
             bool is_strict = false,
             std::optional<std::string> content = std::nullopt
+        );
+
+        explicit ConstructFile(
+            std::string file_name,
+            bool is_strict,
+            std::span<const uint8_t> buffer
         );
 
         void construct();
