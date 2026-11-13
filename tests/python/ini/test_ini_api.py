@@ -9,6 +9,8 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 from __future__ import annotations
 
+import os
+from collections.abc import Buffer
 from pathlib import Path
 import pytest
 
@@ -337,6 +339,7 @@ def test_high_level_format_scan_and_inspect_api(
     assert no_ext_report.block_counts == {}
     assert no_ext_report.total_top_level_items == 1
 
+
 def test_buffer_protocol_ingestion() -> None:
     """Verify parse_ini, parse_str, and recognize_structure correctly process zero-copy Buffer objects."""
     import lotm._core as _core
@@ -365,6 +368,7 @@ def test_buffer_protocol_ingestion() -> None:
     assert start_lvl == 0
     assert len(delims) > 0
 
+
 def test_utf8_bom_and_cp1252_encoding_fallback(tmp_path: Path) -> None:
     """Verify UTF-8 BOM stripping and Windows-1252 fallback across disk and Buffer APIs."""
     # 1. UTF-8 with BOM on disk
@@ -376,11 +380,12 @@ def test_utf8_bom_and_cp1252_encoding_fallback(tmp_path: Path) -> None:
     assert bom_doc[0]._class == "Object"
 
     # 2. Windows-1252 encoded .ini and .str payloads (smart quotes 0x93/0x94, Euro 0x80, é 0xE9)
+    # Passed correctly as raw byte strings
     cp1252_ini_bytes = (
-        "Object Rohirrim ; \x93\xC9omer's Guard \x80\x94\n"
-        "    Side = Men\n"
-        "End\n"
-    ).encode("cp1252")
+        b"Object Rohirrim ; \x93\xc9omer's Guard \x80\x94\n"
+        b"    Side = Men\n"
+        b"End\n"
+    )
     cp1252_ini_path = tmp_path / "cp1252_unit.ini"
     cp1252_ini_path.write_bytes(cp1252_ini_bytes)
 
@@ -391,7 +396,7 @@ def test_utf8_bom_and_cp1252_encoding_fallback(tmp_path: Path) -> None:
     buf_ini_doc = ini.parse_ini("memory_cp1252.ini", strict=True, file_content=cp1252_ini_bytes)
     assert "“Éomer's Guard €”" in buf_ini_doc.print()
 
-    cp1252_str_bytes = 'OBJECT:Rohirrim\n    "Cavalier d\'\xC9lite \x80"\nEnd\n'.encode("cp1252")
+    cp1252_str_bytes = b'OBJECT:Rohirrim\n    "Cavalier d\'\xc9lite \x80"\nEnd\n'
     str_doc = ini.parse_str("lotr.str", strict=True, file_content=cp1252_str_bytes)
     assert len(str_doc.entries) == 1
     assert "Cavalier d'Élite €" in str_doc.print()
