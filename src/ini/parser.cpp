@@ -26,6 +26,19 @@ namespace lotm::ini {
 
     namespace {
 
+        [[nodiscard]] std::filesystem::path utf8_to_path(std::string_view utf8_str) {
+            const std::u8string_view u8_view(
+                reinterpret_cast<const char8_t*>(utf8_str.data()),
+                utf8_str.size()
+            );
+            return std::filesystem::path(u8_view);
+        }
+
+        [[nodiscard]] std::string path_to_utf8(const std::filesystem::path& p) {
+            const auto u8 = p.u8string();
+            return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
+        }
+
         // Windows-1252 code page mapping for bytes 0x80..0x9F to Unicode code points.
         inline constexpr std::array<std::uint16_t, 32> CP1252_80_9F_TABLE = {
             0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021,
@@ -146,6 +159,12 @@ namespace lotm::ini {
             std::string_view raw_view,
             std::string& transcoded_storage
         ) {
+            if (raw_view.size() > MAX_INI_FILE_SIZE) {
+                throw IniParseError(
+                    "Security abort: Buffer size (" + std::to_string(raw_view.size()) +
+                    ") exceeds maximum allowed INI size (" + std::to_string(MAX_INI_FILE_SIZE) + ")."
+                );
+            }
             const std::string_view stripped = strip_utf8_bom(raw_view);
             if (is_valid_utf8(stripped)) {
                 return stripped;
@@ -249,13 +268,17 @@ namespace lotm::ini {
                     nullptr
                 );
                 if (file_handle_ == INVALID_HANDLE_VALUE) {
-                    throw IniParseError("Failed to open file for mapping: " + path.string());
+                    throw IniParseError("Failed to open file for mapping: " + path_to_utf8(path));
                 }
 
                 LARGE_INTEGER size;
                 if (!GetFileSizeEx(file_handle_, &size)) {
                     CloseHandle(file_handle_);
-                    throw IniParseError("Failed to get file size: " + path.string());
+                    throw IniParseError("Failed to get file size: " + path_to_utf8(path));
+                }
+                if (size.QuadPart < 0 || static_cast<std::uintmax_t>(size.QuadPart) > MAX_INI_FILE_SIZE) {
+                    CloseHandle(file_handle_);
+                    throw IniParseError("Security abort: File size exceeds maximum allowed INI size: " + path_to_utf8(path));
                 }
                 size_ = static_cast<std::size_t>(size.QuadPart);
 
@@ -270,7 +293,7 @@ namespace lotm::ini {
                     );
                     if (map_handle_ == nullptr) {
                         CloseHandle(file_handle_);
-                        throw IniParseError("Failed to create file mapping: " + path.string());
+                        throw IniParseError("Failed to create file mapping: " + path_to_utf8(path));
                     }
 
                     data_ = static_cast<const char*>(MapViewOfFile(
@@ -283,7 +306,7 @@ namespace lotm::ini {
                     if (data_ == nullptr) {
                         CloseHandle(map_handle_);
                         CloseHandle(file_handle_);
-                        throw IniParseError("Failed to map view of file: " + path.string());
+                        throw IniParseError("Failed to map view of file: " + path_to_utf8(path));
                     }
                 }
             }
@@ -337,6 +360,41 @@ namespace lotm::ini {
             return result;
         }
 
+        [[nodiscard]] std::pair<std::vector<std::vector<std::string>>, int> recognize_structure_from_utf8(
+            std::string_view file_path,
+            std::string_view content_view
+        ) {
+            const bool is_ini = ends_with_ci(file_path, ".ini");
+            std::pair<std::vector<std::vector<std::string>>, int> matched_result{ {}, 0 };
+            LexedLine lexed;
+
+            for_each_line_view(content_view, [&](std::string_view raw_line, std::size_t) -> bool {
+                lex_line_into(raw_line, lexed);
+                if (lexed.line_tokens.empty()) {
+                    return true;
+                }
+
+                for (std::size_t group_idx = 0; group_idx < INI_DELIMITER_RULES.size(); ++group_idx) {
+                    const auto& group_rules = INI_DELIMITER_RULES[group_idx];
+                    for (std::size_t level_idx = 0; level_idx < group_rules.size(); ++level_idx) {
+                        if (is_ini && level_idx > 0) {
+                            break;
+                        }
+                        if (match_delimiter_rule(lexed.line_tokens, group_rules[level_idx]) != nullptr) {
+                            matched_result = {
+                                materialize_delimiter_group(INI_DELIMITERS[group_idx]),
+                                static_cast<int>(level_idx)
+                            };
+                            return false; // Stop iterating lines
+                        }
+                    }
+                }
+                return true;
+                });
+
+            return matched_result;
+        }
+
         [[nodiscard]] bool is_path_within_root(
             const std::filesystem::path& candidate,
             const std::filesystem::path& root
@@ -353,7 +411,7 @@ namespace lotm::ini {
                 }
                 if (*cand_it != *root_it) {
                     // Case-insensitive component comparison on Windows. Does not need the if on POSIX
-                    if (!detail::iequals_ascii(cand_it->string(), root_it->string())) {
+                    if (!detail::iequals_ascii(path_to_utf8(*cand_it), path_to_utf8(*root_it))) {
                         return false;
                     }
                 }
@@ -568,40 +626,11 @@ namespace lotm::ini {
                 raw_view = *file_content;
             }
             else {
-                mmap.emplace(std::filesystem::path{ file_path });
+                mmap.emplace(utf8_to_path(file_path));
                 raw_view = mmap->view();
             }
             const std::string_view content_view = prepare_utf8_view(raw_view, transcoded_buffer);
-
-            const bool is_ini = ends_with_ci(file_path, ".ini");
-            std::pair<std::vector<std::vector<std::string>>, int> matched_result{ {}, 0 };
-            LexedLine lexed;
-
-            for_each_line_view(content_view, [&](std::string_view raw_line, std::size_t) -> bool {
-                lex_line_into(raw_line, lexed);
-                if (lexed.line_tokens.empty()) {
-                    return true;
-                }
-
-                for (std::size_t group_idx = 0; group_idx < INI_DELIMITER_RULES.size(); ++group_idx) {
-                    const auto& group_rules = INI_DELIMITER_RULES[group_idx];
-                    for (std::size_t level_idx = 0; level_idx < group_rules.size(); ++level_idx) {
-                        if (is_ini && level_idx > 0) {
-                            break;
-                        }
-                        if (match_delimiter_rule(lexed.line_tokens, group_rules[level_idx]) != nullptr) {
-                            matched_result = {
-                                materialize_delimiter_group(INI_DELIMITERS[group_idx]),
-                                static_cast<int>(level_idx)
-                            };
-                            return false; // Stop iterating lines
-                        }
-                    }
-                }
-                return true;
-                });
-
-            return matched_result;
+            return recognize_structure_from_utf8(file_path, content_view);
         }
 
         return { {}, 0 };
@@ -613,12 +642,12 @@ namespace lotm::ini {
         const std::filesystem::path& virtual_root
     ) {
         const std::string clean = node.clean_path();
-        const std::filesystem::path target_rel{ clean };
+        const std::filesystem::path target_rel = utf8_to_path(clean);
 
         std::error_code ec;
         const std::filesystem::path canon_root = std::filesystem::weakly_canonical(virtual_root, ec);
         if (ec) {
-            throw IniParseError("Invalid virtual root: " + virtual_root.string());
+            throw IniParseError("Invalid virtual root: " + path_to_utf8(virtual_root));
         }
 
         std::filesystem::path candidate = std::filesystem::weakly_canonical(
@@ -630,7 +659,7 @@ namespace lotm::ini {
 
         if (!is_path_within_root(candidate, canon_root)) {
             throw IniParseError(
-                "Security violation: " + node.raw_path + " escapes virtual root " + virtual_root.string()
+                "Security violation: " + node.raw_path + " escapes virtual root " + path_to_utf8(virtual_root)
             );
         }
 
@@ -646,8 +675,9 @@ namespace lotm::ini {
         bool strict,
         std::optional<std::string_view> file_content
     ) {
+        const std::filesystem::path fs_path = utf8_to_path(file_path);
         if (!ends_with_ci(file_path, ".str") ||
-            (!file_content.has_value() && !std::filesystem::is_regular_file(std::filesystem::path{ file_path }))) {
+            (!file_content.has_value() && !std::filesystem::is_regular_file(fs_path))) {
             throw IniParseError("file " + std::string{ file_path } + " invalid.");
         }
 
@@ -658,7 +688,7 @@ namespace lotm::ini {
             raw_view = *file_content;
         }
         else {
-            mmap.emplace(std::filesystem::path{ file_path });
+            mmap.emplace(fs_path);
             raw_view = mmap->view();
         }
         const std::string_view content_view = prepare_utf8_view(raw_view, transcoded_buffer);
@@ -822,28 +852,22 @@ namespace lotm::ini {
     )
         : name(std::move(file_name)),
         strict(is_strict) {
-        if (!buffer.empty()) {
+        if (!name.empty()) {
+            if (!is_supported_config_ext(name)) {
+                throw IniParseError("file " + name + " invalid.");
+            }
             const std::string_view raw_view(
-                reinterpret_cast<const char*>(buffer.data()),
+                buffer.empty() ? "" : reinterpret_cast<const char*>(buffer.data()),
                 buffer.size()
             );
-            std::string transcoded;
-            const std::string_view utf8_view = prepare_utf8_view(raw_view, transcoded);
-            if (!transcoded.empty()) {
-                file_content = std::move(transcoded);
-            }
-            else {
-                file_content = std::string{ utf8_view };
-            }
-        }
-        if (!name.empty()) {
-            construct();
+            construct_from_view(raw_view);
         }
     }
 
     void ConstructFile::construct() {
+        const std::filesystem::path fs_path = utf8_to_path(name);
         if (!is_supported_config_ext(name) ||
-            (!file_content.has_value() && !std::filesystem::is_regular_file(std::filesystem::path{ name }))) {
+            (!file_content.has_value() && !std::filesystem::is_regular_file(fs_path))) {
             throw IniParseError("file " + name + " invalid.");
         }
 
@@ -856,7 +880,22 @@ namespace lotm::ini {
             else if (utf8_view.size() != file_content->size()) {
                 *file_content = std::string{ utf8_view };
             }
+            construct_from_view(*file_content);
+            return;
         }
+
+        MMapFile mmap{ fs_path };
+        construct_from_view(mmap.view());
+    }
+
+    void ConstructFile::construct_from_view(std::string_view raw_view) {
+        struct TransientStateGuard {
+            ConstructFile& self;
+            ~TransientStateGuard() noexcept {
+                self.context_stack_.clear();
+                self.active_rules_.clear();
+            }
+        } state_guard{ *this };
 
         items.clear();
         defines.clear();
@@ -866,10 +905,7 @@ namespace lotm::ini {
         context_stack_.emplace_back(this);
 
         if (ends_with_ci(name, ".str")) {
-            const std::optional<std::string_view> content_opt = file_content.has_value()
-                ? std::optional<std::string_view>{*file_content}
-            : std::nullopt;
-            StrDocument str_doc = StrParser::parse_file(name, strict, content_opt);
+            StrDocument str_doc = StrParser::parse_file(name, strict, raw_view);
 
             std::vector<std::string> str_delims;
             str_delims.reserve(STR_DELIMITERS.size());
@@ -895,18 +931,10 @@ namespace lotm::ini {
             return;
         }
 
-        std::optional<MMapFile> mmap;
         std::string transcoded_buffer;
-        std::string_view content_view;
-        if (file_content.has_value()) {
-            content_view = *file_content;
-        }
-        else {
-            mmap.emplace(std::filesystem::path{ name });
-            content_view = prepare_utf8_view(mmap->view(), transcoded_buffer);
-        }
+        const std::string_view content_view = prepare_utf8_view(raw_view, transcoded_buffer);
 
-        auto [recognized_delims, recognized_start] = recognize_structure(name, content_view);
+        auto [recognized_delims, recognized_start] = recognize_structure_from_utf8(name, content_view);
         delimiters = std::move(recognized_delims);
         start_level = recognized_start;
 
@@ -1050,7 +1078,7 @@ namespace lotm::ini {
             std::string class_str = std::string{ lexed.words[0] } + " =";
             std::string block_name = lexed.words.size() >= 2 ? std::string{ lexed.words[1] } : std::string{};
             std::string ident = join_views(ident_span);
-            validate_sage_bounds(block_name, ident);
+            validate_sage_bounds(block_name, ident, class_str);
 
             ConstructLevel new_fcurve{
                 std::move(class_str),
@@ -1150,9 +1178,9 @@ namespace lotm::ini {
 
         std::string block_name;
         std::string block_identifier;
-        if (remaining_words.size() == 2 && (ends_with_ci(name, ".ini") || ends_with_ci(name, ".inc"))) {
+        if (remaining_words.size() >= 2 && (ends_with_ci(name, ".ini") || ends_with_ci(name, ".inc"))) {
             block_name = std::string{ remaining_words[0] };
-            block_identifier = std::string{ remaining_words[1] };
+            block_identifier = join_views(remaining_words.subspan(1));
         }
         else if (!remaining_words.empty()) {
             block_name = join_views(remaining_words);
@@ -1164,7 +1192,7 @@ namespace lotm::ini {
             class_token.append(" =");
         }
 
-        validate_sage_bounds(block_name, block_identifier);
+        validate_sage_bounds(block_name, block_identifier, class_token);
 
         ConstructLevel new_block{
             std::move(class_token),
@@ -1279,7 +1307,7 @@ namespace lotm::ini {
         if (full_path.empty()) {
             throw IniParseError("empty path.");
         }
-        const std::filesystem::path fs_path{ full_path };
+        const std::filesystem::path fs_path = utf8_to_path(full_path);
         if (!std::filesystem::is_regular_file(fs_path)) {
             throw IniParseError("wrong path: " + std::string{ full_path });
         }
