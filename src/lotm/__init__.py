@@ -12,7 +12,7 @@ import logging
 # Prevent "No handler found" warnings for users who don't configure logging
 logging.getLogger("lotm").addHandler(logging.NullHandler())
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 from . import big
 
