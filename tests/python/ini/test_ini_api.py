@@ -364,3 +364,34 @@ def test_buffer_protocol_ingestion() -> None:
     delims, start_lvl = _core.ini.recognize_structure_buffer("dummy.ini", ini_content)
     assert start_lvl == 0
     assert len(delims) > 0
+
+def test_utf8_bom_and_cp1252_encoding_fallback(tmp_path: Path) -> None:
+    """Verify UTF-8 BOM stripping and Windows-1252 fallback across disk and Buffer APIs."""
+    # 1. UTF-8 with BOM on disk
+    bom_ini_path = tmp_path / "bom_unit.ini"
+    bom_ini_path.write_bytes(b"\xef\xbb\xbfObject GondorArcher\n    Side = Men\nEnd\n")
+    bom_doc = ini.parse_ini(bom_ini_path, strict=True)
+    assert len(bom_doc) == 1
+    assert isinstance(bom_doc[0], ini.ConstructLevel)
+    assert bom_doc[0]._class == "Object"
+
+    # 2. Windows-1252 encoded .ini and .str payloads (smart quotes 0x93/0x94, Euro 0x80, é 0xE9)
+    cp1252_ini_bytes = (
+        "Object Rohirrim ; \x93\xC9omer's Guard \x80\x94\n"
+        "    Side = Men\n"
+        "End\n"
+    ).encode("cp1252")
+    cp1252_ini_path = tmp_path / "cp1252_unit.ini"
+    cp1252_ini_path.write_bytes(cp1252_ini_bytes)
+
+    disk_ini_doc = ini.parse_ini(cp1252_ini_path, strict=True)
+    assert len(disk_ini_doc) == 1
+    assert "“Éomer's Guard €”" in disk_ini_doc.print()
+
+    buf_ini_doc = ini.parse_ini("memory_cp1252.ini", strict=True, file_content=cp1252_ini_bytes)
+    assert "“Éomer's Guard €”" in buf_ini_doc.print()
+
+    cp1252_str_bytes = 'OBJECT:Rohirrim\n    "Cavalier d\'\xC9lite \x80"\nEnd\n'.encode("cp1252")
+    str_doc = ini.parse_str("lotr.str", strict=True, file_content=cp1252_str_bytes)
+    assert len(str_doc.entries) == 1
+    assert "Cavalier d'Élite €" in str_doc.print()
