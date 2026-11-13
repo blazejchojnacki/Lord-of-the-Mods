@@ -39,6 +39,25 @@ target_compile_options(lotm_cpp_tests PRIVATE
     $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
 )
 
+add_executable(lotm_ini_tests
+    cpp/main.cpp
+    cpp/ini/test_ini_parser.cpp
+)
+
+target_link_libraries(lotm_ini_tests PRIVATE
+    lotm_core
+    lotm_ini
+    Catch2::Catch2
+)
+
+target_compile_features(lotm_ini_tests PRIVATE cxx_std_20)
+
+target_compile_options(lotm_ini_tests PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
+)
+
 include(CTest)
 include(Catch)
 catch_discover_tests(lotm_cpp_tests)
+catch_discover_tests(lotm_ini_tests)

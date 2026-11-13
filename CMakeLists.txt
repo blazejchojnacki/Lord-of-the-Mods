@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 cmake_minimum_required(VERSION 3.20)
-project(Lord_of_the_Mods VERSION 0.4.0 LANGUAGES CXX)
+project(Lord_of_the_Mods VERSION 0.5.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -14,6 +14,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 # Require Python and nanobind before processing subdirectories
+set(Python_FIND_VIRTUALENV FIRST)
+set(Python_FIND_REGISTRY NEVER)
 find_package(Python 3.12 COMPONENTS Interpreter Development.Module Development.SABIModule REQUIRED)
 
 # Automatically resolve nanobind CMake directory if not explicitly provided
@@ -37,6 +39,7 @@ find_package(nanobind CONFIG REQUIRED)
 add_subdirectory(src/core)
 add_subdirectory(src/big)
 add_subdirectory(src/cppy_bridge)
+add_subdirectory(src/ini)
 
 
 # tests
@@ -45,4 +48,10 @@ option(BUILD_TESTING "Build the test suite" OFF)
 if(BUILD_TESTING)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+# tools
+option(LOTM_BUILD_TOOLS "Build internal development and verification tools" OFF)
+if(LOTM_BUILD_TOOLS)
+    add_subdirectory(tools)
 endif()

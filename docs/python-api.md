@@ -173,3 +173,70 @@ with load_overlay(["base.big", "patch.big", "mod.big"]) as overlay:
     
     weapon_bytes = overlay.read_entry("data/weapon.ini")
 ```
+
+---
+
+## `lotm.ini` — SAGE Configuration & Localization API
+
+The `lotm.ini` package provides a native C++20 AST parser, iterative serializer, and validator for SAGE `.ini`, `.inc`, and `.str` files.
+
+### `parse_ini(file_path: str | os.PathLike[str], *, strict: bool = False, file_content: str | Buffer | None = None) -> ConstructFile`
+Parses a `.ini`, `.inc`, or `.str` file into a root `ConstructFile` AST object. When `file_content` is `None`, the file is memory-mapped directly from disk via Win32 `CreateFileMappingW`. When a `bytes` or `memoryview` buffer is supplied (such as from `BigArchive.read_entry`), it is ingested zero-copy without intermediate Python string decoding.
+
+* **`file_path`**: Path to the configuration file (used for extension recognition and error reporting, or disk reading when `file_content` is `None`).
+* **`strict`**: If `True`, raises `IniParseError` immediately on negative nesting levels or unclosed blocks at EOF. If `False`, records diagnostics in `ConstructFile.errors`.
+* **`file_content`**: Optional `str` or binary `Buffer` (`bytes`, `bytearray`, `memoryview`).
+* **Exceptions**:
+  * `lotm.ini.IniParseError`: Raised on invalid file paths/extensions, strict delimiter mismatches, exceeding `MAX_INI_DEPTH` (16), or exceeding legacy 32-bit SAGE buffer limits (256-byte block names / 512-byte identifiers).
+
+**Zero-Copy BIG-to-INI Pipeline Example:**
+```python
+from lotm.big import BigArchive
+from lotm.ini import parse_ini, ConstructLevel
+
+with BigArchive("ini.big") as archive:
+    raw_bytes = archive.read_entry("data/ini/weapon.ini")
+    doc = parse_ini("data/ini/weapon.ini", strict=True, file_content=raw_bytes)
+
+for item in doc:
+    if isinstance(item, ConstructLevel):
+        print(f"{item._class} -> {item.name}")
+```
+
+### `parse_str(file_path: str | os.PathLike[str], *, strict: bool = False, file_content: str | Buffer | None = None) -> StrDocument`
+Parses a SAGE `.str` localization dictionary into a `StrDocument` containing `StrEntry` blocks, standalone comments, and diagnostic errors.
+
+### `format_ini(file_path: str | os.PathLike[str], output_path: str | os.PathLike[str] | None = None, *, strict: bool = False, file_content: str | None = None) -> str`
+Parses and iteratively serializes a `.ini`, `.inc`, or `.str` file with consistent 4-space indentation, optionally writing the formatted output to `output_path`.
+
+### `scan_ini(target_path: str | os.PathLike[str], *, strict: bool = False) -> dict[Path, list[str]]`
+Scans a single file or recursively scans a directory tree for `.ini`, `.inc`, and `.str` structural errors, returning a dictionary mapping each `Path` to its list of diagnostic messages.
+
+### `inspect_ini(file_path: str | os.PathLike[str], *, strict: bool = False, file_content: str | None = None) -> IniInspectionReport`
+Returns an immutable `IniInspectionReport` dataclass summarizing `file_path`, `file_type`, `start_level`, `define_count`, `include_count`, `total_top_level_items`, `block_counts`, and `errors`.
+
+### `validate_include(node: IncludeNode, current_file: str | os.PathLike[str], virtual_root: str | os.PathLike[str]) -> Path`
+Resolves a `#include` directive (`IncludeNode`) relative to `current_file.parent` or `virtual_root` and verifies that the canonical target path remains strictly confined inside `virtual_root` (blocking `../` Local File Inclusion escapes).
+
+```python
+from pathlib import Path
+from lotm.ini import IncludeNode, validate_include, IniParseError
+
+node = IncludeNode('"..\\common\\macros.inc"')
+try:
+    safe_path = validate_include(
+        node,
+        current_file=Path("mod/data/ini/object/hero.ini"),
+        virtual_root=Path("mod/data/ini"),
+    )
+except IniParseError as err:
+    print(f"Blocked unsafe include: {err}")
+```
+
+### AST Node Hierarchy (`lotm.ini`)
+* **`ConstructFile`**: Root document container supporting `len(doc)`, indexing (`doc[i]`), iteration, `.append(node)`, `.defines`, `.errors`, and `.print()`.
+* **`ConstructLevel`**: Nested block node (`_class`, `name`, `identifier`, `comment`, `header_comment`, `end_token`, `end_comment`, `items`) supporting sequence indexing, iteration, `.append(node)`, and `.print(level=0, file_type=".ini")`.
+* **`ScriptNode`**: Opaque `BeginScript ... EndScript` container preserving raw Lua lines (`content`) so inner Lua `end` tokens never collide with INI block closures.
+* **`IncludeNode`**: Lossless `#include` node exposing `raw_path`, `comment`, and the normalized `.clean_path` property.
+* **`StatementNode` & `CommentNode`**: Leaf AST nodes representing key-value assignments and standalone/inline comments.
+* **`StrEntry` & `StrDocument`**: Localization structures for `.str` files.

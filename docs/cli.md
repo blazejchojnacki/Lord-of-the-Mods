@@ -1,7 +1,7 @@
 # Lord-of-the-Mods
 # Command-Line Interface (CLI)
 
-`lotm` provides terminal commands to inspect, pack, extract, and compare EA BIG4 archives.
+`lotm` provides terminal commands to inspect, pack, extract, and compare EA BIG4 archives, as well as scan, format, and inspect SAGE `.ini`, `.inc`, and `.str` configuration files.
 
 ## 1. Quick Reference
 
@@ -11,8 +11,11 @@
 | `lotm big unpack <archive> [-o <out_dir>] [-f <pattern>]` | Extract an archive into a target directory |
 | `lotm big diff <base.big> <target.big> [-o <patch.big>]` | Compare two archives and generate a delta patch |
 | `lotm big overlay <archive1> <archive2> ...` | Emulate SAGE load-order and preview virtual file tree |
+| `lotm ini scan <target> [-o <report>] [--strict]` | Scan `.ini`, `.inc`, and `.str` files for structural errors |
+| `lotm ini format <file> [-o <out>] [--strict]` | Format a configuration file with normalized 4-space indentation |
+| `lotm ini inspect <file> [--strict]` | Display AST block breakdown, macro counts, and diagnostics |
 | `python -m lotm ...` | Fallback umbrella module execution |
-| `lotm-big ...` | Domain alias shortcut |
+| `lotm-big ...` | Domain alias shortcut for BIG operations |
 
 ---
 
@@ -76,3 +79,47 @@ lotm big overlay "03_mod.big" "01_patch.big" -f "*.dds"
 * `sources`: A directory path (to mount all `.big` files alphabetically) or a sequence of explicit `.big` file paths evaluated in the given order.
 * `-f`, `--filter`: Optional glob pattern to inspect specific resolved files.
 * `-v`, `--verbose`: Output the override history and winning source archive for each resolved file directly to stdout.
+
+---
+
+## 6. Scanning Configuration Files (`lotm ini scan`)
+
+Scans a single `.ini`, `.inc`, or `.str` file—or recursively scans an entire directory tree—for delimiter mismatches, negative nesting levels, unclosed blocks at EOF, and orphaned `.str` statements.
+
+```cmd
+lotm ini scan "mod_workspace/data/ini" -o "scan_report.txt" --strict
+```
+
+**Options:**
+* `target`: Path to a `.ini`, `.inc`, or `.str` file, or a directory to scan recursively (Positional, Required).
+* `-o`, `--output`: Optional destination file path to save the diagnostic scan report.
+* `--strict`: Exit with a non-zero error code (`1`) if any structural or delimiter errors are detected.
+
+---
+
+## 7. Formatting Configuration Files (`lotm ini format`)
+
+Parses a SAGE `.ini`, `.inc`, or `.str` file into its AST representation and serializes it back with normalized 4-space block indentation while preserving all inline comments, standalone comments, `#define` macros, and `#include` directives.
+
+```cmd
+lotm ini format "mod_workspace/data/ini/weapon.ini" -o "weapon_formatted.ini" --strict
+```
+
+**Options:**
+* `file`: Path to the source `.ini`, `.inc`, or `.str` file (Positional, Required).
+* `-o`, `--output`: Destination file path (Default: overwrites `file` in-place).
+* `--strict`: Abort formatting and exit with a non-zero status code if any structural errors exist in the input file.
+
+---
+
+## 8. Inspecting Configuration Files (`lotm ini inspect`)
+
+Parses a configuration or localization file and prints a structural summary report detailing the recognized starting nesting level, `#define` count, `#include` count, top-level block frequency breakdown, and any non-strict warnings.
+
+```cmd
+lotm ini inspect "mod_workspace/data/ini/object/gondor/aragorn.ini"
+```
+
+**Options:**
+* `file`: Path to the `.ini`, `.inc`, or `.str` file to inspect (Positional, Required).
+* `--strict`: Fail with a non-zero status code if the file contains structural errors.
