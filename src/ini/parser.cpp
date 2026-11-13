@@ -10,12 +10,14 @@
 #include "ini/parser.hpp"
 
 #include <algorithm>
+#include <array>
+#include <cstdint>
 #include <fstream>
 #include <iterator>
 #include <sstream>
 
 
-// Windows specific. Change for POSIX
+ // Windows specific. Change for POSIX
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
@@ -23,6 +25,134 @@
 namespace lotm::ini {
 
     namespace {
+
+        // Windows-1252 code page mapping for bytes 0x80..0x9F to Unicode code points.
+        inline constexpr std::array<std::uint16_t, 32> CP1252_80_9F_TABLE = {
+            0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021,
+            0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F,
+            0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
+            0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178
+        };
+
+        /**
+         * @brief Strips a leading UTF-8 Byte Order Mark (EF BB BF) if present.
+         */
+        [[nodiscard]] constexpr std::string_view strip_utf8_bom(std::string_view sv) noexcept {
+            if (sv.size() >= 3 &&
+                static_cast<unsigned char>(sv[0]) == 0xEF &&
+                static_cast<unsigned char>(sv[1]) == 0xBB &&
+                static_cast<unsigned char>(sv[2]) == 0xBF) {
+                return sv.substr(3);
+            }
+            return sv;
+        }
+
+        /**
+         * @brief Validates whether a byte view is well-formed UTF-8 in a single zero-allocation pass.
+         */
+        [[nodiscard]] constexpr bool is_valid_utf8(std::string_view sv) noexcept {
+            std::size_t i = 0;
+            const std::size_t len = sv.size();
+
+            while (i < len) {
+                const auto b0 = static_cast<unsigned char>(sv[i]);
+                if (b0 <= 0x7F) {
+                    ++i;
+                }
+                else if (b0 >= 0xC2 && b0 <= 0xDF) {
+                    if (i + 1 >= len) {
+                        return false;
+                    }
+                    const auto b1 = static_cast<unsigned char>(sv[i + 1]);
+                    if ((b1 & 0xC0) != 0x80) {
+                        return false;
+                    }
+                    i += 2;
+                }
+                else if (b0 >= 0xE0 && b0 <= 0xEF) {
+                    if (i + 2 >= len) {
+                        return false;
+                    }
+                    const auto b1 = static_cast<unsigned char>(sv[i + 1]);
+                    const auto b2 = static_cast<unsigned char>(sv[i + 2]);
+                    if ((b0 == 0xE0 && (b1 < 0xA0 || b1 > 0xBF)) ||
+                        (b0 == 0xED && (b1 < 0x80 || b1 > 0x9F)) ||
+                        (b1 & 0xC0) != 0x80 ||
+                        (b2 & 0xC0) != 0x80) {
+                        return false;
+                    }
+                    i += 3;
+                }
+                else if (b0 >= 0xF0 && b0 <= 0xF4) {
+                    if (i + 3 >= len) {
+                        return false;
+                    }
+                    const auto b1 = static_cast<unsigned char>(sv[i + 1]);
+                    const auto b2 = static_cast<unsigned char>(sv[i + 2]);
+                    const auto b3 = static_cast<unsigned char>(sv[i + 3]);
+                    if ((b0 == 0xF0 && (b1 < 0x90 || b1 > 0xBF)) ||
+                        (b0 == 0xF4 && (b1 < 0x80 || b1 > 0x8F)) ||
+                        (b1 & 0xC0) != 0x80 ||
+                        (b2 & 0xC0) != 0x80 ||
+                        (b3 & 0xC0) != 0x80) {
+                        return false;
+                    }
+                    i += 4;
+                }
+                else {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /**
+         * @brief Transcodes a Windows-1252 / Latin-1 byte view into a valid UTF-8 std::string.
+         */
+        [[nodiscard]] std::string cp1252_to_utf8(std::string_view sv) {
+            std::string out;
+            out.reserve(sv.size() + (sv.size() / 4));
+
+            for (const char ch : sv) {
+                const auto b = static_cast<unsigned char>(ch);
+                if (b <= 0x7F) {
+                    out.push_back(ch);
+                }
+                else if (b >= 0xA0) {
+                    out.push_back(static_cast<char>(0xC0 | (b >> 6)));
+                    out.push_back(static_cast<char>(0x80 | (b & 0x3F)));
+                }
+                else {
+                    const std::uint16_t cp = CP1252_80_9F_TABLE[b - 0x80];
+                    if (cp <= 0x07FF) {
+                        out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+                        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+                    }
+                    else {
+                        out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+                        out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+                        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+                    }
+                }
+            }
+            return out;
+        }
+
+        /**
+         * @brief Strips any UTF-8 BOM and returns a zero-copy view if already valid UTF-8,
+         *        or transcodes legacy Windows-1252 bytes into `transcoded_storage`.
+         */
+        [[nodiscard]] std::string_view prepare_utf8_view(
+            std::string_view raw_view,
+            std::string& transcoded_storage
+        ) {
+            const std::string_view stripped = strip_utf8_bom(raw_view);
+            if (is_valid_utf8(stripped)) {
+                return stripped;
+            }
+            transcoded_storage = cp1252_to_utf8(stripped);
+            return transcoded_storage;
+        }
 
         [[nodiscard]] bool ends_with_ci(std::string_view str, std::string_view suffix) noexcept {
             if (str.size() < suffix.size()) {
@@ -179,6 +309,16 @@ namespace lotm::ini {
             HANDLE file_handle_{ INVALID_HANDLE_VALUE };
             HANDLE map_handle_{ nullptr };
         };
+
+        [[nodiscard]] std::string read_normalized_utf8_file(const std::filesystem::path& path) {
+            MMapFile mmap{ path };
+            std::string transcoded;
+            const std::string_view utf8_view = prepare_utf8_view(mmap.view(), transcoded);
+            if (!transcoded.empty()) {
+                return transcoded;
+            }
+            return std::string{ utf8_view };
+        }
 
         [[nodiscard]] std::vector<std::vector<std::string>> materialize_delimiter_group(
             std::span<const std::span<const std::string_view>> group
@@ -422,14 +562,16 @@ namespace lotm::ini {
 
         if (ends_with_ci(file_path, ".ini") || ends_with_ci(file_path, ".inc")) {
             std::optional<MMapFile> mmap;
-            std::string_view content_view;
+            std::string transcoded_buffer;
+            std::string_view raw_view;
             if (file_content.has_value()) {
-                content_view = *file_content;
+                raw_view = *file_content;
             }
             else {
                 mmap.emplace(std::filesystem::path{ file_path });
-                content_view = mmap->view();
+                raw_view = mmap->view();
             }
+            const std::string_view content_view = prepare_utf8_view(raw_view, transcoded_buffer);
 
             const bool is_ini = ends_with_ci(file_path, ".ini");
             std::pair<std::vector<std::vector<std::string>>, int> matched_result{ {}, 0 };
@@ -510,14 +652,16 @@ namespace lotm::ini {
         }
 
         std::optional<MMapFile> mmap;
-        std::string_view content_view;
+        std::string transcoded_buffer;
+        std::string_view raw_view;
         if (file_content.has_value()) {
-            content_view = *file_content;
+            raw_view = *file_content;
         }
         else {
             mmap.emplace(std::filesystem::path{ file_path });
-            content_view = mmap->view();
+            raw_view = mmap->view();
         }
+        const std::string_view content_view = prepare_utf8_view(raw_view, transcoded_buffer);
 
         StrDocument doc;
         doc.name = std::string{ file_path };
@@ -679,10 +823,18 @@ namespace lotm::ini {
         : name(std::move(file_name)),
         strict(is_strict) {
         if (!buffer.empty()) {
-            file_content = std::string(
+            const std::string_view raw_view(
                 reinterpret_cast<const char*>(buffer.data()),
                 buffer.size()
             );
+            std::string transcoded;
+            const std::string_view utf8_view = prepare_utf8_view(raw_view, transcoded);
+            if (!transcoded.empty()) {
+                file_content = std::move(transcoded);
+            }
+            else {
+                file_content = std::string{ utf8_view };
+            }
         }
         if (!name.empty()) {
             construct();
@@ -693,6 +845,17 @@ namespace lotm::ini {
         if (!is_supported_config_ext(name) ||
             (!file_content.has_value() && !std::filesystem::is_regular_file(std::filesystem::path{ name }))) {
             throw IniParseError("file " + name + " invalid.");
+        }
+
+        if (file_content.has_value()) {
+            std::string transcoded;
+            const std::string_view utf8_view = prepare_utf8_view(*file_content, transcoded);
+            if (!transcoded.empty()) {
+                *file_content = std::move(transcoded);
+            }
+            else if (utf8_view.size() != file_content->size()) {
+                *file_content = std::string{ utf8_view };
+            }
         }
 
         items.clear();
@@ -733,13 +896,14 @@ namespace lotm::ini {
         }
 
         std::optional<MMapFile> mmap;
+        std::string transcoded_buffer;
         std::string_view content_view;
         if (file_content.has_value()) {
             content_view = *file_content;
         }
         else {
             mmap.emplace(std::filesystem::path{ name });
-            content_view = mmap->view();
+            content_view = prepare_utf8_view(mmap->view(), transcoded_buffer);
         }
 
         auto [recognized_delims, recognized_start] = recognize_structure(name, content_view);
@@ -1125,28 +1289,20 @@ namespace lotm::ini {
                 ConstructFile file_object{ std::string{ full_path }, false };
                 std::string printed = file_object.print();
                 if (printed.empty()) {
-                    std::optional<MMapFile> mmap;
-                    mmap.emplace(fs_path);
-                    return { std::string(mmap->view()),{} };
+                    return { read_normalized_utf8_file(fs_path),{} };
                 }
                 return { std::move(printed), std::move(file_object.delimiters) };
             }
             catch (const IniParseError&) {
-                std::optional<MMapFile> mmap;
-                mmap.emplace(fs_path);
-                return { std::string(mmap->view()),{} };
+                return { read_normalized_utf8_file(fs_path),{} };
             }
             catch (const std::out_of_range&) {
-                std::optional<MMapFile> mmap;
-                mmap.emplace(fs_path);
-                return { std::string(mmap->view()),{} };
+                return { read_normalized_utf8_file(fs_path),{} };
             }
         }
 
         if (ends_with_ci(full_path, ".txt")) {
-            std::optional<MMapFile> mmap;
-            mmap.emplace(fs_path);
-            return { std::string(mmap->view()),{} };
+            return { read_normalized_utf8_file(fs_path),{} };
         }
 
         throw IniParseError("wrong path or unsupported file type: " + std::string{ full_path });
