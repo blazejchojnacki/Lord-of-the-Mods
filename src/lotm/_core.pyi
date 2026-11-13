@@ -320,6 +320,13 @@ class ini:
             file_content: str | None = None,
         ) -> 'ini.StrDocument': ...
 
+        @staticmethod
+        def parse_str_buffer(
+            file_path: str | os.PathLike[str],
+            strict: bool,
+            file_buffer: Buffer,
+        ) -> 'ini.StrDocument': ...
+
     class ConstructFile:
         name: str
         comment: str
@@ -332,6 +339,13 @@ class ini:
         current_level: int
         last_comment: str
         errors: list[str]
+        @overload
+        def __init__(
+            self,
+            name: str | os.PathLike[str],
+            strict: bool,
+            file_buffer: Buffer,
+        ) -> None: ...
         @overload
         def __init__(
             self,
@@ -363,6 +377,12 @@ class ini:
     def recognize_structure(
         file_path: str | os.PathLike[str],
         file_content: str | None = None,
+    ) -> tuple[list[list[str]], int]: ...
+
+    @staticmethod
+    def recognize_structure_buffer(
+        file_path: str | os.PathLike[str],
+        file_buffer: Buffer,
     ) -> tuple[list[list[str]], int]: ...
 
     @staticmethod

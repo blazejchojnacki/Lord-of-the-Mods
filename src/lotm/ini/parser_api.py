@@ -10,6 +10,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 import os
+from collections.abc import Buffer
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypeAlias
@@ -74,7 +75,7 @@ def parse_ini(
     file_path: str | os.PathLike[str],
     *,
     strict: bool = False,
-    file_content: str | None = None,
+    file_content: str | Buffer | None = None,
 ) -> ConstructFile:
     """
     Parse a SAGE .ini, .inc, or .str configuration file into a ConstructFile AST.
@@ -85,8 +86,9 @@ def parse_ini(
         Path to the configuration file (used for extension dispatch and diagnostics).
     strict : bool, default=False
         If True, raises IniParseError immediately on unclosed blocks or negative levels.
-    file_content : str | None, default=None
-        Optional in-memory string buffer. Reads from disk when None.
+    file_content : str | Buffer | None, default=None
+        Optional in-memory string or binary buffer protocol object (e.g. bytes, memoryview).
+        Reads from disk when None.
 
     Returns
     -------
@@ -99,6 +101,8 @@ def parse_ini(
     >>> len(doc)
     1
     """
+    if isinstance(file_content, (bytes, bytearray, memoryview)):
+        return ConstructFile(os.fspath(file_path), strict, file_content)
     return ConstructFile(os.fspath(file_path), strict, file_content)
 
 
@@ -106,7 +110,7 @@ def parse_str(
     file_path: str | os.PathLike[str],
     *,
     strict: bool = False,
-    file_content: str | None = None,
+    file_content: str | Buffer | None = None,
 ) -> StrDocument:
     """
     Parse a SAGE .str localization file into a dedicated StrDocument AST.
@@ -117,8 +121,9 @@ def parse_str(
         Path to the .str localization file.
     strict : bool, default=False
         If True, raises IniParseError on unclosed entries or orphaned statements.
-    file_content : str | None, default=None
-        Optional in-memory string buffer. Reads from disk when None.
+    file_content : str | Buffer | None, default=None
+        Optional in-memory string or binary buffer protocol object.
+        Reads from disk when None.
 
     Returns
     -------
@@ -131,6 +136,8 @@ def parse_str(
     >>> len(doc.entries)
     1
     """
+    if isinstance(file_content, (bytes, bytearray, memoryview)):
+        return _ini.parse_str_buffer(os.fspath(file_path), strict, file_content)
     return StrParser.parse_file(os.fspath(file_path), strict, file_content)
 
 

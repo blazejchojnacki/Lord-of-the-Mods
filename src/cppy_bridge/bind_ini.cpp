@@ -24,8 +24,10 @@
 #include <ini/types.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -51,6 +53,34 @@ namespace lotm::python {
             }
             return static_cast<std::size_t>(index);
         }
+
+        struct ScopedPyBuffer {
+            Py_buffer view{};
+            bool valid{ false };
+
+            explicit ScopedPyBuffer(nb::handle obj) {
+                if (PyObject_GetBuffer(obj.ptr(), &view, PyBUF_SIMPLE) != 0) {
+                    throw nb::python_error();
+                }
+                valid = true;
+            }
+
+            ScopedPyBuffer(const ScopedPyBuffer&) = delete;
+            ScopedPyBuffer& operator=(const ScopedPyBuffer&) = delete;
+
+            ~ScopedPyBuffer() {
+                if (valid) {
+                    PyBuffer_Release(&view);
+                }
+            }
+
+            [[nodiscard]] std::span<const uint8_t> as_span() const noexcept {
+                return std::span<const uint8_t>(
+                    static_cast<const uint8_t*>(view.buf),
+                    static_cast<std::size_t>(view.len)
+                );
+            }
+        };
 
     } // namespace
 
@@ -225,6 +255,16 @@ namespace lotm::python {
                 nb::arg("file_content") = nb::none(),
                 "Parses a SAGE .str file from disk or an in-memory string");
 
+        sub.def("parse_str_buffer", [](const std::filesystem::path& file_path, bool strict, nb::object file_buffer) {
+            const std::string path_str = path_to_utf8(file_path);
+            ScopedPyBuffer py_buf(file_buffer);
+            std::string_view content_view(reinterpret_cast<const char*>(py_buf.view.buf), py_buf.view.len);
+            nb::gil_scoped_release release;
+            return lotm::ini::StrParser::parse_file(path_str, strict, content_view);
+            },
+            nb::arg("file_path"), nb::arg("strict"), nb::arg("file_buffer"),
+            "Parses a SAGE .str file directly from a Python memoryview or bytes buffer");
+
         nb::class_<lotm::ini::ConstructFile>(sub, "ConstructFile", "Root AST representation of a parsed SAGE .ini, .inc, or .str document")
             .def("__init__", [](lotm::ini::ConstructFile* t,
                 const std::filesystem::path& name,
@@ -268,6 +308,17 @@ namespace lotm::python {
                 nb::arg("strict") = false,
                 nb::arg("file_content") = nb::none(),
                 "Initializes a ConstructFile with explicit metadata attributes")
+            .def("__init__", [](lotm::ini::ConstructFile* t,
+                const std::filesystem::path& name,
+                bool strict,
+                nb::object file_buffer) {
+                    std::string name_str = path_to_utf8(name);
+                    ScopedPyBuffer py_buf(file_buffer);
+                    nb::gil_scoped_release release;
+                    new (t) lotm::ini::ConstructFile(std::move(name_str), strict, py_buf.as_span());
+                },
+                nb::arg("name"), nb::arg("strict"), nb::arg("file_buffer"),
+                "Initializes and parses a configuration document from a Python memoryview or bytes buffer")
             .def_rw("name", &lotm::ini::ConstructFile::name, "File path or document name")
             .def_rw("comment", &lotm::ini::ConstructFile::comment, "Document-level comment")
             .def_rw("defines", &lotm::ini::ConstructFile::defines, "Collected #define macro lines")
@@ -311,6 +362,16 @@ namespace lotm::python {
             nb::arg("file_path"),
             nb::arg("file_content") = nb::none(),
             "Recognizes the delimiter hierarchy and starting nesting depth of a SAGE .ini, .inc, or .str file");
+
+        sub.def("recognize_structure_buffer", [](const std::filesystem::path& file_path, nb::object file_buffer) {
+            const std::string path_str = path_to_utf8(file_path);
+            ScopedPyBuffer py_buf(file_buffer);
+            std::string_view content_view(reinterpret_cast<const char*>(py_buf.view.buf), py_buf.view.len);
+            nb::gil_scoped_release release;
+            return lotm::ini::recognize_structure(path_str, content_view);
+            },
+            nb::arg("file_path"), nb::arg("file_buffer"),
+            "Recognizes the delimiter hierarchy and starting nesting depth from a Python memoryview or bytes buffer");
 
         sub.def("validate_include", &lotm::ini::validate_include,
             nb::arg("node"),
