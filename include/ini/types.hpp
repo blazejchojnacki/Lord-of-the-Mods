@@ -32,6 +32,7 @@ namespace lotm::ini {
     inline constexpr std::string_view LEVEL_INDENT = "    ";
     inline constexpr std::array<std::string_view, 3> INI_ENDS = { "End", "END", "end" };
     inline constexpr std::size_t MAX_INI_DEPTH = 16;
+    inline constexpr std::size_t MAX_INI_FILE_SIZE = 64ULL * 1024ULL * 1024ULL;
 
     // Legacy 32-bit SAGE Engine string buffer limits for AST builders
     inline constexpr std::size_t SAGE_MAX_BLOCK_NAME_LEN = 256;
@@ -41,7 +42,19 @@ namespace lotm::ini {
      * @brief Validates string lengths against legacy SAGE engine buffer limits.
      * @throws IniParseError if bounds are exceeded.
      */
-    inline void validate_sage_bounds(std::string_view name, std::string_view identifier = "") {
+    inline void validate_sage_bounds(
+        std::string_view name,
+        std::string_view identifier = "",
+        std::string_view class_token = ""
+    ) {
+        std::string_view clean_class = class_token;
+        while (!clean_class.empty() && (clean_class.back() == '=' || clean_class.back() == ' ')) {
+            clean_class.remove_suffix(1);
+        }
+        if (clean_class.size() > SAGE_MAX_BLOCK_NAME_LEN) {
+            throw IniParseError("Security abort: Block class length (" + std::to_string(clean_class.size()) +
+                ") exceeds SAGE engine limit (" + std::to_string(SAGE_MAX_BLOCK_NAME_LEN) + ")");
+        }
         if (name.size() > SAGE_MAX_BLOCK_NAME_LEN) {
             throw IniParseError("Security abort: Block name length (" + std::to_string(name.size()) +
                 ") exceeds SAGE engine limit (" + std::to_string(SAGE_MAX_BLOCK_NAME_LEN) + ")");
@@ -231,7 +244,7 @@ namespace lotm::ini {
         header_comment(std::move(hdr_cmt)),
         end_token(std::move(end_tok)),
         end_comment(std::move(end_cmt)) {
-        validate_sage_bounds(name, identifier);
+        validate_sage_bounds(name, identifier, _class);
     }
 
     inline ConstructLevel::~ConstructLevel() = default;
@@ -278,6 +291,21 @@ namespace lotm::ini {
             validate_sage_bounds(category, identifier);
         }
 
+        [[nodiscard]] std::size_t size() const noexcept { return items.size(); }
+        [[nodiscard]] bool empty() const noexcept { return items.empty(); }
+
+        void append(StrChildNode item) { items.push_back(std::move(item)); }
+
+        [[nodiscard]] StrChildNode& operator[](std::size_t index) { return items[index]; }
+        [[nodiscard]] const StrChildNode& operator[](std::size_t index) const { return items[index]; }
+
+        [[nodiscard]] auto begin() noexcept { return items.begin(); }
+        [[nodiscard]] auto end() noexcept { return items.end(); }
+        [[nodiscard]] auto begin() const noexcept { return items.begin(); }
+        [[nodiscard]] auto end() const noexcept { return items.end(); }
+        [[nodiscard]] auto cbegin() const noexcept { return items.cbegin(); }
+        [[nodiscard]] auto cend() const noexcept { return items.cend(); }
+
         [[nodiscard]] std::string print() const;
 
         [[nodiscard]] bool operator==(const StrEntry&) const = default;
@@ -296,7 +324,24 @@ namespace lotm::ini {
         std::vector<StrDocEntry> entries{};
         std::vector<std::string> errors{};
 
+        [[nodiscard]] std::size_t size() const noexcept { return entries.size(); }
+        [[nodiscard]] bool empty() const noexcept { return entries.empty(); }
+
+        void append(StrDocEntry entry) { entries.push_back(std::move(entry)); }
+
+        [[nodiscard]] StrDocEntry& operator[](std::size_t index) { return entries[index]; }
+        [[nodiscard]] const StrDocEntry& operator[](std::size_t index) const { return entries[index]; }
+
+        [[nodiscard]] auto begin() noexcept { return entries.begin(); }
+        [[nodiscard]] auto end() noexcept { return entries.end(); }
+        [[nodiscard]] auto begin() const noexcept { return entries.begin(); }
+        [[nodiscard]] auto end() const noexcept { return entries.end(); }
+        [[nodiscard]] auto cbegin() const noexcept { return entries.cbegin(); }
+        [[nodiscard]] auto cend() const noexcept { return entries.cend(); }
+
         [[nodiscard]] std::string print() const;
+
+        [[nodiscard]] bool operator==(const StrDocument&) const = default;
     };
 
     /**
