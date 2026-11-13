@@ -15,9 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Modeled the configuration AST via `std::variant` (`CommentNode`, `StatementNode`, `IncludeNode`, `ScriptNode`, `ConstructLevel`) alongside `StrEntry`, `StrDocument`, `StrParser`, and `ConstructFile`.
   - Added native handling for SAGE quirks: opaque `BeginScript ... EndScript` Lua blocks, dynamic `<key> = FCurve` block promotion, transparent `ReplaceModule` depth shifting, and case-tolerant closing keywords (`End`, `END`, `end`).
   - Implemented non-recursive, stack-based iterative AST serialization (`serialize_iterative` via `SerializationFrame` and `std::visit`) guaranteeing 100% lossless roundtrip reconstruction.
-- **OS Memory-Mapped & Zero-Copy Buffer Ingestion**:
+- **OS Memory-Mapped, Zero-Copy Ingestion & Legacy Encodings**:
   - Added Windows `CreateFileMappingW` / `MapViewOfFile` RAII memory-mapped file ingestion (`MMapFile`) for zero-copy on-disk parsing.
   - Bound Python Buffer Protocol overloads (`bytes`, `bytearray`, `memoryview`) via `ScopedPyBuffer` in `ConstructFile`, `parse_str_buffer`, and `recognize_structure_buffer`, allowing `BigArchive.read_entry()` payloads to be parsed without intermediate string decoding.
+  - Implemented automatic UTF-8 BOM stripping and single-pass UTF-8 validation with a seamless fallback to transcode legacy Windows-1252/Latin-1 bytes, preventing decoding crashes at the Python boundary.
 - **Public Python API (`lotm.ini`) & Umbrella CLI (`lotm ini`)**:
   - Exposed all AST node classes and parser routines through `nanobind` (`lotm._core.ini`) with full GIL release during parsing and serialization, accompanied by strict `_core.pyi` type stubs.
   - Added high-level Python API functions (`parse_ini`, `parse_str`, `format_ini`, `scan_ini`, `inspect_ini`) and the `IniInspectionReport` summary dataclass.

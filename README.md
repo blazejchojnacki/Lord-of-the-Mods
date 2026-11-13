@@ -15,7 +15,7 @@ A high-performance C++20 and Python toolkit designed for modding EA *The Battle 
 - **Byte-Fidelity Repacking:** Creates SAGE-compliant `.big` archives on disk or directly to in-memory buffers with alphabetical binary-search index ordering and EA build tag alignment.
 - **Archive Diffing & Delta Patching:** Compare two archives byte-for-byte and automatically generate minimal, standalone patch archives containing only additions and modifications.
 - **Load-Order Emulation:** Emulate SAGE engine virtual file trees to resolve the effective "last-wins" entries across an entire load-order sequence of multiple archives.
-- **Lossless INI/INC/STR Parsing & Formatting:** Parse, validate, inspect, and format SAGE `.ini`, `.inc`, and `.str` configuration and localization files, zero-copy memory-mapped ingestion, and virtual chroot `#include` security.
+- **Lossless INI/INC/STR Parsing & Formatting:** Parse, validate, inspect, and format SAGE `.ini`, `.inc`, and `.str` configuration and localization files with 100% roundtrip fidelity, zero-copy memory-mapped ingestion, automatic UTF-8 BOM/Windows-1252 legacy encoding fallbacks, and virtual chroot `#include` security.
 - **Python 3.12+ Bindings:** C++ performance accessible directly in Python via `nanobind`.
 
 ## Requirements
