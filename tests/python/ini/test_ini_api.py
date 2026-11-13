@@ -336,3 +336,31 @@ def test_high_level_format_scan_and_inspect_api(
     )
     assert no_ext_report.block_counts == {}
     assert no_ext_report.total_top_level_items == 1
+
+def test_buffer_protocol_ingestion() -> None:
+    """Verify parse_ini, parse_str, and recognize_structure correctly process zero-copy Buffer objects."""
+    import lotm._core as _core
+
+    ini_content = b"Object GondorFighter\n  Side = Men\nEnd\n"
+
+    # Test bytes and memoryview ingestion for parse_ini (ConstructFile)
+    doc_bytes = ini.parse_ini("dummy.ini", file_content=ini_content)
+    assert len(doc_bytes) == 1
+    assert "Side = Men" in doc_bytes.print()
+
+    doc_mv = ini.parse_ini("dummy.ini", file_content=memoryview(ini_content))
+    assert len(doc_mv) == 1
+
+    # Test bytes and memoryview ingestion for parse_str (StrParser)
+    str_content = b'OBJECT:Unit\n  "Soldier"\nEnd\n'
+    str_bytes = ini.parse_str("dummy.str", file_content=str_content)
+    assert len(str_bytes.entries) == 1
+    assert "OBJECT:Unit" in str_bytes.print()
+
+    str_mv = ini.parse_str("dummy.str", file_content=memoryview(str_content))
+    assert len(str_mv.entries) == 1
+
+    # Test native core recognize_structure_buffer
+    delims, start_lvl = _core.ini.recognize_structure_buffer("dummy.ini", ini_content)
+    assert start_lvl == 0
+    assert len(delims) > 0
