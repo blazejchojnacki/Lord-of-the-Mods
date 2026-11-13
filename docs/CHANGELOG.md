@@ -6,6 +6,28 @@ All notable changes to the Lord of the Mods (`lotm`) project will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-11-13
+
+### Added
+- **Native C++20 SAGE Configuration Parser (`lotm_ini`)**:
+  - Implemented zero-copy `std::string_view` line tokenization (`LexedLine`, `lex_line_into`, `for_each_line_view`) operating directly over contiguous buffers without per-line heap reallocations or separator mutations (`=`, `:`).
+  - Added compile-time `constexpr` delimiter lookup tables (`INI_DELIMITERS`, `INI_DELIMITER_RULES`, `STR_DELIMITERS`, `STR_DELIMITER_RULES`) for zero-cost schema initialization.
+  - Modeled the configuration AST via `std::variant` (`CommentNode`, `StatementNode`, `IncludeNode`, `ScriptNode`, `ConstructLevel`) alongside `StrEntry`, `StrDocument`, `StrParser`, and `ConstructFile`.
+  - Added native handling for SAGE quirks: opaque `BeginScript ... EndScript` Lua blocks, dynamic `<key> = FCurve` block promotion, transparent `ReplaceModule` depth shifting, and case-tolerant closing keywords (`End`, `END`, `end`).
+  - Implemented non-recursive, stack-based iterative AST serialization (`serialize_iterative` via `SerializationFrame` and `std::visit`) guaranteeing 100% lossless roundtrip reconstruction.
+- **OS Memory-Mapped & Zero-Copy Buffer Ingestion**:
+  - Added Windows `CreateFileMappingW` / `MapViewOfFile` RAII memory-mapped file ingestion (`MMapFile`) for zero-copy on-disk parsing.
+  - Bound Python Buffer Protocol overloads (`bytes`, `bytearray`, `memoryview`) via `ScopedPyBuffer` in `ConstructFile`, `parse_str_buffer`, and `recognize_structure_buffer`, allowing `BigArchive.read_entry()` payloads to be parsed without intermediate string decoding.
+- **Public Python API (`lotm.ini`) & Umbrella CLI (`lotm ini`)**:
+  - Exposed all AST node classes and parser routines through `nanobind` (`lotm._core.ini`) with full GIL release during parsing and serialization, accompanied by strict `_core.pyi` type stubs.
+  - Added high-level Python API functions (`parse_ini`, `parse_str`, `format_ini`, `scan_ini`, `inspect_ini`) and the `IniInspectionReport` summary dataclass.
+  - Registered `lotm ini scan`, `lotm ini format`, and `lotm ini inspect` subcommands under the unified `lotm` umbrella CLI runner.
+
+### Security & Hardening
+- **Nesting Depth Guard**: Enforced `MAX_INI_DEPTH = 16` across all block, `FCurve`, and `BeginScript` transitions to prevent stack-exhaustion attacks from malformed configuration files.
+- **Virtual Chroot `#include` Sandboxing**: Implemented `validate_include` using canonical path resolution to confine `#include` directives strictly within the virtual `data/ini` root and block path traversal (`../`) escapes.
+- **Legacy 32-Bit Engine Buffer Bounds Validation**: Enforced `SAGE_MAX_BLOCK_NAME_LEN` (256 bytes) and `SAGE_MAX_IDENTIFIER_LEN` (512 bytes) via `validate_sage_bounds` in AST constructors and parser routines to prevent downstream buffer overflows in the 32-bit game executable.
+
 ## [0.4.0] - 2026-11-06
 
 ### Added

@@ -77,16 +77,19 @@ python -m pytest tests/python -v --cov=lotm --cov-report=term-missing
 ```
 
 ### C++ (Catch2 & OpenCppCoverage)
-Run the native C++ unit tests. CTest is recommended for a quick pass/fail summary:
+Run the native C++ unit tests. CTest is recommended for a quick pass/fail summary across both `lotm_cpp_tests` and `lotm_ini_tests`:
 ```cmd
 ctest --test-dir build --output-on-failure
 ```
-*(Note: To run specific tests or see detailed assertions, execute the binary directly: `.\build\tests\lotm_cpp_tests.exe`)*
+*(Note: To run specific tests or see detailed assertions, execute the binaries directly: `.\build\tests\lotm_cpp_tests.exe` and `.\build\tests\lotm_ini_tests.exe`)*
 
 **C++ Coverage Generation:**
 To generate the line-by-line HTML coverage report (requires `winget install OpenCppCoverage.OpenCppCoverage`). Ensure the project was compiled with `-DCMAKE_BUILD_TYPE=Debug` so that MSVC outputs PDB symbols for OpenCppCoverage:
 ```cmd
 OpenCppCoverage.exe --sources "%CD%\src" --sources "%CD%\include" --excluded_sources "%CD%\tests" --export_type html:coverage_cpp -- "%CD%\build\tests\lotm_cpp_tests.exe"
+```
+```cmd
+OpenCppCoverage.exe --sources "%CD%\src" --sources "%CD%\include" --excluded_sources "%CD%\tests" --export_type html:coverage_ini_cpp -- "%CD%\build\tests\lotm_ini_tests.exe"
 ```
 ```cmd
 start .\coverage_cpp\index.html
@@ -117,4 +120,5 @@ The resulting package is stored inside the `dist/` directory.
 The build system is organized into decoupled CMake targets:
 - `lotm_core`: Header-only interface library containing endian-swapping utilities (`endian.hpp`).
 - `lotm_big`: Static C++ library implementing `BigArchive`, `BigPacker`, `BigDiff`, and `BigOverlay`.
-- `lotm`: The native Python extension module (`.pyd`) exported via `nanobind`.
+- `lotm_ini`: Static C++ library implementing the zero-copy SAGE `.ini`, `.inc`, and `.str` lexer, schema tables, AST parser, iterative serializer, and `#include` virtual chroot validator.
+- `_core`: The native Python extension module (`.pyd`) exported via `nanobind` under `lotm._core`.

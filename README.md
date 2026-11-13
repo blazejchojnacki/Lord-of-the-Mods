@@ -15,6 +15,7 @@ A high-performance C++20 and Python toolkit designed for modding EA *The Battle 
 - **Byte-Fidelity Repacking:** Creates SAGE-compliant `.big` archives on disk or directly to in-memory buffers with alphabetical binary-search index ordering and EA build tag alignment.
 - **Archive Diffing & Delta Patching:** Compare two archives byte-for-byte and automatically generate minimal, standalone patch archives containing only additions and modifications.
 - **Load-Order Emulation:** Emulate SAGE engine virtual file trees to resolve the effective "last-wins" entries across an entire load-order sequence of multiple archives.
+- **Lossless INI/INC/STR Parsing & Formatting:** Parse, validate, inspect, and format SAGE `.ini`, `.inc`, and `.str` configuration and localization files, zero-copy memory-mapped ingestion, and virtual chroot `#include` security.
 - **Python 3.12+ Bindings:** C++ performance accessible directly in Python via `nanobind`.
 
 ## Requirements
@@ -23,8 +24,8 @@ A high-performance C++20 and Python toolkit designed for modding EA *The Battle 
 
 ## Documentation
 The `lotm` project provides comprehensive documentation for contributors and users:
-* **[Python API Reference](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/python-api.md)**: Programmatic extraction, packing, diffing, and overlay APIs.
-* **[Command-Line Tools](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/cli.md)**: Standalone terminal instructions for packing, unpacking, patch generation, and overlay emulation.
+* **[Python API Reference](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/python-api.md)**: Programmatic archive extraction, packing, diffing, overlay emulation, and INI/INC/STR AST parsing APIs.
+* **[Command-Line Tools](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/cli.md)**: Standalone terminal instructions for BIG archive operations and INI configuration scanning, formatting, and inspection.
 * **[BIG4 Format Specs](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/big4-format.md)**: Deep technical details regarding the BIG4 binary layout and SAGE engine alignment quirks.
 * **[Contributing Guide](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/CONTRIBUTING.md)**: Development, compilation, and testing workflows for C++ and Python.
 * **[Coverage Log](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/coverage-log.md)**: Current C++ Catch2 and Pytest coverage benchmarks.
