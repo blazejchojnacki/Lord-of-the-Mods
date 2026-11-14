@@ -9,13 +9,16 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 from __future__ import annotations
 
+import lotm
 import lotm._core as _core
 import lotm.ini as ini
 
 
 def test_core_ini_submodule_exists() -> None:
-    """Verify that the private C++ extension exposes the ini submodule."""
+    """Verify that the private C++ extension exposes the ini submodule and top-level lotm exports ini."""
     assert hasattr(_core, "ini")
+    assert hasattr(lotm, "ini")
+    assert "ini" in lotm.__all__
 
 
 def test_public_ini_exports_all_symbols() -> None:
@@ -58,5 +61,8 @@ def test_constants_and_exception_inheritance() -> None:
     assert ini.LEVEL_INDENT == "    "
     assert ini.INI_ENDS == ("End", "END", "end")
     assert ini.MAX_INI_DEPTH == 16
+    assert _core.ini.MAX_INI_FILE_SIZE == 64 * 1024 * 1024
+    assert _core.ini.SAGE_MAX_BLOCK_NAME_LEN == 256
+    assert _core.ini.SAGE_MAX_IDENTIFIER_LEN == 512
     assert ini.SUPPORTED_EXTENSIONS == (".ini", ".inc", ".str")
     assert issubclass(ini.IniParseError, ValueError)

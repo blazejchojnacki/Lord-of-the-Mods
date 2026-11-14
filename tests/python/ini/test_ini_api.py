@@ -57,6 +57,11 @@ def test_ast_leaf_nodes_properties_equality_and_repr() -> None:
     scr.end_comment = "; end"
     scr.content = ['CurDrawableShowSubObject("BOW")', "if x then end"]
 
+    with pytest.raises(ini.IniParseError):
+        scr.name = "A" * 257
+    with pytest.raises(ini.IniParseError):
+        scr.identifier = "B" * 513
+
     assert scr == ini.ScriptNode(
         "BeginScript",
         "OnInit",
@@ -101,12 +106,23 @@ def test_construct_level_container_operations_and_indexing() -> None:
     block.end_token = "END"
     block.end_comment = "; updated tail"
 
+    with pytest.raises(ini.IniParseError):
+        block._class = "C" * 257
+    with pytest.raises(ini.IniParseError):
+        block.name = "N" * 257
+    with pytest.raises(ini.IniParseError):
+        block.identifier = "I" * 513
+
     block.append(ini.CommentNode("; inner cmt"))
     block.append(ini.StatementNode("Health = 200"))
     assert len(block) == 2
 
-    # Positive and negative __getitem__ / __setitem__
+    # Positive and negative __getitem__ / __setitem__ and reference semantics
     assert isinstance(block[0], ini.CommentNode)
+    block[0].text = "; mutated inner cmt"
+    assert isinstance(block[0], ini.CommentNode)
+    assert block[0].text == "; mutated inner cmt"
+
     assert isinstance(block[-1], ini.StatementNode)
 
     block[-1] = ini.StatementNode("Health = 250", "; buffed")
@@ -149,6 +165,20 @@ def test_str_entry_and_str_document_bindings(sample_str_file: Path) -> None:
     entry.end_comment = "; end"
     entry.items = [ini.CommentNode("; c"), ini.StatementNode('"Soldier"')]
 
+    with pytest.raises(ini.IniParseError):
+        entry.category = "C" * 257
+    with pytest.raises(ini.IniParseError):
+        entry.identifier = "I" * 513
+
+    entry.append(ini.CommentNode("; appended child"))
+    assert len(entry) == 3
+    assert isinstance(entry[-1], ini.CommentNode)
+    entry[-1] = ini.CommentNode("; replaced child")
+    assert list(entry)[-1] == ini.CommentNode("; replaced child")
+
+    with pytest.raises(IndexError):
+        _ = entry[10]
+
     assert entry == entry
     assert "StrEntry" in repr(entry)
     assert "OBJECT:GondorSoldier" in entry.print()
@@ -157,8 +187,21 @@ def test_str_entry_and_str_document_bindings(sample_str_file: Path) -> None:
     doc.name = "custom2.str"
     doc.entries = [entry]
     doc.errors = []
+    doc.append(ini.CommentNode("; doc tail"))
+    assert len(doc) == 2
+    assert isinstance(doc[0], ini.StrEntry)
+    doc[0].identifier = "GondorElite"
+    assert isinstance(doc[0], ini.StrEntry)
+    assert doc[0].identifier == "GondorElite"
+    doc[-1] = ini.CommentNode("; doc tail 2")
+    assert len(list(doc)) == 2
+    assert doc == doc
+
+    with pytest.raises(IndexError):
+        _ = doc[10]
+
     assert "StrDocument" in repr(doc)
-    assert "OBJECT:GondorSoldier" in doc.print()
+    assert "OBJECT:GondorElite" in doc.print()
 
     parsed_doc = ini.parse_str(sample_str_file, strict=True)
     assert len(parsed_doc.entries) == 3
@@ -199,6 +242,16 @@ def test_construct_file_overloads_and_sequence_protocol(sample_ini_file: Path) -
     assert len(meta_parsed) == 1
     assert "ConstructFile" in repr(meta_parsed)
 
+    # Verify in-place reference semantics on ConstructFile indexing and iteration
+    assert isinstance(meta_parsed[0], ini.ConstructLevel)
+    meta_parsed[0].name = "MirkwoodBow"
+    assert "Weapon MirkwoodBow" in meta_parsed.print()
+
+    for root_node in meta_parsed:
+        if isinstance(root_node, ini.ConstructLevel):
+            root_node.name = "LorienBow"
+    assert "Weapon LorienBow" in meta_parsed.print()
+
     # Property read/write accessors
     meta_parsed.comment = "; updated"
     meta_parsed.defines = ["#define RANGE 300"]
@@ -213,6 +266,7 @@ def test_construct_file_overloads_and_sequence_protocol(sample_ini_file: Path) -
 
     meta_parsed.construct()
     assert meta_parsed.errors == []
+    assert meta_parsed == meta_parsed
 
     # Indexing and iteration on ConstructFile
     meta_parsed.append(ini.CommentNode("; appended"))
@@ -284,19 +338,41 @@ def test_high_level_format_scan_and_inspect_api(
     sample_str_file: Path,
     malformed_ini_file: Path,
     ini_mod_directory: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Verify format_ini, scan_ini, and inspect_ini across all execution branches."""
-    # format_ini without output_path
+    # format_ini without output_path (both str and Buffer)
     formatted_str = ini.format_ini(
         "inline.ini",
         file_content="Armor A\nArmor = DEFAULT 10%\nEnd\n",
     )
     assert "    Armor = DEFAULT 10%\n" in formatted_str
 
+    formatted_buf = ini.format_ini(
+        "inline.ini",
+        file_content=b"Armor A\nArmor = DEFAULT 10%\nEnd\n",
+    )
+    assert formatted_buf == formatted_str
+
     # format_ini with output_path creating parent directory
     out_formatted = tmp_path / "formatted_out" / "hero.ini"
     ini.format_ini(sample_ini_file, output_path=out_formatted, strict=True)
     assert out_formatted.is_file()
+
+    # format_ini atomic write cleanup when os.replace fails
+    fail_dest = tmp_path / "formatted_out" / "atomic_fail.ini"
+    tmp_sibling = fail_dest.with_name(f".{fail_dest.name}.lotm_tmp")
+
+    def _mock_replace_fail(src: os.PathLike[str], dst: os.PathLike[str]) -> None:
+        raise OSError("Simulated atomic rename failure")
+
+    with monkeypatch.context() as m:
+        m.setattr(os, "replace", _mock_replace_fail)
+        with pytest.raises(OSError, match="Simulated atomic rename failure"):
+            ini.format_ini(sample_ini_file, output_path=fail_dest, strict=True)
+
+    assert not tmp_sibling.exists()
+    assert not fail_dest.exists()
 
     # scan_ini on missing path
     with pytest.raises(ini.IniParseError, match="Target path does not exist"):
@@ -315,7 +391,7 @@ def test_high_level_format_scan_and_inspect_api(
     # scan_ini on directory
     dir_scan = ini.scan_ini(ini_mod_directory, strict=True)
     assert len(dir_scan) == 3
-    assert all( errs == [] for errs in dir_scan.values() )
+    assert all(errs == [] for errs in dir_scan.values())
 
     # inspect_ini on .ini (contains CommentNode, IncludeNode, ScriptNode, ConstructLevel)
     ini_report = ini.inspect_ini(sample_ini_file, strict=True)
@@ -325,6 +401,14 @@ def test_high_level_format_scan_and_inspect_api(
     assert ini_report.include_count == 2
     assert ini_report.block_counts == {"BeginScript": 1, "Object": 1}
     assert ini_report.errors == []
+
+    # inspect_ini on binary Buffer
+    buf_report = ini.inspect_ini(
+        "weapon.ini",
+        strict=True,
+        file_content=b"Weapon GondorSword\n    Damage = 40\nEnd\n",
+    )
+    assert buf_report.block_counts == {"Weapon": 1}
 
     # inspect_ini on .str (contains CommentNode and StrEntry)
     str_report = ini.inspect_ini(sample_str_file, strict=True)
@@ -346,13 +430,16 @@ def test_buffer_protocol_ingestion() -> None:
 
     ini_content = b"Object GondorFighter\n  Side = Men\nEnd\n"
 
-    # Test bytes and memoryview ingestion for parse_ini (ConstructFile)
+    # Test bytes, memoryview, and empty b"" ingestion for parse_ini (ConstructFile)
     doc_bytes = ini.parse_ini("dummy.ini", file_content=ini_content)
     assert len(doc_bytes) == 1
     assert "Side = Men" in doc_bytes.print()
 
     doc_mv = ini.parse_ini("dummy.ini", file_content=memoryview(ini_content))
     assert len(doc_mv) == 1
+
+    doc_empty_buf = ini.parse_ini("empty_virtual.ini", strict=True, file_content=b"")
+    assert len(doc_empty_buf) == 0
 
     # Test bytes and memoryview ingestion for parse_str (StrParser)
     str_content = b'OBJECT:Unit\n  "Soldier"\nEnd\n'
