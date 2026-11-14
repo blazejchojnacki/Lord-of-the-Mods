@@ -1,6 +1,6 @@
 # Lord-of-the-Mods (lotm)
 
-[![PyPI version](https://img.shields.io/pypi/v/lord-of-the-mods.svg?color=blue)](https://pypi.org/project/lord-of-the-mods/)
+[![PyPI version](https://img.shields.io/pypi/v/lord-of-the-mods.svg?color=blue)]([https://pypi.org/project/lord-of-the-mods/](https://pypi.org/project/lord-of-the-mods/))
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows_x64-0078D6.svg?logo=windows&logoColor=white)](https://www.microsoft.com/windows/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -27,6 +27,7 @@ The `lotm` project provides comprehensive documentation for contributors and use
 * **[Python API Reference](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/python-api.md)**: Programmatic archive extraction, packing, diffing, overlay emulation, and INI/INC/STR AST parsing APIs.
 * **[Command-Line Tools](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/cli.md)**: Standalone terminal instructions for BIG archive operations and INI configuration scanning, formatting, and inspection.
 * **[BIG4 Format Specs](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/big4-format.md)**: Deep technical details regarding the BIG4 binary layout and SAGE engine alignment quirks.
+* **[INI Parser & AST Specs](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/ini-parser.md)**: Architectural overview of the zero-copy SAGE `.ini`, `.inc`, and `.str` lexer, compile-time schema tables, and iterative serializer.
 * **[Contributing Guide](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/CONTRIBUTING.md)**: Development, compilation, and testing workflows for C++ and Python.
 * **[Coverage Log](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/coverage-log.md)**: Current C++ Catch2 and Pytest coverage benchmarks.
 * **[Changelog](https://github.com/blazejchojnacki/Lord-of-the-Mods/blob/main/docs/CHANGELOG.md)**: Release history and feature notes.
