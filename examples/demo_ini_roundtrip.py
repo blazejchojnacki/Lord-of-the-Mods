@@ -1,6 +1,10 @@
 """
 @file examples/demo_ini_roundtrip.py
 @brief PyCharm demo script for lotm.ini AST deconstruction, formatting, and diff logging.
+
+Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
+Part of the Lord of the Mods (lotm) project.
+SPDX-License-Identifier: GPL-3.0-or-later
 """
 
 import difflib
@@ -11,7 +15,23 @@ import lotm.ini as ini
 
 
 def setup_dummy_file(path: Path) -> str:
-    """Creates a slightly malformed SAGE INI file to demonstrate formatting corrections."""
+    """
+    Create a slightly malformed SAGE INI file to demonstrate formatting corrections.
+
+    Parameters
+    ----------
+    path : Path
+        Destination file path where the unformatted sample INI payload will be written.
+
+    Returns
+    -------
+    str
+        Raw unformatted configuration text written to `path`.
+
+    Examples
+    --------
+    >>> text = setup_dummy_file(Path("demo_workspace/original.ini"))  # doctest: +SKIP
+    """
     messy_content = (
         "; Messy SAGE Configuration\n"
         "Object GondorFighter\n"
@@ -37,6 +57,18 @@ def setup_dummy_file(path: Path) -> str:
 
 
 def main() -> int:
+    """
+    Execute the INI AST deconstruction, re-serialization, and unified diff demonstration.
+
+    Returns
+    -------
+    int
+        Process exit code (0 on success, 1 on fatal parse error).
+
+    Examples
+    --------
+    >>> exit_code = main()  # doctest: +SKIP
+    """
     workspace = Path(__file__).parent.resolve() / "demo_workspace"
     original_path = workspace / "original.ini"
     formatted_path = workspace / "formatted.ini"

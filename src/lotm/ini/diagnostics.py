@@ -48,6 +48,14 @@ class IniInspectionReport:
         Frequency map of top-level ConstructLevel classes or StrEntry categories.
     errors : list[str]
         List of structural or delimiter mismatch diagnostics.
+
+    Examples
+    --------
+    >>> report = inspect_ini("Armor.ini", file_content="Armor HeroArmor\\nEnd\\n")
+    >>> report.file_type
+    '.ini'
+    >>> report.block_counts["Armor"]
+    1
     """
 
     file_path: Path

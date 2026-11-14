@@ -104,6 +104,12 @@ def register_subparser(parent_subparsers: Any) -> None:
     ----------
     parent_subparsers : argparse._SubParsersAction
         Top-level subparsers action from `lotm.cli`.
+
+    Examples
+    --------
+    >>> parser = argparse.ArgumentParser(prog="lotm")
+    >>> subparsers = parser.add_subparsers(dest="domain", required=True)
+    >>> register_subparser(subparsers)
     """
     ini_parser = parent_subparsers.add_parser(
         "ini",
