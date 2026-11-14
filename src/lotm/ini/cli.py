@@ -14,7 +14,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from lotm.ini.parser_api import IniParseError, format_ini, inspect_ini, scan_ini
+from lotm.ini.diagnostics import inspect_ini, scan_ini
+from lotm.ini.formatter import format_ini
+from lotm.ini.parser import IniParseError
 
 EXIT_SUCCESS = 0
 EXIT_ERROR = 1
