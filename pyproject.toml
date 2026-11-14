@@ -64,7 +64,7 @@ cmake.build-type = "Release"
 cmake.define = { BUILD_TESTING = "OFF" }
 wheel.packages = ["src/lotm"]
 wheel.py-api = "cp312"
-sdist.exclude = [".github", "docs", "examples", "tests"]
+sdist.exclude = [".github", "_prototype", "docs", "examples", "tests", "tools"]
 
 [tool.mypy]
 python_version = "3.12"
