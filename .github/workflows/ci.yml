@@ -70,9 +70,16 @@ jobs:
             --sources "${{ github.workspace }}\src" `
             --sources "${{ github.workspace }}\include" `
             --excluded_sources "${{ github.workspace }}\tests" `
+            --export_type binary:cpp_tests.cov `
+            -- .\build\tests\lotm_cpp_tests.exe
+          & "C:\Program Files\OpenCppCoverage\OpenCppCoverage.exe" `
+            --sources "${{ github.workspace }}\src" `
+            --sources "${{ github.workspace }}\include" `
+            --excluded_sources "${{ github.workspace }}\tests" `
+            --input_coverage cpp_tests.cov `
             --export_type cobertura:cpp-coverage.xml `
             --export_type html:coverage_cpp `
-            -- .\build\tests\lotm_cpp_tests.exe
+            -- .\build\tests\lotm_ini_tests.exe
 
       - name: Upload C++ Coverage Report
         uses: actions/upload-artifact@v4
@@ -96,9 +103,16 @@ jobs:
       - name: Test Installed Wheel
         run: |
           pip install (Get-Item dist/*.whl).FullName
+          lotm --help
+          lotm big --help
+          lotm ini --help
+          lotm ini scan --help
+          lotm ini format --help
+          lotm ini inspect --help
           lotm-big --help
           lotm-big pack --help
           lotm-big unpack --help
           lotm-big diff --help
           lotm-big overlay --help
+          python -m lotm --help
           python -m lotm.big --help
