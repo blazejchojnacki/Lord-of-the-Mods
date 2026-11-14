@@ -71,7 +71,7 @@ jobs:
             --sources "${{ github.workspace }}\include" `
             --excluded_sources "${{ github.workspace }}\tests" `
             --export_type binary:cpp_tests.cov `
-            -- .\build\tests\lotm_cpp_tests.exe
+            -- .\build\tests\lotm_big_tests.exe
           & "C:\Program Files\OpenCppCoverage\OpenCppCoverage.exe" `
             --sources "${{ github.workspace }}\src" `
             --sources "${{ github.workspace }}\include" `
