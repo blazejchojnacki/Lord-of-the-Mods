@@ -101,8 +101,6 @@ def parse_ini(
     >>> len(doc)
     1
     """
-    if isinstance(file_content, (bytes, bytearray, memoryview)):
-        return ConstructFile(os.fspath(file_path), strict, file_content)
     return ConstructFile(os.fspath(file_path), strict, file_content)
 
 
@@ -136,7 +134,7 @@ def parse_str(
     >>> len(doc.entries)
     1
     """
-    if isinstance(file_content, (bytes, bytearray, memoryview)):
+    if isinstance(file_content, Buffer):
         return _ini.parse_str_buffer(os.fspath(file_path), strict, file_content)
     return StrParser.parse_file(os.fspath(file_path), strict, file_content)
 
@@ -146,7 +144,7 @@ def format_ini(
     output_path: str | os.PathLike[str] | None = None,
     *,
     strict: bool = False,
-    file_content: str | None = None,
+    file_content: str | Buffer | None = None,
 ) -> str:
     """
     Parse and format a SAGE .ini, .inc, or .str file with normalized 4-space indentation.
@@ -159,8 +157,8 @@ def format_ini(
         Optional destination path to write the formatted text.
     strict : bool, default=False
         If True, raises IniParseError if structural errors are encountered.
-    file_content : str | None, default=None
-        Optional in-memory content buffer.
+    file_content : str | Buffer | None, default=None
+        Optional in-memory string or binary buffer protocol object.
 
     Returns
     -------
@@ -178,7 +176,13 @@ def format_ini(
     if output_path is not None:
         dest = Path(output_path)
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(formatted, encoding="utf-8")
+        tmp_dest = dest.with_name(f".{dest.name}.lotm_tmp")
+        try:
+            tmp_dest.write_text(formatted, encoding="utf-8")
+            os.replace(tmp_dest, dest)
+        except BaseException:
+            tmp_dest.unlink(missing_ok=True)
+            raise
     return formatted
 
 
@@ -247,7 +251,7 @@ def inspect_ini(
     file_path: str | os.PathLike[str],
     *,
     strict: bool = False,
-    file_content: str | None = None,
+    file_content: str | Buffer | None = None,
 ) -> IniInspectionReport:
     """
     Inspect a SAGE configuration file and return a structural summary report.
@@ -258,8 +262,8 @@ def inspect_ini(
         Path to the .ini, .inc, or .str file.
     strict : bool, default=False
         If True, raises IniParseError if structural errors are present.
-    file_content : str | None, default=None
-        Optional in-memory content buffer.
+    file_content : str | Buffer | None, default=None
+        Optional in-memory string or binary buffer protocol object.
 
     Returns
     -------
