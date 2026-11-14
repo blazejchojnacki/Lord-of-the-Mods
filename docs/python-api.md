@@ -178,7 +178,7 @@ with load_overlay(["base.big", "patch.big", "mod.big"]) as overlay:
 
 ## `lotm.ini` — SAGE Configuration & Localization API
 
-The `lotm.ini` package provides a native C++20 AST parser, iterative serializer, and validator for SAGE `.ini`, `.inc`, and `.str` files.
+The `lotm.ini` package provides a native C++20 AST parser, iterative serializer, and validator for SAGE `.ini`, `.inc`, and `.str` files. It is organized across `lotm.ini.parser`, `lotm.ini.formatter`, and `lotm.ini.diagnostics`, with all public symbols re-exported directly under `lotm.ini`.
 
 ### `parse_ini(file_path: str | os.PathLike[str], *, strict: bool = False, file_content: str | Buffer | None = None) -> ConstructFile`
 Parses a `.ini`, `.inc`, or `.str` file into a root `ConstructFile` AST object. When `file_content` is `None`, the file is memory-mapped directly from disk via Win32 `CreateFileMappingW`. When a `bytes` or `memoryview` buffer is supplied (such as from `BigArchive.read_entry`), it is ingested zero-copy without intermediate Python string decoding.
@@ -187,9 +187,9 @@ Parses a `.ini`, `.inc`, or `.str` file into a root `ConstructFile` AST object. 
 * **`strict`**: If `True`, raises `IniParseError` immediately on negative nesting levels or unclosed blocks at EOF. If `False`, records diagnostics in `ConstructFile.errors`.
 * **`file_content`**: Optional `str` or binary `Buffer` (`bytes`, `bytearray`, `memoryview`).
 * **Exceptions**:
-  * `lotm.ini.IniParseError`: Raised on invalid file paths/extensions, strict delimiter mismatches, exceeding `MAX_INI_DEPTH` (16), or exceeding legacy 32-bit SAGE buffer limits (256-byte block names / 512-byte identifiers).
+  * `lotm.ini.IniParseError`: Raised on invalid file paths/extensions, strict delimiter mismatches, exceeding `MAX_INI_DEPTH` (16), exceeding `MAX_INI_FILE_SIZE` (64 MiB), or exceeding legacy 32-bit SAGE buffer limits (256-byte block classes/names or 512-byte identifiers).
 
-**Zero-Copy BIG-to-INI Pipeline Example:**
+**Zero-Copy BIG-to-INI Pipeline & In-Place AST Mutation Example:**
 ```python
 from lotm.big import BigArchive
 from lotm.ini import parse_ini, ConstructLevel
@@ -206,13 +206,13 @@ for item in doc:
 ### `parse_str(file_path: str | os.PathLike[str], *, strict: bool = False, file_content: str | Buffer | None = None) -> StrDocument`
 Parses a SAGE `.str` localization dictionary into a `StrDocument` containing `StrEntry` blocks, standalone comments, and diagnostic errors.
 
-### `format_ini(file_path: str | os.PathLike[str], output_path: str | os.PathLike[str] | None = None, *, strict: bool = False, file_content: str | None = None) -> str`
-Parses and iteratively serializes a `.ini`, `.inc`, or `.str` file with consistent 4-space indentation, optionally writing the formatted output to `output_path`.
+### `format_ini(file_path: str | os.PathLike[str], output_path: str | os.PathLike[str] | None = None, *, strict: bool = False, file_content: str | Buffer | None = None) -> str`
+Parses and iteratively serializes a `.ini`, `.inc`, or `.str` file with consistent 4-space indentation. When `output_path` is provided, the formatted output is written atomically via a temporary sibling file (`.lotm_tmp`) and `os.replace`.
 
 ### `scan_ini(target_path: str | os.PathLike[str], *, strict: bool = False) -> dict[Path, list[str]]`
 Scans a single file or recursively scans a directory tree for `.ini`, `.inc`, and `.str` structural errors, returning a dictionary mapping each `Path` to its list of diagnostic messages.
 
-### `inspect_ini(file_path: str | os.PathLike[str], *, strict: bool = False, file_content: str | None = None) -> IniInspectionReport`
+### `inspect_ini(file_path: str | os.PathLike[str], *, strict: bool = False, file_content: str | Buffer | None = None) -> IniInspectionReport`
 Returns an immutable `IniInspectionReport` dataclass summarizing `file_path`, `file_type`, `start_level`, `define_count`, `include_count`, `total_top_level_items`, `block_counts`, and `errors`.
 
 ### `validate_include(node: IncludeNode, current_file: str | os.PathLike[str], virtual_root: str | os.PathLike[str]) -> Path`
@@ -233,10 +233,17 @@ except IniParseError as err:
     print(f"Blocked unsafe include: {err}")
 ```
 
+### Low-Level Helper Functions (`lotm.ini`)
+* **`recognize_structure(file_path: str | os.PathLike[str], file_content: str | None = None) -> tuple[list[list[str]], int]`**: Detects the active SAGE schema delimiter hierarchy and starting nesting depth (`0` for `.ini`/`.str`, `>= 0` for `.inc`).
+* **`load_file(full_path: str | os.PathLike[str]) -> tuple[str, list[list[str]]]`**: Loads and normalizes a `.ini`, `.inc`, or `.str` file via `ConstructFile` (falling back to raw UTF-8/Windows-1252 text on empty or unparseable files) or reads a `.txt` file directly.
+* **`scan_file_for_errors(file_path: str | os.PathLike[str]) -> list[str]`**: Parses a single file in non-strict mode and returns any delimiter or nesting level mismatch messages without raising exceptions.
+
 ### AST Node Hierarchy (`lotm.ini`)
-* **`ConstructFile`**: Root document container supporting `len(doc)`, indexing (`doc[i]`), iteration, `.append(node)`, `.defines`, `.errors`, and `.print()`.
-* **`ConstructLevel`**: Nested block node (`_class`, `name`, `identifier`, `comment`, `header_comment`, `end_token`, `end_comment`, `items`) supporting sequence indexing, iteration, `.append(node)`, and `.print(level=0, file_type=".ini")`.
+All container nodes (`ConstructFile`, `ConstructLevel`, `StrDocument`, `StrEntry`) implement `len()`, indexing (`node[i]`), item assignment (`node[i] = ...`), iteration (`for child in node:`), `.append(child)`, and `==`. Indexing and iteration return internal references (`nb::rv_policy::reference_internal`), so in-place attribute changes on retrieved child nodes mutate the AST directly.
+
+* **`ConstructFile`**: Root document container exposing `.name`, `.defines`, `.delimiters`, `.start_level`, `.strict`, `.items`, `.errors`, `.construct()`, and `.print()`.
+* **`ConstructLevel`**: Nested block node (`_class`, `name`, `identifier`, `comment`, `header_comment`, `end_token`, `end_comment`, `items`) exposing `.print(level=0, file_type=".ini")`.
 * **`ScriptNode`**: Opaque `BeginScript ... EndScript` container preserving raw Lua lines (`content`) so inner Lua `end` tokens never collide with INI block closures.
 * **`IncludeNode`**: Lossless `#include` node exposing `raw_path`, `comment`, and the normalized `.clean_path` property.
 * **`StatementNode` & `CommentNode`**: Leaf AST nodes representing key-value assignments and standalone/inline comments.
-* **`StrEntry` & `StrDocument`**: Localization structures for `.str` files.
+* **`StrEntry` & `StrDocument`**: Localization container structures for `.str` files.

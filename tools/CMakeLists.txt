@@ -7,11 +7,18 @@
 
 add_executable(lotm_ini_validator
     ini_validator.cpp
-    ../src/ini/parser.cpp
 )
 
-target_include_directories(lotm_ini_validator PRIVATE ../include)
+target_link_libraries(lotm_ini_validator PRIVATE
+    lotm_ini
+)
+
 target_compile_features(lotm_ini_validator PRIVATE cxx_std_20)
+
+target_compile_options(lotm_ini_validator PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
+)
 
 # cmake -B build -G Ninja -DLOTM_BUILD_TOOLS=ON
 # ninja -C build lotm_ini_validator

@@ -27,17 +27,9 @@ validate_include = ini.validate_include
 load_file = ini.load_file
 scan_file_for_errors = ini.scan_file_for_errors
 
-from .parser_api import (
-     SUPPORTED_EXTENSIONS,
-    AstNode,
-    IniInspectionReport,
-    RootItem,
-    format_ini,
-    inspect_ini,
-    parse_ini,
-    parse_str,
-    scan_ini,
-)
+from .diagnostics import IniInspectionReport, inspect_ini, scan_ini
+from .formatter import format_ini
+from .parser import SUPPORTED_EXTENSIONS, AstNode, RootItem, parse_ini, parse_str
 
 __all__ = [
     "LEVEL_INDENT",

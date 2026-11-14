@@ -38,7 +38,7 @@ find_package(nanobind CONFIG REQUIRED)
 # # Modular targets: each folder handles its own sources and includes
 add_subdirectory(src/core)
 add_subdirectory(src/big)
-add_subdirectory(src/cppy_bridge)
+add_subdirectory(src/bindings)
 add_subdirectory(src/ini)
 
 

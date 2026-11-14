@@ -1,5 +1,5 @@
 /**
- * @file src/cppy_bridge/main.cpp
+ * @file src/bindings/main.cpp
  * @brief main binding between CPP and Python.
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>

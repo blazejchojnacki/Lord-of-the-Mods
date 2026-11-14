@@ -96,6 +96,33 @@ namespace lotm::ini {
             return result;
         }
 
+        /**
+         * @brief Finds the starting index of a comment (';' or '//') outside of double quotes
+         *        while ignoring '//' immediately preceded by ':' (such as 'http://').
+         */
+        [[nodiscard]] constexpr std::size_t find_comment_start(std::string_view raw_line) noexcept {
+            bool in_quotes = false;
+            const std::size_t len = raw_line.size();
+
+            for (std::size_t i = 0; i < len; ++i) {
+                const char c = raw_line[i];
+                if (c == '"') {
+                    in_quotes = !in_quotes;
+                }
+                else if (!in_quotes) {
+                    if (c == ';') {
+                        return i;
+                    }
+                    if (c == '/' && (i + 1) < len && raw_line[i + 1] == '/') {
+                        if (i == 0 || raw_line[i - 1] != ':') {
+                            return i;
+                        }
+                    }
+                }
+            }
+            return std::string_view::npos;
+        }
+
     } // namespace detail
 
     /**
@@ -107,9 +134,7 @@ namespace lotm::ini {
         out.line_tokens.clear();
         out.comment.clear();
 
-        const std::size_t semi_pos = raw_line.find(';');
-        const std::size_t slash_pos = raw_line.find("//");
-        const std::size_t comment_index = std::min(semi_pos, slash_pos);
+        const std::size_t comment_index = detail::find_comment_start(raw_line);
 
         std::string_view code_part = raw_line;
         if (comment_index != std::string_view::npos) {

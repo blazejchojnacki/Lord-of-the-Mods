@@ -12,7 +12,7 @@
 #include "ini/lexer.hpp"
 #include "ini/parser.hpp"
 #include "ini/schema.hpp"
-#include "ini/types.hpp"
+#include "ini/ast.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -58,7 +58,11 @@ namespace {
         [[nodiscard]] const fs::path& root() const noexcept { return root_; }
 
         [[nodiscard]] fs::path write_file(std::string_view rel_path, std::string_view content) const {
-            const fs::path full_path = root_ / rel_path;
+            const std::u8string_view u8_rel(
+                reinterpret_cast<const char8_t*>(rel_path.data()),
+                rel_path.size()
+            );
+            const fs::path full_path = root_ / fs::path(u8_rel);
             fs::create_directories(full_path.parent_path());
             std::ofstream out(full_path, std::ios::binary);
             out.write(content.data(), static_cast<std::streamsize>(content.size()));
@@ -184,6 +188,51 @@ TEST_CASE("AST types, node operations, and SerializableNodeRef conversions", "[i
         CHECK(move_assigned == lvl);
     }
 
+    SECTION("StrEntry and StrDocument container protocols and equality") {
+        StrEntry entry{ "OBJECT", "GondorSoldier" };
+        CHECK(entry.empty());
+        CHECK(entry.size() == 0);
+
+        entry.append(CommentNode{ "; localized cmt" });
+        entry.append(StatementNode{ "\"Gondor Soldier\"", "" });
+        REQUIRE(entry.size() == 2);
+        CHECK_FALSE(entry.empty());
+
+        entry[1] = StatementNode{ "\"Gondor Infantry\"", "; updated" };
+        const StrEntry& const_entry = entry;
+        CHECK(std::get<StatementNode>(const_entry[1]).text == "\"Gondor Infantry\"");
+
+        std::size_t entry_iter_count = 0;
+        for (auto it = entry.begin(); it != entry.end(); ++it) { ++entry_iter_count; }
+        for (auto it = const_entry.begin(); it != const_entry.end(); ++it) { ++entry_iter_count; }
+        for (auto it = const_entry.cbegin(); it != const_entry.cend(); ++it) { ++entry_iter_count; }
+        CHECK(entry_iter_count == 6);
+
+        StrDocument doc{ "lotr.str" };
+        CHECK(doc.empty());
+        CHECK(doc.size() == 0);
+
+        doc.append(CommentNode{ "; doc header" });
+        doc.append(entry);
+        REQUIRE(doc.size() == 2);
+        CHECK_FALSE(doc.empty());
+
+        doc[0] = CommentNode{ "; updated doc header" };
+        const StrDocument& const_doc = doc;
+        CHECK(std::get<CommentNode>(const_doc[0]).text == "; updated doc header");
+
+        std::size_t doc_iter_count = 0;
+        for (auto it = doc.begin(); it != doc.end(); ++it) { ++doc_iter_count; }
+        for (auto it = const_doc.begin(); it != const_doc.end(); ++it) { ++doc_iter_count; }
+        for (auto it = const_doc.cbegin(); it != const_doc.cend(); ++it) { ++doc_iter_count; }
+        CHECK(doc_iter_count == 6);
+
+        StrDocument doc_copy = doc;
+        CHECK(doc_copy == doc);
+        doc_copy.name = "other.str";
+        CHECK_FALSE(doc_copy == doc);
+    }
+
     SECTION("to_serializable_ref conversion overloads") {
         const AstNode ast_cmt = CommentNode{ "; c" };
         const AstNode ast_stmt = StatementNode{ "x = 1" };
@@ -258,6 +307,20 @@ TEST_CASE("Zero-copy lexer, whitespace helpers, and line view iterator", "[ini][
         REQUIRE(l3.words_signs == std::vector<std::string_view>{"Key=Val1:Val2"});
         REQUIRE(l3.line_tokens == std::vector<std::string_view>{"Key", "=", "Val1", ":", "Val2"});
         CHECK(l3.comment.empty());
+    }
+
+    SECTION("lex_line preserves ';' and '//' inside quotes and URL schemes like http://") {
+        const LexedLine quoted_semi = lex_line("    \" Soldier ; Archer // Cavalry \" ; real trailing comment");
+        REQUIRE(quoted_semi.words_signs.size() == 7);
+        CHECK(quoted_semi.comment == "; real trailing comment");
+
+        const LexedLine url_line = lex_line("    URL = http://www.ea.com/lotr // official link");
+        REQUIRE(url_line.words_signs == std::vector<std::string_view>{"URL", "=", "http://www.ea.com/lotr"});
+        CHECK(url_line.comment == "// official link");
+
+        const LexedLine leading_slash = lex_line("// full line slash comment");
+        CHECK(leading_slash.words.empty());
+        CHECK(leading_slash.comment == "// full line slash comment");
     }
 
     SECTION("for_each_line_view handles LF, CRLF, CR, and early termination") {
@@ -574,7 +637,7 @@ TEST_CASE("StrParser happy paths, comment coalescing, and strict/non-strict erro
 TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth security limits", "[ini][parser][security]") {
     TempDirFixture temp;
 
-    SECTION("Default ConstructFile, container interface, and short filename print") {
+    SECTION("Default ConstructFile, container interface, equality, and short filename print") {
         ConstructFile empty_cf;
         CHECK(empty_cf.empty());
         CHECK(empty_cf.size() == 0);
@@ -589,6 +652,11 @@ TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth secu
         empty_cf[0] = AstNode{ StatementNode{ "Key = 2", "" } };
         const ConstructFile& const_cf = empty_cf;
         CHECK(std::get<StatementNode>(std::get<AstNode>(const_cf[0])).text == "Key = 2");
+
+        ConstructFile copy_cf = empty_cf;
+        CHECK(copy_cf == empty_cf);
+        copy_cf.name = "b";
+        CHECK_FALSE(copy_cf == empty_cf);
 
         std::size_t cnt = 0;
         for (auto it = empty_cf.begin(); it != empty_cf.end(); ++it) { ++cnt; }
@@ -617,7 +685,7 @@ TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth secu
         CHECK_FALSE(cf.print().empty());
     }
 
-    SECTION("Handles #define, #include, ReplaceModule depth shift, FCurve, BeginScript, and schema switching") {
+    SECTION("Handles #define, #include, ReplaceModule depth shift, FCurve, BeginScript, multi-flag headers, and schema switching") {
         const std::string ini_content =
             "#define DAMAGE_MACRO 100 ; macro cmt\n"
             "#include \"..\\common.inc\" ; inc cmt\n"
@@ -639,7 +707,7 @@ TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth secu
             "        DefaultModelConditionState\n"
             "            Model = GUHero_SKN\n"
             "        End\n"
-            "        AnimationState = MOVING SPECIAL_ONE\n"
+            "        AnimationState = MOVING SPECIAL_ONE DAMAGED AFLAME\n"
             "            BeginScript\n"
             "                CurDrawableSetTransitionAnimState(\"TRANS_Move\")\n"
             "            EndScript\n"
@@ -718,14 +786,15 @@ TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth secu
         CHECK_THROWS_AS(ConstructFile("overflow_block.ini", true, overflow_block), IniParseError);
     }
 
-    SECTION("Enforces legacy 32-bit SAGE Engine string buffer limits on names and identifiers") {
+    SECTION("Enforces legacy 32-bit SAGE Engine string buffer limits on classes, names, and identifiers") {
         const std::string valid_256(256, 'A');
         const std::string invalid_257(257, 'A');
         const std::string valid_512(512, 'B');
         const std::string invalid_513(513, 'B');
 
         // ConstructLevel
-        CHECK_NOTHROW(ConstructLevel{ "Object", valid_256, valid_512 });
+        CHECK_NOTHROW(ConstructLevel{ valid_256 + " =", valid_256, valid_512 });
+        CHECK_THROWS_AS(ConstructLevel(invalid_257, "Name", ""), IniParseError);
         CHECK_THROWS_AS(ConstructLevel("Object", invalid_257, ""), IniParseError);
         CHECK_THROWS_AS(ConstructLevel("Object", "", invalid_513), IniParseError);
 
@@ -752,12 +821,15 @@ TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth secu
         const std::string overlong_fcurve = "Alpha = FCurve " + invalid_513 + "\nEnd\n";
         CHECK_THROWS_AS(ConstructFile("bounds_fcurve.ini", true, overlong_fcurve), IniParseError);
 
+        const std::string overlong_fcurve_class = invalid_257 + " = FCurve\nEnd\n";
+        CHECK_THROWS_AS(ConstructFile("bounds_fcurve_cls.ini", true, overlong_fcurve_class), IniParseError);
+
         const std::string overlong_str = "OBJECT:" + invalid_513 + "\n    \"Text\"\nEnd\n";
         CHECK_THROWS_AS(StrParser::parse_file("bounds.str", true, overlong_str), IniParseError);
     }
 }
 
-TEST_CASE("File loading, error scanning, and deterministic I/O lock handling", "[ini][io]") {
+TEST_CASE("File loading, error scanning, UTF-8 paths, and deterministic I/O lock handling", "[ini][io]") {
     TempDirFixture temp;
 
     SECTION("load_file handles .ini, empty .ini fallback, .txt, and error conditions") {
@@ -781,6 +853,31 @@ TEST_CASE("File loading, error scanning, and deterministic I/O lock handling", "
 
         const fs::path bad_ext = temp.write_file("archive.big", "BIG4");
         CHECK_THROWS_AS(load_file(bad_ext.string()), IniParseError);
+    }
+
+    SECTION("Handles non-ASCII UTF-8 filesystem paths across ConstructFile, StrParser, and validate_include") {
+        const std::string rel_utf8_ini = "gda\xC5\x84sk_\xC5\xBC\xC3\xB3\xC5\x82\xC4\x87/bro\xC5\x84.ini";
+        const std::string rel_utf8_inc = "gda\xC5\x84sk_\xC5\xBC\xC3\xB3\xC5\x82\xC4\x87/makra.inc";
+        const std::string rel_utf8_str = "gda\xC5\x84sk_\xC5\xBC\xC3\xB3\xC5\x82\xC4\x87/tekst.str";
+
+        const fs::path ini_path = temp.write_file(rel_utf8_ini, "Weapon Miecz\n    Damage = 30\nEnd\n");
+        const fs::path inc_path = temp.write_file(rel_utf8_inc, "Damage = 30\n");
+        const fs::path str_path = temp.write_file(rel_utf8_str, "OBJECT:Miecz\n    \"Miecz\"\nEnd\n");
+
+        const auto u8_ini = ini_path.u8string();
+        const std::string utf8_ini_str(reinterpret_cast<const char*>(u8_ini.data()), u8_ini.size());
+
+        const auto u8_str = str_path.u8string();
+        const std::string utf8_str_str(reinterpret_cast<const char*>(u8_str.data()), u8_str.size());
+
+        ConstructFile cf{ utf8_ini_str, true };
+        REQUIRE(cf.size() == 1);
+
+        StrDocument sdoc = StrParser::parse_file(utf8_str_str, true);
+        REQUIRE(sdoc.size() == 1);
+
+        const IncludeNode inc_node{ "\"makra.inc\"" };
+        CHECK(validate_include(inc_node, ini_path, temp.root()) == fs::weakly_canonical(inc_path));
     }
 
     SECTION("scan_file_for_errors returns warnings for broken files and catches fatal exceptions") {
@@ -835,7 +932,7 @@ TEST_CASE("UTF-8 BOM stripping, Windows-1252 fallback, and binary span construct
         CHECK(std::get<StrEntry>(str_doc.entries[0]).category == "OBJECT");
     }
 
-    SECTION("ConstructFile std::span<const uint8_t> constructor handles valid UTF-8 and Windows-1252") {
+    SECTION("ConstructFile std::span<const uint8_t> constructor handles valid UTF-8, Windows-1252, and empty buffers") {
         // 1. Valid multi-byte UTF-8 (2-byte é, 3-byte €, 4-byte 🗡️)
         const std::string valid_utf8 =
             "Weapon EowynSword ; \xC3\xA9 \xE2\x82\xAC \xF0\x9F\x97\xA1\n"
@@ -864,10 +961,16 @@ TEST_CASE("UTF-8 BOM stripping, Windows-1252 fallback, and binary span construct
         const std::string printed = cf_cp1252.print();
         CHECK(printed.find("\xE2\x80\x9C" "H\xC3\xA9ro" "\xE2\x80\x9D \xE2\x82\xAC\xC2\x81") != std::string::npos);
 
-        // 3. Empty buffer span
+        // 3. Empty buffer span (unnamed, named valid extension, and invalid extension)
         const std::span<const std::uint8_t> empty_span{};
         ConstructFile cf_empty_span{ "", false, empty_span };
         CHECK(cf_empty_span.empty());
+
+        ConstructFile cf_empty_named{ "virtual_empty.ini", true, empty_span };
+        CHECK(cf_empty_named.empty());
+        CHECK(cf_empty_named.errors.empty());
+
+        CHECK_THROWS_AS(ConstructFile("unsupported.ext", true, empty_span), IniParseError);
     }
 
     SECTION("UTF-8 validator rejects malformed, overlong, surrogate, and truncated sequences via CP1252 fallback") {

@@ -19,34 +19,36 @@ src\lotm\big\overlay.py         23      0   100%
 src\lotm\big\packer.py          43      0   100%
 src\lotm\big\unpacker.py        28      0   100%
 src\lotm\cli.py                 30      0   100%
-src\lotm\ini\__init__.py        20      0   100%
-src\lotm\ini\cli.py             72      0   100%
-src\lotm\ini\parser_api.py      85      0   100%
+src\lotm\ini\__init__.py        22      0   100%
+src\lotm\ini\cli.py             74      0   100%
+src\lotm\ini\diagnostics.py     62      0   100%
+src\lotm\ini\formatter.py       21      0   100%
+src\lotm\ini\parser.py          24      0   100%
 ----------------------------------------------------------
-TOTAL                          484      0   100%
+TOTAL                          510      0   100%
 ```
 
 ```text
 Cpp coverage at 95%.
 Name                              Total lines    Coverage    Missing
 ---------------------------------------------------------------------
-build\tests\lotm_cpp_tests.exe           1221         93%
-build\tests\lotm_ini_tests.exe           1088         97%
+build\tests\lotm_big_tests.exe           1221         93%
+build\tests\lotm_ini_tests.exe           1151         97%
 src\big\big_diff.cpp                      331         90%    108, 170, 218-220, 244, 246-252, 299, 309, 320, 336, 341, 343-347, 349-350, 352, 418, 462, 473, 483, 488, 504, 526, 533
 src\big\big_overlay.cpp                   131         93%    191-196, 199-201
 include\ini\schema.hpp                     66         94%    73-74, 76-77
 src\big\big_archive.cpp                   384         94%    45, 99, 167, 197, 219, 239, 365, 370, 379, 391, 399, 404, 421, 424, 430, 436, 521, 531, 538, 571, 583, 588, 615
 src\big\big_packer.cpp                    345         97%    76, 245, 305, 363, 384, 403, 410, 476, 531
-src\ini\parser.cpp                        766         97%    64, 74, 88, 159, 199, 257-258, 272-273, 284-286, 621, 737, 984, 1105-1106, 1143, 1298-1301, 1309, 1318
-include\ini\lexer.hpp                     130         98%    51-52
+src\ini\parser.cpp                        781         97%    77, 87, 101, 163, 178, 218, 276-277, 280-281, 295-296, 307-309, 650, 767, 1012, 1133-1134, 1171, 1326-1329, 1337, 1346
+include\ini\lexer.hpp                     145         99%    51-52
 include\big\big_archive.hpp                 4        100%
 include\big\big_diff.hpp                    3        100%
 include\big\big_overlay.hpp                 2        100%
 include\core\endian.hpp                    21        100%
-include\ini\parser.hpp                     27        100%
-include\ini\types.hpp                      99        100%
+include\ini\ast.hpp                       129        100%
+include\ini\parser.hpp                     30        100%
 ---------------------------------------------------------------------
-TOTAL                                    2309         95%
+TOTAL                                    2372         95%
 
 Remaining 5% C++ consists of unmockable OS/hardware I/O faults (e.g., sudden disk space exhaustion during `out_file.write()`, physical read truncations) which are exempt from unit testing.
 ```

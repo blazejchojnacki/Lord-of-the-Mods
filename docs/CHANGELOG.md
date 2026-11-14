@@ -6,28 +6,29 @@ All notable changes to the Lord of the Mods (`lotm`) project will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] - 2026-11-13
+## [0.5.0] - 2026-11-14
 
 ### Added
 - **Native C++20 SAGE Configuration Parser (`lotm_ini`)**:
   - Implemented zero-copy `std::string_view` line tokenization (`LexedLine`, `lex_line_into`, `for_each_line_view`) operating directly over contiguous buffers without per-line heap reallocations or separator mutations (`=`, `:`).
+  - Added quote-aware and URL-aware comment detection (`detail::find_comment_start`) so `;` and `//` inside double-quoted strings or immediately following `:` (such as `http://` in `WebpageURL`) are preserved accurately.
   - Added compile-time `constexpr` delimiter lookup tables (`INI_DELIMITERS`, `INI_DELIMITER_RULES`, `STR_DELIMITERS`, `STR_DELIMITER_RULES`) for zero-cost schema initialization.
-  - Modeled the configuration AST via `std::variant` (`CommentNode`, `StatementNode`, `IncludeNode`, `ScriptNode`, `ConstructLevel`) alongside `StrEntry`, `StrDocument`, `StrParser`, and `ConstructFile`.
-  - Added native handling for SAGE quirks: opaque `BeginScript ... EndScript` Lua blocks, dynamic `<key> = FCurve` block promotion, transparent `ReplaceModule` depth shifting, and case-tolerant closing keywords (`End`, `END`, `end`).
+  - Modeled the configuration AST via `std::variant` in `include/ini/ast.hpp` (`CommentNode`, `StatementNode`, `IncludeNode`, `ScriptNode`, `ConstructLevel`) alongside `StrEntry`, `StrDocument`, `StrParser`, and `ConstructFile` with full C++20 equality and sequence protocols.
+  - Added native handling for SAGE quirks: opaque `BeginScript ... EndScript` Lua blocks, dynamic `<key> = FCurve` block promotion, transparent `ReplaceModule` depth shifting, multi-flag block header splitting, and case-tolerant closing keywords (`End`, `END`, `end`).
   - Implemented non-recursive, stack-based iterative AST serialization (`serialize_iterative` via `SerializationFrame` and `std::visit`) guaranteeing 100% lossless roundtrip reconstruction.
 - **OS Memory-Mapped, Zero-Copy Ingestion & Legacy Encodings**:
-  - Added Windows `CreateFileMappingW` / `MapViewOfFile` RAII memory-mapped file ingestion (`MMapFile`) for zero-copy on-disk parsing.
-  - Bound Python Buffer Protocol overloads (`bytes`, `bytearray`, `memoryview`) via `ScopedPyBuffer` in `ConstructFile`, `parse_str_buffer`, and `recognize_structure_buffer`, allowing `BigArchive.read_entry()` payloads to be parsed without intermediate string decoding.
+  - Added Windows `CreateFileMappingW` / `MapViewOfFile` RAII memory-mapped file ingestion (`MMapFile`) with strict UTF-8 path conversion (`std::u8string_view` / `.u8string()`) for zero-copy on-disk parsing across Unicode file paths.
+  - Bound Python Buffer Protocol overloads (`bytes`, `bytearray`, `memoryview`) via `ScopedPyBuffer` in `ConstructFile`, `parse_str_buffer`, and `recognize_structure_buffer`, allowing `BigArchive.read_entry()` payloads to be parsed directly over valid UTF-8 spans without intermediate string copying.
   - Implemented automatic UTF-8 BOM stripping and single-pass UTF-8 validation with a seamless fallback to transcode legacy Windows-1252/Latin-1 bytes, preventing decoding crashes at the Python boundary.
 - **Public Python API (`lotm.ini`) & Umbrella CLI (`lotm ini`)**:
-  - Exposed all AST node classes and parser routines through `nanobind` (`lotm._core.ini`) with full GIL release during parsing and serialization, accompanied by strict `_core.pyi` type stubs.
-  - Added high-level Python API functions (`parse_ini`, `parse_str`, `format_ini`, `scan_ini`, `inspect_ini`) and the `IniInspectionReport` summary dataclass.
+  - Exposed `lotm.ini` at the top-level package (`lotm.__all__`) and bound all AST node classes and parser routines through `nanobind` (`lotm._core.ini` in `src/bindings/`) with `nb::rv_policy::reference_internal` for in-place AST mutations, full GIL release during parsing/serialization, and strict `_core.pyi` type stubs.
+  - Organized high-level Python API into cohesive domain modules: `lotm.ini.parser` (`parse_ini`, `parse_str`), `lotm.ini.formatter` (`format_ini` with atomic `.lotm_tmp` sibling file replacement), and `lotm.ini.diagnostics` (`scan_ini`, `inspect_ini`, `IniInspectionReport`).
   - Registered `lotm ini scan`, `lotm ini format`, and `lotm ini inspect` subcommands under the unified `lotm` umbrella CLI runner.
 
 ### Security & Hardening
-- **Nesting Depth Guard**: Enforced `MAX_INI_DEPTH = 16` across all block, `FCurve`, and `BeginScript` transitions to prevent stack-exhaustion attacks from malformed configuration files.
-- **Virtual Chroot `#include` Sandboxing**: Implemented `validate_include` using canonical path resolution to confine `#include` directives strictly within the virtual `data/ini` root and block path traversal (`../`) escapes.
-- **Legacy 32-Bit Engine Buffer Bounds Validation**: Enforced `SAGE_MAX_BLOCK_NAME_LEN` (256 bytes) and `SAGE_MAX_IDENTIFIER_LEN` (512 bytes) via `validate_sage_bounds` in AST constructors and parser routines to prevent downstream buffer overflows in the 32-bit game executable.
+- **Nesting Depth & File Size Guards**: Enforced `MAX_INI_DEPTH = 16` across all block, `FCurve`, and `BeginScript` transitions to prevent stack exhaustion, and `MAX_INI_FILE_SIZE` (64 MiB) in `MMapFile` and buffer preparation to block Out-Of-Memory (OOM) denial-of-service payloads.
+- **Virtual Chroot `#include` Sandboxing**: Implemented `validate_include` using canonical UTF-8 path resolution to confine `#include` directives strictly within the virtual `data/ini` root and block path traversal (`../`) escapes.
+- **Legacy 32-Bit Engine Buffer Bounds Validation**: Enforced `SAGE_MAX_BLOCK_NAME_LEN` (256 bytes) on block classes/names and `SAGE_MAX_IDENTIFIER_LEN` (512 bytes) on identifiers via `validate_sage_bounds` across C++ AST constructors, parser routines, and Python property setters to prevent downstream buffer overflows in the 32-bit game executable.
 
 ## [0.4.0] - 2026-11-06
 
@@ -60,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Command-Line Interface** (Breaking): Removed individual legacy script aliases (`lotm-big-pack`, `lotm-big-unpack`, `lotm-big-diff`, `lotm-big-overlay`) in favor of a centralized subparser architecture. All commands are now invoked through the unified `lotm-big` entry point (`lotm-big pack`, `lotm-big unpack`).
 - **CLI Output Isolation**:
-  - Isolated CLI command results and summaries to `sys.stdout`, reserving logging handlers strictly for diagnostic telemetry.architecture. All commands are now invoked through the unified `lotm-big` entry point (e.g., `lotm-big pack`, `lotm-big unpack`).
+  - Isolated CLI command results and summaries to `sys.stdout`, reserving logging handlers strictly for diagnostic telemetry.
 
 ## [0.3.0] - 2026-11-03
 

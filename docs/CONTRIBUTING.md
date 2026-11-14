@@ -68,28 +68,35 @@ pip install -e ".[test]"
 
 ## 3. Testing & Coverage
 
-Pull requests modifying core logic must maintain ≥ 85% test coverage. Always run both test suites locally before committing.
+Pull requests modifying core logic must maintain >90% test coverage. Always run both test suites locally before committing.
 
-### Python (Pytest)
+### Python (Pytest & Doctests)
 Run the integration test suite and generate a terminal coverage report:
 ```cmd
 python -m pytest tests/python -v --cov=lotm --cov-report=term-missing
 ```
+Run the interactive documentation examples embedded in the NumPy docstrings:
+```cmd
+python -m pytest --doctest-modules src/lotm
+```
 
 ### C++ (Catch2 & OpenCppCoverage)
-Run the native C++ unit tests. CTest is recommended for a quick pass/fail summary across both `lotm_cpp_tests` and `lotm_ini_tests`:
+Run the native C++ unit tests. CTest is recommended for a quick pass/fail summary across both `lotm_big_tests` and `lotm_ini_tests`:
 ```cmd
 ctest --test-dir build --output-on-failure
 ```
-*(Note: To run specific tests or see detailed assertions, execute the binaries directly: `.\build\tests\lotm_cpp_tests.exe` and `.\build\tests\lotm_ini_tests.exe`)*
+*(Note: To run specific tests or see detailed assertions, execute the binaries directly: `.\build\tests\lotm_big_tests.exe` and `.\build\tests\lotm_ini_tests.exe`)*
 
 **C++ Coverage Generation:**
-To generate the line-by-line HTML coverage report (requires `winget install OpenCppCoverage.OpenCppCoverage`). Ensure the project was compiled with `-DCMAKE_BUILD_TYPE=Debug` so that MSVC outputs PDB symbols for OpenCppCoverage:
+To generate the line-by-line HTML coverage report (requires `winget install OpenCppCoverage.OpenCppCoverage`). Ensure the project was compiled with `-DCMAKE_BUILD_TYPE=Debug` so that MSVC outputs PDB symbols for OpenCppCoverage.
+
+Run the BIG suite and export the binary coverage state:
 ```cmd
-OpenCppCoverage.exe --sources "%CD%\src" --sources "%CD%\include" --excluded_sources "%CD%\tests" --export_type html:coverage_cpp -- "%CD%\build\tests\lotm_cpp_tests.exe"
+OpenCppCoverage.exe --sources "%CD%\src" --sources "%CD%\include" --excluded_sources "%CD%\tests" --export_type binary:cpp_tests.cov -- "%CD%\build\tests\lotm_big_tests.exe"
 ```
+Run the INI suite, merge the previous binary coverage, and generate the final HTML/XML reports:
 ```cmd
-OpenCppCoverage.exe --sources "%CD%\src" --sources "%CD%\include" --excluded_sources "%CD%\tests" --export_type html:coverage_ini_cpp -- "%CD%\build\tests\lotm_ini_tests.exe"
+OpenCppCoverage.exe --sources "%CD%\src" --sources "%CD%\include" --excluded_sources "%CD%\tests" --input_coverage cpp_tests.cov --export_type html:coverage_cpp -- "%CD%\build\tests\lotm_ini_tests.exe"
 ```
 ```cmd
 start .\coverage_cpp\index.html
@@ -121,4 +128,4 @@ The build system is organized into decoupled CMake targets:
 - `lotm_core`: Header-only interface library containing endian-swapping utilities (`endian.hpp`).
 - `lotm_big`: Static C++ library implementing `BigArchive`, `BigPacker`, `BigDiff`, and `BigOverlay`.
 - `lotm_ini`: Static C++ library implementing the zero-copy SAGE `.ini`, `.inc`, and `.str` lexer, schema tables, AST parser, iterative serializer, and `#include` virtual chroot validator.
-- `_core`: The native Python extension module (`.pyd`) exported via `nanobind` under `lotm._core`.
+- `_core`: The native Python extension module (`.pyd`) exported via `nanobind` under `lotm._core` (`src/bindings/`).

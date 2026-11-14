@@ -1,6 +1,6 @@
 """
-Lord of the Mods (lotm)
-High-performance SAGE engine archive manipulation library.
+@file src/lotm/__init__.py
+@brief High-performance SAGE engine archive and configuration manipulation library.
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
 Part of the Lord of the Mods (lotm) project.
@@ -14,6 +14,6 @@ logging.getLogger("lotm").addHandler(logging.NullHandler())
 
 __version__ = "0.5.0"
 
-from . import big
+from . import big, ini
 
-__all__ = ["__version__", "big"]
+__all__ = ["__version__", "big", "ini"]

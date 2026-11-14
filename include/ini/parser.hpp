@@ -11,7 +11,7 @@
 
 #include "ini/lexer.hpp"
 #include "ini/schema.hpp"
-#include "ini/types.hpp"
+#include "ini/ast.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -119,12 +119,24 @@ namespace lotm::ini {
 
         [[nodiscard]] std::string print() const;
 
+        [[nodiscard]] bool operator==(const ConstructFile& other) const noexcept {
+            return name == other.name &&
+                comment == other.comment &&
+                defines == other.defines &&
+                delimiters == other.delimiters &&
+                start_level == other.start_level &&
+                strict == other.strict &&
+                items == other.items &&
+                errors == other.errors;
+        }
+
     private:
         using ContextPtr = std::variant<ConstructFile*, ConstructLevel*, ScriptNode*>;
 
         std::vector<std::vector<DelimiterRule>> active_rules_{};
         std::vector<ContextPtr> context_stack_{};
 
+        void construct_from_view(std::string_view raw_view);
         [[nodiscard]] int get_lookup_level() const noexcept;
         void append_to_active_context(AstNode node);
         void parse_line(std::string_view raw_line, std::size_t line_num, LexedLine& lex_scratch);
