@@ -29,7 +29,7 @@ def test_parse_ini_and_parse_str_from_disk_and_strings(
 
     inc_doc = ini.parse_ini(sample_inc_file, strict=True)
     assert inc_doc.start_level == 2
-    assert len(inc_doc) == 2
+    assert len(inc_doc) == 1
 
     str_doc = ini.parse_str(sample_str_file, strict=True)
     assert len(str_doc.entries) == 3

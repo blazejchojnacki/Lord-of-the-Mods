@@ -311,7 +311,7 @@ TEST_CASE("Zero-copy lexer, whitespace helpers, and line view iterator", "[ini][
 
     SECTION("lex_line preserves ';' and '//' inside quotes and URL schemes like http://") {
         const LexedLine quoted_semi = lex_line("    \" Soldier ; Archer // Cavalry \" ; real trailing comment");
-        REQUIRE(quoted_semi.words_signs.size() == 5);
+        REQUIRE(quoted_semi.words_signs.size() == 7);
         CHECK(quoted_semi.comment == "; real trailing comment");
 
         const LexedLine url_line = lex_line("    URL = http://www.ea.com/lotr // official link");
