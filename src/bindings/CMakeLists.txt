@@ -1,4 +1,4 @@
-# @file src/cppy_bridge/CMakeLists.txt
+# @file src/bindings/CMakeLists.txt
 # @brief CMake for CPP - Python binding
 #
 # Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>

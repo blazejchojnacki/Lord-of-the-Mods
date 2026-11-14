@@ -1,5 +1,5 @@
 /**
- * @file src/cppy_bridge/bind_ini.cpp
+ * @file src/bindings/bind_ini.cpp
  * @brief Binding .INI, .INC, and .STR configuration parser features
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
