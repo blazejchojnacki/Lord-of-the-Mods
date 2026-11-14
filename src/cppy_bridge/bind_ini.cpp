@@ -91,6 +91,9 @@ namespace lotm::python {
 
         sub.attr("LEVEL_INDENT") = std::string{ lotm::ini::LEVEL_INDENT };
         sub.attr("MAX_INI_DEPTH") = lotm::ini::MAX_INI_DEPTH;
+        sub.attr("MAX_INI_FILE_SIZE") = lotm::ini::MAX_INI_FILE_SIZE;
+        sub.attr("SAGE_MAX_BLOCK_NAME_LEN") = lotm::ini::SAGE_MAX_BLOCK_NAME_LEN;
+        sub.attr("SAGE_MAX_IDENTIFIER_LEN") = lotm::ini::SAGE_MAX_IDENTIFIER_LEN;
 
         nb::list ini_ends_list;
         for (const auto kw : lotm::ini::INI_ENDS) {
@@ -141,8 +144,20 @@ namespace lotm::python {
                 nb::arg("end_token") = "EndScript",
                 nb::arg("end_comment") = "",
                 nb::arg("content") = std::vector<std::string>{})
-            .def_rw("name", &lotm::ini::ScriptNode::name, "Opening script keyword")
-            .def_rw("identifier", &lotm::ini::ScriptNode::identifier, "Optional script identifier")
+            .def_prop_rw("name",
+                [](const lotm::ini::ScriptNode& self) { return self.name; },
+                [](lotm::ini::ScriptNode& self, std::string val) {
+                    lotm::ini::validate_sage_bounds(val, self.identifier);
+                    self.name = std::move(val);
+                },
+                "Opening script keyword")
+            .def_prop_rw("identifier",
+                [](const lotm::ini::ScriptNode& self) { return self.identifier; },
+                [](lotm::ini::ScriptNode& self, std::string val) {
+                    lotm::ini::validate_sage_bounds(self.name, val);
+                    self.identifier = std::move(val);
+                },
+                "Optional script identifier")
             .def_rw("comment", &lotm::ini::ScriptNode::comment, "Leading comment block")
             .def_rw("header_comment", &lotm::ini::ScriptNode::header_comment, "Inline comment on the opening line")
             .def_rw("end_token", &lotm::ini::ScriptNode::end_token, "Closing script keyword")
@@ -170,9 +185,27 @@ namespace lotm::python {
                 nb::arg("header_comment") = "",
                 nb::arg("end_token") = "",
                 nb::arg("end_comment") = "")
-            .def_rw("_class", &lotm::ini::ConstructLevel::_class, "Delimiter class keyword")
-            .def_rw("name", &lotm::ini::ConstructLevel::name, "Block name or type")
-            .def_rw("identifier", &lotm::ini::ConstructLevel::identifier, "Optional module tag or sub-identifier")
+            .def_prop_rw("_class",
+                [](const lotm::ini::ConstructLevel& self) { return self._class; },
+                [](lotm::ini::ConstructLevel& self, std::string val) {
+                    lotm::ini::validate_sage_bounds(self.name, self.identifier, val);
+                    self._class = std::move(val);
+                },
+                "Delimiter class keyword")
+            .def_prop_rw("name",
+                [](const lotm::ini::ConstructLevel& self) { return self.name; },
+                [](lotm::ini::ConstructLevel& self, std::string val) {
+                    lotm::ini::validate_sage_bounds(val, self.identifier, self._class);
+                    self.name = std::move(val);
+                },
+                "Block name or type")
+            .def_prop_rw("identifier",
+                [](const lotm::ini::ConstructLevel& self) { return self.identifier; },
+                [](lotm::ini::ConstructLevel& self, std::string val) {
+                    lotm::ini::validate_sage_bounds(self.name, val, self._class);
+                    self.identifier = std::move(val);
+                },
+                "Optional module tag or sub-identifier")
             .def_rw("comment", &lotm::ini::ConstructLevel::comment, "Leading comment block")
             .def_rw("header_comment", &lotm::ini::ConstructLevel::header_comment, "Inline comment on the header line")
             .def_rw("end_token", &lotm::ini::ConstructLevel::end_token, "Closing keyword (End, END, end)")
@@ -180,14 +213,16 @@ namespace lotm::python {
             .def_rw("items", &lotm::ini::ConstructLevel::items, "Child AST nodes contained in this block")
             .def("append", &lotm::ini::ConstructLevel::append, nb::arg("item"), "Appends a child AST node to this block")
             .def("__len__", &lotm::ini::ConstructLevel::size)
-            .def("__getitem__", [](const lotm::ini::ConstructLevel& self, Py_ssize_t index) -> lotm::ini::AstNode {
+            .def("__getitem__", [](lotm::ini::ConstructLevel& self, Py_ssize_t index) -> lotm::ini::AstNode& {
             return self.items[normalize_py_index(index, self.size())];
-                }, nb::arg("index"))
+                }, nb::arg("index"), nb::rv_policy::reference_internal)
             .def("__setitem__", [](lotm::ini::ConstructLevel& self, Py_ssize_t index, lotm::ini::AstNode item) {
             self.items[normalize_py_index(index, self.size())] = std::move(item);
                 }, nb::arg("index"), nb::arg("item"))
-            .def("__iter__", [](const lotm::ini::ConstructLevel& self) {
-            return nb::make_iterator(nb::type<lotm::ini::ConstructLevel>(), "iterator", self.begin(), self.end());
+            .def("__iter__", [](lotm::ini::ConstructLevel& self) {
+            return nb::make_iterator<nb::rv_policy::reference_internal>(
+                nb::type<lotm::ini::ConstructLevel>(), "iterator", self.begin(), self.end()
+            );
                 }, nb::keep_alive<0, 1>())
             .def("print", &lotm::ini::ConstructLevel::print,
                 nb::arg("level") = 0,
@@ -211,13 +246,38 @@ namespace lotm::python {
                 nb::arg("end_token") = "End",
                 nb::arg("end_comment") = "",
                 nb::arg("items") = std::vector<lotm::ini::StrChildNode>{})
-            .def_rw("category", &lotm::ini::StrEntry::category, "Localization string category prefix")
-            .def_rw("identifier", &lotm::ini::StrEntry::identifier, "Localization key identifier")
+            .def_prop_rw("category",
+                [](const lotm::ini::StrEntry& self) { return self.category; },
+                [](lotm::ini::StrEntry& self, std::string val) {
+                    lotm::ini::validate_sage_bounds(val, self.identifier);
+                    self.category = std::move(val);
+                },
+                "Localization string category prefix")
+            .def_prop_rw("identifier",
+                [](const lotm::ini::StrEntry& self) { return self.identifier; },
+                [](lotm::ini::StrEntry& self, std::string val) {
+                    lotm::ini::validate_sage_bounds(self.category, val);
+                    self.identifier = std::move(val);
+                },
+                "Localization key identifier")
             .def_rw("comment", &lotm::ini::StrEntry::comment, "Leading comment block")
             .def_rw("header_comment", &lotm::ini::StrEntry::header_comment, "Inline comment on the header line")
             .def_rw("end_token", &lotm::ini::StrEntry::end_token, "Closing keyword")
             .def_rw("end_comment", &lotm::ini::StrEntry::end_comment, "Inline comment on the closing line")
             .def_rw("items", &lotm::ini::StrEntry::items, "Child comment and statement nodes")
+            .def("append", &lotm::ini::StrEntry::append, nb::arg("item"), "Appends a child node to this localization entry")
+            .def("__len__", &lotm::ini::StrEntry::size)
+            .def("__getitem__", [](lotm::ini::StrEntry& self, Py_ssize_t index) -> lotm::ini::StrChildNode& {
+            return self.items[normalize_py_index(index, self.size())];
+                }, nb::arg("index"), nb::rv_policy::reference_internal)
+            .def("__setitem__", [](lotm::ini::StrEntry& self, Py_ssize_t index, lotm::ini::StrChildNode item) {
+            self.items[normalize_py_index(index, self.size())] = std::move(item);
+                }, nb::arg("index"), nb::arg("item"))
+            .def("__iter__", [](lotm::ini::StrEntry& self) {
+            return nb::make_iterator<nb::rv_policy::reference_internal>(
+                nb::type<lotm::ini::StrEntry>(), "iterator", self.begin(), self.end()
+            );
+                }, nb::keep_alive<0, 1>())
             .def("print", &lotm::ini::StrEntry::print,
                 nb::call_guard<nb::gil_scoped_release>(),
                 "Serializes the localization entry")
@@ -236,9 +296,25 @@ namespace lotm::python {
             .def_rw("name", &lotm::ini::StrDocument::name, "Document file path or identifier")
             .def_rw("entries", &lotm::ini::StrDocument::entries, "Top-level localization entries and comments")
             .def_rw("errors", &lotm::ini::StrDocument::errors, "Non-strict parsing warnings and errors")
+            .def("append", &lotm::ini::StrDocument::append, nb::arg("entry"), "Appends a top-level entry to the document")
+            .def("__len__", &lotm::ini::StrDocument::size)
+            .def("__getitem__", [](lotm::ini::StrDocument& self, Py_ssize_t index) -> lotm::ini::StrDocEntry& {
+            return self.entries[normalize_py_index(index, self.size())];
+                }, nb::arg("index"), nb::rv_policy::reference_internal)
+            .def("__setitem__", [](lotm::ini::StrDocument& self, Py_ssize_t index, lotm::ini::StrDocEntry entry) {
+            self.entries[normalize_py_index(index, self.size())] = std::move(entry);
+                }, nb::arg("index"), nb::arg("entry"))
+            .def("__iter__", [](lotm::ini::StrDocument& self) {
+            return nb::make_iterator<nb::rv_policy::reference_internal>(
+                nb::type<lotm::ini::StrDocument>(), "iterator", self.begin(), self.end()
+            );
+                }, nb::keep_alive<0, 1>())
             .def("print", &lotm::ini::StrDocument::print,
                 nb::call_guard<nb::gil_scoped_release>(),
                 "Serializes the entire .str document")
+            .def("__eq__", [](const lotm::ini::StrDocument& self, const lotm::ini::StrDocument& other) {
+            return self == other;
+                })
             .def("__repr__", [](const lotm::ini::StrDocument& self) {
             return "<StrDocument name='" + self.name + "' entries=" + std::to_string(self.entries.size()) +
                 " errors=" + std::to_string(self.errors.size()) + ">";
@@ -337,18 +413,23 @@ namespace lotm::python {
                 nb::arg("item"),
                 "Appends a top-level AST node or StrEntry to the document")
             .def("__len__", &lotm::ini::ConstructFile::size)
-            .def("__getitem__", [](const lotm::ini::ConstructFile& self, Py_ssize_t index) -> lotm::ini::RootItem {
+            .def("__getitem__", [](lotm::ini::ConstructFile& self, Py_ssize_t index) -> lotm::ini::RootItem& {
             return self.items[normalize_py_index(index, self.size())];
-                }, nb::arg("index"))
+                }, nb::arg("index"), nb::rv_policy::reference_internal)
             .def("__setitem__", [](lotm::ini::ConstructFile& self, Py_ssize_t index, lotm::ini::RootItem item) {
             self.items[normalize_py_index(index, self.size())] = std::move(item);
                 }, nb::arg("index"), nb::arg("item"))
-            .def("__iter__", [](const lotm::ini::ConstructFile& self) {
-            return nb::make_iterator(nb::type<lotm::ini::ConstructFile>(), "iterator", self.begin(), self.end());
+            .def("__iter__", [](lotm::ini::ConstructFile& self) {
+            return nb::make_iterator<nb::rv_policy::reference_internal>(
+                nb::type<lotm::ini::ConstructFile>(), "iterator", self.begin(), self.end()
+            );
                 }, nb::keep_alive<0, 1>())
             .def("print", &lotm::ini::ConstructFile::print,
                 nb::call_guard<nb::gil_scoped_release>(),
                 "Iteratively serializes the document back into formatted configuration text")
+            .def("__eq__", [](const lotm::ini::ConstructFile& self, const lotm::ini::ConstructFile& other) {
+            return self == other;
+                })
             .def("__repr__", [](const lotm::ini::ConstructFile& self) {
             return "<ConstructFile name='" + self.name + "' items=" + std::to_string(self.items.size()) +
                 " errors=" + std::to_string(self.errors.size()) + ">";
