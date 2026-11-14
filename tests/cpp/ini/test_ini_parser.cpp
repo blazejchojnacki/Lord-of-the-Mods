@@ -12,7 +12,7 @@
 #include "ini/lexer.hpp"
 #include "ini/parser.hpp"
 #include "ini/schema.hpp"
-#include "ini/types.hpp"
+#include "ini/ast.hpp"
 
 #include <atomic>
 #include <chrono>

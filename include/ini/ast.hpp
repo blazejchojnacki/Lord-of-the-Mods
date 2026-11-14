@@ -1,5 +1,5 @@
 /**
- * @file include/ini/types.hpp
+ * @file include/ini/ast.hpp
  * @brief AST node definitions, variants, and iterative serialization frame structures for lotm::ini.
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
