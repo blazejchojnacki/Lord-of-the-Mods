@@ -106,12 +106,14 @@ jobs:
       - name: Test Installed Wheel
         run: |
           pip install (Get-Item dist/*.whl).FullName
+          lotm --version
           lotm --help
           lotm big --help
           lotm ini --help
           lotm ini scan --help
           lotm ini format --help
           lotm ini inspect --help
+          lotm-big --version
           lotm-big --help
           lotm-big pack --help
           lotm-big unpack --help
