@@ -1,5 +1,5 @@
 /**
- * @file src/cppy_bridge/bind_big.cpp
+ * @file src/bindings/bind_big.cpp
  * @brief Binding .BIG features
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>

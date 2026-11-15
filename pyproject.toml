@@ -11,7 +11,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "lord-of-the-mods"
-version = "0.4.0"
+version = "0.5.0"
 description = "Modular Python library and modding toolkit for The Battle for Middle-earth game"
 readme = "README.md"
 license = { file = "LICENSE.md" }
@@ -64,7 +64,8 @@ cmake.build-type = "Release"
 cmake.define = { BUILD_TESTING = "OFF" }
 wheel.packages = ["src/lotm"]
 wheel.py-api = "cp312"
-sdist.exclude = [".github", "docs", "examples", "tests"]
+sdist.exclude = [".github", "_prototype", "tools"]
+# "docs", "examples", "tests" are meant to be in tar.gz, while they are excluded from the wheel by `wheel.packages = ["src/lotm"]`
 
 [tool.mypy]
 python_version = "3.12"

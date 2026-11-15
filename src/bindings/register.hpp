@@ -1,5 +1,5 @@
 /**
- * @file src/cppy_bridge/register.hpp
+ * @file src/bindings/register.hpp
  * @brief header file to link feature specific binding cpp files to main binding file
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>

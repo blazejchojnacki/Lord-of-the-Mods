@@ -16,13 +16,27 @@ from typing import NoReturn
 
 from lotm import __version__
 from lotm.big import cli as big_cli
+from lotm.ini import cli as ini_cli
 
 EXIT_SUCCESS = 0
 EXIT_ERROR = 1
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Construct and return the top-level umbrella ArgumentParser for lotm."""
+    """
+    Construct and return the top-level umbrella ArgumentParser for lotm.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        Configured root parser with registered `big` and `ini` domain subparsers.
+
+    Examples
+    --------
+    >>> parser = build_parser()
+    >>> parser.prog
+    'lotm'
+    """
     parser = argparse.ArgumentParser(
         prog="lotm",
         description="Lord of the Mods (lotm) — high-performance SAGE engine modding toolkit.",
@@ -36,6 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="domain", required=True)
 
     big_cli.register_subparser(subparsers)
+    ini_cli.register_subparser(subparsers)
 
     return parser
 
@@ -53,6 +68,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     -------
     int
         Process exit code (0 for success, 1 for runtime error).
+
+    Examples
+    --------
+    >>> main(["ini", "inspect", "missing_file.ini"])
+    1
     """
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -68,7 +88,18 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def cli_entry() -> NoReturn:
-    """Console script entry point for pyproject.toml."""
+    """
+    Console script entry point for pyproject.toml.
+
+    Raises
+    ------
+    SystemExit
+        Always raised with the integer exit code returned by `main()`.
+
+    Examples
+    --------
+    >>> cli_entry()  # doctest: +SKIP
+    """
     sys.exit(main())
 
 
