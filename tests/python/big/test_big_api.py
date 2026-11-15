@@ -699,3 +699,12 @@ def test_load_overlay_from_directory_and_archive_sequence(tmp_path: Path):
 
     with pytest.raises(FileNotFoundError, match="Archive not found"):
         big.load_overlay([arc1, tmp_path / "missing_arc.big"])
+
+def test_cli_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
+    """Verify that lotm-big reports its version and exits with code 0."""
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["--version"])
+
+    assert exc_info.value.code == 0
+    stdout, _ = capsys.readouterr()
+    assert "lotm-big" in stdout
