@@ -17,7 +17,7 @@ import lotm.ini as ini
 
 
 def test_ast_leaf_nodes_properties_equality_and_repr() -> None:
-    """Verify CommentNode, StatementNode, IncludeNode, and ScriptNode bindings."""
+    """Verify CommentNode, StatementNode, IncludeNode, DefineNode, and ScriptNode bindings."""
     c1 = ini.CommentNode("; comment 1")
     c2 = ini.CommentNode()
     c2.text = "; comment 1"
@@ -38,6 +38,13 @@ def test_ast_leaf_nodes_properties_equality_and_repr() -> None:
     assert inc1 == inc2
     assert inc1.clean_path == "../shared/macros.inc"
     assert "IncludeNode" in repr(inc1)
+
+    def1 = _core.ini.DefineNode("#define DAMAGE 50", "; macro cmt")
+    def2 = _core.ini.DefineNode()
+    def2.text = "#define DAMAGE 50"
+    def2.comment = "; macro cmt"
+    assert def1 == def2
+    assert "DefineNode" in repr(def1)
 
     scr = ini.ScriptNode(
         name="BeginScript",
@@ -214,45 +221,44 @@ def test_construct_file_overloads_and_sequence_protocol(sample_ini_file: Path) -
     assert len(empty_cf) == 0
     assert empty_cf.name == ""
 
-    # 7-argument metadata constructor with empty name (does not auto-construct)
+    # 6-argument metadata constructor with empty name (does not auto-construct)
     meta_empty = ini.ConstructFile(
         name="",
-        comment="; doc cmt",
         defines=["#define A 1"],
         delimiters=[["Weapon"], []],
         start_level=0,
         strict=False,
         file_content=None,
     )
-    assert meta_empty.comment == "; doc cmt"
     assert meta_empty.defines == ["#define A 1"]
     assert len(meta_empty) == 0
 
-    # 7-argument metadata constructor with non-empty name and content (auto-constructs)
+    # 6-argument metadata constructor with non-empty name and content (preserves metadata and auto-constructs)
     meta_parsed = ini.ConstructFile(
-        name="inline.ini",
-        comment="; doc",
-        defines=[],
-        delimiters=[],
-        start_level=0,
+        name="inline.inc",
+        defines=["#define PRE_MACRO 1"],
+        delimiters=[["CustomRoot"], ["CustomWeapon"], []],
+        start_level=1,
         strict=True,
-        file_content="Weapon GondorBow\n    AttackRange = 300\nEnd\n",
+        file_content="CustomWeapon GondorBow\n    AttackRange = 300\nEnd\n",
     )
     assert len(meta_parsed) == 1
+    assert meta_parsed.start_level == 1
+    assert meta_parsed.defines == ["#define PRE_MACRO 1"]
     assert "ConstructFile" in repr(meta_parsed)
 
     # Verify in-place reference semantics on ConstructFile indexing and iteration
     assert isinstance(meta_parsed[0], ini.ConstructLevel)
     meta_parsed[0].name = "MirkwoodBow"
-    assert "Weapon MirkwoodBow" in meta_parsed.print()
+    assert "CustomWeapon MirkwoodBow" in meta_parsed.print()
 
     for root_node in meta_parsed:
         if isinstance(root_node, ini.ConstructLevel):
             root_node.name = "LorienBow"
-    assert "Weapon LorienBow" in meta_parsed.print()
+    assert "CustomWeapon LorienBow" in meta_parsed.print()
 
     # Property read/write accessors
-    meta_parsed.comment = "; updated"
+    meta_parsed.name = "inline.ini"
     meta_parsed.defines = ["#define RANGE 300"]
     meta_parsed.delimiters = [["Weapon"], []]
     meta_parsed.start_level = 0
@@ -310,13 +316,17 @@ def test_module_level_functions_and_security_guards(
     assert buf_start == 0
     assert len(buf_delims) > 0
 
-    # validate_include inside virtual root vs path traversal escape
+    # validate_include inside virtual root vs missing relative file vs path traversal escape
     vroot = ini_mod_directory / "data" / "ini"
     hero_ini = vroot / "object" / "hero.ini"
     valid_inc = ini.IncludeNode('"includes\\armor.inc"')
     resolved = ini.validate_include(valid_inc, hero_ini, vroot)
     assert resolved.is_file()
     assert resolved.name == "armor.inc"
+
+    missing_in_root_inc = ini.IncludeNode('"..\\includes\\nonexistent.inc"')
+    with pytest.raises(ini.IniParseError, match="Include file not found"):
+        ini.validate_include(missing_in_root_inc, hero_ini, vroot)
 
     escape_inc = ini.IncludeNode('"..\\..\\notes.txt"')
     with pytest.raises(ini.IniParseError, match="Security violation"):

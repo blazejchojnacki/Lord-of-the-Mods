@@ -107,12 +107,14 @@ TEST_CASE("AST types, node operations, and SerializableNodeRef conversions", "[i
         STATIC_REQUIRE(is_ini_end("End"));
         STATIC_REQUIRE(is_ini_end("END"));
         STATIC_REQUIRE(is_ini_end("end"));
-        STATIC_REQUIRE_FALSE(is_ini_end("EnD"));
+        STATIC_REQUIRE(is_ini_end("EnD"));
+        STATIC_REQUIRE(is_ini_end("eNd"));
+        STATIC_REQUIRE_FALSE(is_ini_end("Enx"));
         STATIC_REQUIRE_FALSE(is_ini_end("EndScript"));
         STATIC_REQUIRE_FALSE(is_ini_end(""));
     }
 
-    SECTION("CommentNode and StatementNode equality") {
+    SECTION("CommentNode, StatementNode, and DefineNode equality") {
         const CommentNode c1{ "; comment A" };
         const CommentNode c2{ "; comment A" };
         const CommentNode c3{ "; comment B" };
@@ -124,6 +126,12 @@ TEST_CASE("AST types, node operations, and SerializableNodeRef conversions", "[i
         const StatementNode s3{ "Damage = 200", "; inline" };
         CHECK(s1 == s2);
         CHECK_FALSE(s1 == s3);
+
+        const DefineNode d1{ "#define MACRO 10", "; def cmt" };
+        const DefineNode d2{ "#define MACRO 10", "; def cmt" };
+        const DefineNode d3{ "#define MACRO 20", "; def cmt" };
+        CHECK(d1 == d2);
+        CHECK_FALSE(d1 == d3);
     }
 
     SECTION("IncludeNode::clean_path normalizes slashes and strips quotes/whitespace") {
@@ -237,12 +245,14 @@ TEST_CASE("AST types, node operations, and SerializableNodeRef conversions", "[i
         const AstNode ast_cmt = CommentNode{ "; c" };
         const AstNode ast_stmt = StatementNode{ "x = 1" };
         const AstNode ast_inc = IncludeNode{ "\"a.inc\"" };
+        const AstNode ast_def = DefineNode{ "#define K 1" };
         const AstNode ast_scr = ScriptNode{};
         const AstNode ast_lvl = ConstructLevel{ "Object", "Test" };
 
         CHECK(std::holds_alternative<const CommentNode*>(to_serializable_ref(ast_cmt)));
         CHECK(std::holds_alternative<const StatementNode*>(to_serializable_ref(ast_stmt)));
         CHECK(std::holds_alternative<const IncludeNode*>(to_serializable_ref(ast_inc)));
+        CHECK(std::holds_alternative<const DefineNode*>(to_serializable_ref(ast_def)));
         CHECK(std::holds_alternative<const ScriptNode*>(to_serializable_ref(ast_scr)));
         CHECK(std::holds_alternative<const ConstructLevel*>(to_serializable_ref(ast_lvl)));
 
@@ -309,10 +319,14 @@ TEST_CASE("Zero-copy lexer, whitespace helpers, and line view iterator", "[ini][
         CHECK(l3.comment.empty());
     }
 
-    SECTION("lex_line preserves ';' and '//' inside quotes and URL schemes like http://") {
+    SECTION("lex_line preserves ';' and '//' inside quotes, escaped quotes, and URL schemes like http://") {
         const LexedLine quoted_semi = lex_line("    \" Soldier ; Archer // Cavalry \" ; real trailing comment");
         REQUIRE(quoted_semi.words_signs.size() == 7);
         CHECK(quoted_semi.comment == "; real trailing comment");
+
+        const LexedLine escaped_quote_line = lex_line("    \"Quote \\\" ; still inside // quotes \\\" end\" ; outside comment");
+        CHECK(escaped_quote_line.comment == "; outside comment");
+        REQUIRE(escaped_quote_line.words_signs.size() == 9);
 
         const LexedLine url_line = lex_line("    URL = http://www.ea.com/lotr // official link");
         REQUIRE(url_line.words_signs == std::vector<std::string_view>{"URL", "=", "http://www.ea.com/lotr"});
@@ -406,10 +420,12 @@ TEST_CASE("Compile-time and runtime delimiter schema rules", "[ini][schema]") {
 }
 
 TEST_CASE("Iterative serialization covers all AST and STR node variations", "[ini][serializer]") {
-    SECTION("ConstructLevel, ScriptNode, IncludeNode, StatementNode, and CommentNode serialization") {
+    SECTION("ConstructLevel, ScriptNode, IncludeNode, DefineNode, StatementNode, and CommentNode serialization") {
         ConstructLevel root_block{ "Object", "GondorTower", "", "; line 1\n  ; line 2", "; root hdr", "End", "; root end" };
         root_block.append(CommentNode{ "; inner standalone" });
         root_block.append(IncludeNode{ "\"..\\common.inc\"", "; inc cmt" });
+        root_block.append(DefineNode{ "#define INNER_VAL 10", "; def cmt" });
+        root_block.append(DefineNode{ "BARE_MACRO 20", "" });
         root_block.append(StatementNode{ "ArmorSet = TowerArmor", "; stmt cmt" });
 
         ScriptNode script{ "BeginScript", "OnInit", "; scr pre", "; scr hdr", "EndScript", "; scr end",{
@@ -433,6 +449,8 @@ TEST_CASE("Iterative serialization covers all AST and STR node variations", "[in
             "Object GondorTower ; root hdr\n"
             "    ; inner standalone\n"
             "    #include \"..\\common.inc\" ; inc cmt\n"
+            "    #define INNER_VAL 10 ; def cmt\n"
+            "    #define BARE_MACRO 20\n"
             "    ArmorSet = TowerArmor ; stmt cmt\n"
             "    ; scr pre\n"
             "    BeginScript OnInit ; scr hdr\n"
@@ -547,7 +565,16 @@ TEST_CASE("Virtual chroot #include path validation and traversal defense", "[ini
         CHECK_THROWS_AS(validate_include(escape_to_fs_root, current_ini, vroot), IniParseError);
     }
 
-    SECTION("Throws when target file does not exist or is a directory") {
+    SECTION("Distinguishes missing relative files inside virtual_root from traversal escapes") {
+        const IncludeNode missing_rel_in_root{ "\"..\\missing_common.inc\"" };
+        try {
+            (void)validate_include(missing_rel_in_root, current_ini, vroot);
+            FAIL("Expected IniParseError for missing relative include");
+        }
+        catch (const IniParseError& ex) {
+            CHECK(std::string{ ex.what() }.find("Include file not found") != std::string::npos);
+        }
+
         const IncludeNode missing_node{ "\"includes/nonexistent.inc\"" };
         CHECK_THROWS_AS(validate_include(missing_node, current_ini, vroot), IniParseError);
 
@@ -575,7 +602,7 @@ TEST_CASE("StrParser happy paths, comment coalescing, and strict/non-strict erro
         CHECK_THROWS_AS(StrParser::parse_file((temp.root() / "missing.str").string(), false), IniParseError);
     }
 
-    SECTION("Parses valid .str from disk with comments in all positions") {
+    SECTION("Parses valid .str from disk with comments in all positions and mixed-case ENd") {
         const std::string content =
             "; file header line 1\n"
             "; file header line 2\n"
@@ -585,9 +612,9 @@ TEST_CASE("StrParser happy paths, comment coalescing, and strict/non-strict erro
             "    ; inner block comment\n"
             "    \n"
             "    ; pre-text comment\n"
-            "    \"Gondor Soldiers\" ; text cmt\n"
+            "    \"Gondor \\\"Soldiers ; Elite\\\"\" ; text cmt\n"
             "    ; trailing inside entry\n"
-            "End ; end cmt\n"
+            "ENd ; end cmt\n"
             "; trailing file comment\n";
         const fs::path str_path = temp.write_file("lotr.str", content);
 
@@ -603,6 +630,7 @@ TEST_CASE("StrParser happy paths, comment coalescing, and strict/non-strict erro
         CHECK(entry.identifier == "GondorFighter");
         CHECK(entry.comment == "; entry lead comment");
         CHECK(entry.header_comment == "; hdr cmt");
+        CHECK(entry.end_token == "ENd");
         CHECK(entry.end_comment == "; end cmt");
         REQUIRE(entry.items.size() == 4);
     }
@@ -632,22 +660,45 @@ TEST_CASE("StrParser happy paths, comment coalescing, and strict/non-strict erro
         CHECK_THROWS_AS(StrParser::parse_file("broken.str", true, "OBJECT:A\nOBJECT:B\nEnd\n"), IniParseError);
         CHECK_THROWS_AS(StrParser::parse_file("broken.str", true, "GUI\n\"Unclosed\"\n"), IniParseError);
     }
+
+    SECTION("Panic-mode error recovery coalesces cascading orphan lines into a single line-span diagnostic") {
+        const std::string unknown_cat_str =
+            "UNKNOWN_CATEGORY:GondorUnit\n"
+            "    \"Line 1 of unknown category\"\n"
+            "    \"Line 2 of unknown category\"\n"
+            "End\n"
+            "OBJECT:ValidUnit\n"
+            "    \"Valid Unit\"\n"
+            "End\n"
+            "ANOTHER_BAD:Trailing\n"
+            "    \"Trailing orphan at EOF\"\n";
+
+        const StrDocument doc = StrParser::parse_file("panic.str", false, unknown_cat_str);
+        REQUIRE(doc.errors.size() == 2);
+        CHECK(doc.errors[0].find("panic.str:1-4 (starting with: UNKNOWN_CATEGORY:GondorUnit)") != std::string::npos);
+        CHECK(doc.errors[1].find("panic.str:8-9 (starting with: ANOTHER_BAD:Trailing)") != std::string::npos);
+    }
 }
 
 TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth security limits", "[ini][parser][security]") {
     TempDirFixture temp;
 
-    SECTION("Default ConstructFile, container interface, equality, and short filename print") {
+    SECTION("Default ConstructFile, container interface, equality, and extensionless filename print") {
         ConstructFile empty_cf;
         CHECK(empty_cf.empty());
         CHECK(empty_cf.size() == 0);
 
-        empty_cf.name = "a";
-        empty_cf.append(AstNode{ StatementNode{ "Key = 1", "" } });
+        empty_cf.name = "virtual_buffer";
+        empty_cf.defines = { "#define LEGACY_DEF 1" };
+        empty_cf.append(AstNode{ ConstructLevel{ "Object", "GondorSoldier", "", "", "", "End", "" } });
         empty_cf.append(RootItem{ AstNode{ CommentNode{ "; cmt" } } });
         empty_cf.append(StrEntry{ "GUI", "Btn" });
         REQUIRE(empty_cf.size() == 3);
         CHECK_FALSE(empty_cf.empty());
+
+        const std::string printed_extless = empty_cf.print();
+        CHECK(printed_extless.find("#define LEGACY_DEF 1\n") != std::string::npos);
+        CHECK(printed_extless.find("Object GondorSoldier\n") != std::string::npos);
 
         empty_cf[0] = AstNode{ StatementNode{ "Key = 2", "" } };
         const ConstructFile& const_cf = empty_cf;
@@ -671,6 +722,45 @@ TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth secu
         CHECK_THROWS_AS(ConstructFile("bad.ext", false, ""), IniParseError);
     }
 
+    SECTION("construct_with_metadata preserves caller-supplied defines, delimiters, and start_level") {
+        ConstructFile meta_cf;
+        meta_cf.name = "custom.inc";
+        meta_cf.defines = { "#define PREDEFINED_MACRO 1" };
+        meta_cf.delimiters = { { "CustomRoot" },{ "CustomInner" },{} };
+        meta_cf.start_level = 1;
+        meta_cf.strict = true;
+        meta_cf.file_content = "\xEF\xBB\xBF" "CustomInner MyBlock\n    Value = 42\nENd\n";
+
+        meta_cf.construct_with_metadata();
+        CHECK(meta_cf.start_level == 1);
+        REQUIRE(meta_cf.defines.size() == 1);
+        REQUIRE(meta_cf.size() == 1);
+        const auto& blk = std::get<ConstructLevel>(std::get<AstNode>(meta_cf[0]));
+        CHECK(blk._class == "CustomInner");
+        CHECK(blk.name == "MyBlock");
+        CHECK(blk.end_token == "ENd");
+
+        // Disk-backed construct_with_metadata and .str construct_with_metadata
+        const fs::path disk_inc = temp.write_file("disk_meta.inc", "CustomInner DiskBlock\nEnd\n");
+        ConstructFile disk_meta;
+        disk_meta.name = disk_inc.string();
+        disk_meta.delimiters = { { "CustomRoot" },{ "CustomInner" },{} };
+        disk_meta.start_level = 1;
+        disk_meta.strict = true;
+        disk_meta.construct_with_metadata();
+        REQUIRE(disk_meta.size() == 1);
+
+        ConstructFile str_meta;
+        str_meta.name = "meta.str";
+        str_meta.file_content = "OBJECT:Hero\n    \"Aragorn\"\nEnd\n";
+        str_meta.construct_with_metadata();
+        REQUIRE(str_meta.size() == 1);
+
+        ConstructFile invalid_meta;
+        invalid_meta.name = "invalid.ext";
+        CHECK_THROWS_AS(invalid_meta.construct_with_metadata(), IniParseError);
+    }
+
     SECTION("ConstructFile delegates .str files and preserves StrEntry, CommentNode, and StatementNode items") {
         const std::string str_content =
             "; top comment\n"
@@ -685,8 +775,9 @@ TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth secu
         CHECK_FALSE(cf.print().empty());
     }
 
-    SECTION("Handles #define, #include, ReplaceModule depth shift, FCurve, BeginScript, multi-flag headers, and schema switching") {
+    SECTION("Handles #define ordering, #include, ReplaceModule depth shift, FCurve, BeginScript, multi-flag headers, and .inc schema switching") {
         const std::string ini_content =
+            "#include \"..\\first_include.inc\" ; inc before define\n"
             "#define DAMAGE_MACRO 100 ; macro cmt\n"
             "#include \"..\\common.inc\" ; inc cmt\n"
             "#include\n"
@@ -721,7 +812,7 @@ TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth secu
             "    Color = FCurve\n"
             "        InPadding = 1\n"
             "    End\n"
-            "End\n"
+            "ENd\n"
             "; trailing file comment\n";
 
         ConstructFile cf{ "hero.ini", true, ini_content };
@@ -730,8 +821,25 @@ TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth secu
         CHECK(cf.defines[0] == "#define DAMAGE_MACRO 100 ; macro cmt");
 
         const std::string printed = cf.print();
+        // Verify #include before #define stays before #define in serialized output
+        CHECK(printed.find("#include \"..\\first_include.inc\"") < printed.find("#define DAMAGE_MACRO 100"));
+
         ConstructFile reparsed{ "hero.ini", true, printed };
         CHECK(reparsed.print() == printed);
+
+        // Verify .inc base-level schema switching at start_level > 0 (level 1 blocks across different schema groups)
+        const std::string inc_switch_content =
+            "Draw = W3DScriptedModelDraw ModuleTag_01\n"
+            "    ExtraPublicBone = BONE01\n"
+            "End\n"
+            "DamageNugget\n"
+            "    Damage = 50\n"
+            "End\n";
+        ConstructFile inc_cf{ "mixed_level1.inc", true, inc_switch_content };
+        CHECK(inc_cf.start_level == 1);
+        REQUIRE(inc_cf.size() == 2);
+        CHECK(std::get<ConstructLevel>(std::get<AstNode>(inc_cf[0]))._class == "Draw =");
+        CHECK(std::get<ConstructLevel>(std::get<AstNode>(inc_cf[1]))._class == "DamageNugget");
     }
 
     SECTION("Handles negative level End and unclosed EOF in strict and non-strict modes") {
@@ -832,7 +940,7 @@ TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth secu
 TEST_CASE("File loading, error scanning, UTF-8 paths, and deterministic I/O lock handling", "[ini][io]") {
     TempDirFixture temp;
 
-    SECTION("load_file handles .ini, empty .ini fallback, .txt, and error conditions") {
+    SECTION("load_file handles .ini, empty .ini fallback, .txt, and propagates security exceptions") {
         CHECK_THROWS_AS(load_file(""), IniParseError);
         CHECK_THROWS_AS(load_file((temp.root() / "nonexistent.ini").string()), IniParseError);
 
@@ -853,6 +961,13 @@ TEST_CASE("File loading, error scanning, UTF-8 paths, and deterministic I/O lock
 
         const fs::path bad_ext = temp.write_file("archive.big", "BIG4");
         CHECK_THROWS_AS(load_file(bad_ext.string()), IniParseError);
+
+        // Security violation in .ini must throw IniParseError instead of falling back to raw file text
+        const fs::path exploit_ini = temp.write_file(
+            "exploit.ini",
+            "Object " + std::string(300, 'X') + "\nEnd\n"
+        );
+        CHECK_THROWS_AS(load_file(exploit_ini.string()), IniParseError);
     }
 
     SECTION("Handles non-ASCII UTF-8 filesystem paths across ConstructFile, StrParser, and validate_include") {
