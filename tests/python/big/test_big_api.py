@@ -700,11 +700,18 @@ def test_load_overlay_from_directory_and_archive_sequence(tmp_path: Path):
     with pytest.raises(FileNotFoundError, match="Archive not found"):
         big.load_overlay([arc1, tmp_path / "missing_arc.big"])
 
-def test_cli_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
-    """Verify that lotm-big reports its version and exits with code 0."""
-    with pytest.raises(SystemExit) as exc_info:
-        cli.main(["--version"])
+def test_big_archive_resolve_entry(standard_mod_directory: Path, tmp_path: Path) -> None:
+    """Verify O(1) BigArchive.resolve metadata lookup and error handling."""
+    archive_path = tmp_path / "resolve_test.big"
+    big.pack(standard_mod_directory, archive_path)
 
-    assert exc_info.value.code == 0
-    stdout, _ = capsys.readouterr()
-    assert "lotm-big" in stdout
+    with big.BigArchive(archive_path) as arc:
+        entry = arc.resolve("DATA/WEAPON.INI")
+        assert entry.name == "data\\weapon.ini"
+        assert entry.size == 9
+
+        with pytest.raises(big.BigArchiveError, match="Entry not found"):
+            arc.resolve("data/missing.ini")
+
+    with pytest.raises(big.BigArchiveError, match="closed archive"):
+        arc.resolve("data/weapon.ini")

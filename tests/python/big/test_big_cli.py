@@ -154,3 +154,12 @@ def test_cli_entry_invokes_sys_exit(standard_mod_directory: Path, tmp_path: Path
 
     assert exc_info.value.code == cli.EXIT_SUCCESS
     assert out_big.is_file()
+
+def test_cli_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
+    """Verify that lotm-big reports its version and exits with code 0."""
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["--version"])
+
+    assert exc_info.value.code == 0
+    stdout, _ = capsys.readouterr()
+    assert "lotm-big" in stdout
