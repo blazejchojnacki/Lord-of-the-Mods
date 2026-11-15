@@ -346,3 +346,46 @@ def test_module_level_functions_and_security_guards(
     assert ini.scan_file_for_errors(sample_ini_file) == []
     errs = ini.scan_file_for_errors(malformed_ini_file)
     assert len(errs) == 2
+    def test_ast_reallocation_and_replacement_memory_safety() -> None:
+    """Verify Python AST node references remain valid across .append() reallocations, __setitem__, and .items assignment."""
+    doc = ini.parse_ini(
+        "memory_safety.ini",
+        strict=True,
+        file_content="Object GondorArcher\n    Health = 100\nEnd\n",
+    )
+
+    hero_block = doc[0]
+    assert isinstance(hero_block, ini.ConstructLevel)
+    health_stmt = hero_block[0]
+    assert isinstance(health_stmt, ini.StatementNode)
+
+    # Force multiple C++ pointer-vector reallocations on both doc and hero_block
+    for i in range(256):
+        hero_block.append(ini.StatementNode(f"Stat_{i} = {i}"))
+        doc.append(ini.CommentNode(f"; comment {i}"))
+
+    # Mutating retained references after reallocations must succeed and reflect in parent AST
+    health_stmt.text = "Health = 250"
+    hero_block.name = "GondorEliteArcher"
+    printed = doc.print()
+    assert "Object GondorEliteArcher\n" in printed
+    assert "    Health = 250\n" in printed
+
+    # Mutating through .items list property mutates the C++ AST in-place
+    first_from_items = hero_block.items[0]
+    assert isinstance(first_from_items, ini.StatementNode)
+    first_from_items.text = "Health = 500"
+    assert "    Health = 500\n" in doc.print()
+
+    # Overwriting index 0 with a different variant type or reassigning .items must not invalidate health_stmt
+    hero_block[0] = ini.CommentNode("; replaced slot 0")
+    assert health_stmt.text == "Health = 500"
+
+    hero_block.items = [ini.StatementNode("Fresh = 1")]
+    assert health_stmt.text == "Health = 500"
+
+    # Re-parsing doc via construct() must not invalidate hero_block or health_stmt
+    doc.file_content = "Weapon GondorSword\n    Damage = 40\nEnd\n"
+    doc.construct()
+    assert hero_block.name == "GondorEliteArcher"
+    assert health_stmt.text == "Health = 500"
