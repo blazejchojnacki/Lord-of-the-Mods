@@ -1,6 +1,6 @@
 # Lord-of-the-Mods (lotm)
 
-[![PyPI version](https://img.shields.io/pypi/v/lord-of-the-mods.svg?color=blue)]([https://pypi.org/project/lord-of-the-mods/](https://pypi.org/project/lord-of-the-mods/))
+[![PyPI version](https://img.shields.io/pypi/v/lord-of-the-mods.svg?color=blue)](https://pypi.org/project/lord-of-the-mods/)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows_x64-0078D6.svg?logo=windows&logoColor=white)](https://www.microsoft.com/windows/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
