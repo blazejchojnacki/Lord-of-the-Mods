@@ -878,3 +878,22 @@ TEST_CASE("BigArchive Selective Glob Extraction", "[big_unpack][filter]") {
         REQUIRE_THROWS_AS(archive.extract_all(missing_out, {}, "", false), std::invalid_argument);
     }
 }
+
+TEST_CASE("BigArchive O(1) resolve metadata lookup", "[big_unpack][resolve]") {
+    ScopedTempEnv env;
+
+    env.write_big_file("BIG4", {
+        { "data\\ini\\weapon.ini", "Damage=50" }
+        });
+
+    BigArchive archive(env.test_file);
+
+    const auto& resolved = archive.resolve("DATA/INI/WEAPON.INI");
+    REQUIRE(resolved.size == 9);
+    REQUIRE(resolved.name == std::string("data") + static_cast<char>(std::filesystem::path::preferred_separator) + "ini" + static_cast<char>(std::filesystem::path::preferred_separator) + "weapon.ini");
+
+    REQUIRE_THROWS_AS(archive.resolve("data/ini/missing.ini"), BigArchiveError);
+
+    archive.close();
+    REQUIRE_THROWS_AS(archive.resolve("data/ini/weapon.ini"), BigArchiveError);
+}

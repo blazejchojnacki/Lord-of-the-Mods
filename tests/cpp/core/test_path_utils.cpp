@@ -1,6 +1,6 @@
 /**
  * @file tests/cpp/core/test_path_utils.cpp
- * @brief Unit tests for lotm::core UTF-8 path conversion and NTFS security helpers.
+ * @brief Unit tests for lotm::core UTF-8 path conversion, glob matching, and NTFS security helpers.
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
  * Part of the Lord of the Mods (lotm) project.
@@ -20,6 +20,24 @@ TEST_CASE("UTF-8 path conversion roundtrip preserves non-ASCII characters", "[co
     const std::string roundtrip = to_utf8(fs_path.generic_u8string());
 
     REQUIRE(roundtrip == utf8_input);
+}
+
+TEST_CASE("Virtual path normalization and glob matching", "[core][path_utils][glob]") {
+    SECTION("normalize_virtual_path lowercases ASCII and unifies slashes") {
+        const char sep = static_cast<char>(std::filesystem::path::preferred_separator);
+        const std::string expected = std::string("data") + sep + "ini" + sep + "weapon.ini";
+        REQUIRE(normalize_virtual_path("DATA/INI\\Weapon.INI") == expected);
+    }
+
+    SECTION("matches_glob handles wildcards, single-char masks, and separator normalization") {
+        REQUIRE(matches_glob("data\\ini\\weapon.ini", ""));
+        REQUIRE(matches_glob("data\\ini\\weapon.ini", "*"));
+        REQUIRE(matches_glob("data\\ini\\weapon.ini", "DATA/ini/*.INI"));
+        REQUIRE(matches_glob("art\\textures\\hero01.dds", "art/textures/hero0?.dds"));
+        REQUIRE(matches_glob("readme.txt", "readme.txt**"));
+        REQUIRE_FALSE(matches_glob("data\\ini\\weapon.ini", "data/ini/*.inc"));
+        REQUIRE_FALSE(matches_glob("short.ini", "short.ini.bak"));
+    }
 }
 
 TEST_CASE("Win32 namespace prefix and drive-relative path detection", "[core][path_utils][security]") {

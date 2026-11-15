@@ -8,9 +8,12 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+
 #include <big/big_overlay.hpp>
 #include <big/big_packer.hpp>
 #include <big/exceptions.hpp>
+#include <core/endian.hpp>
+
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -50,6 +53,48 @@ public:
         std::filesystem::path dest = root_dir / filename;
         std::ofstream out(dest, std::ios::binary);
         out.write(reinterpret_cast<const char*>(raw_bytes.data()), static_cast<std::streamsize>(raw_bytes.size()));
+        return dest;
+    }
+
+    std::filesystem::path create_raw_archive(
+        const std::string& filename,
+        const std::vector<std::pair<std::string, std::string>>& entries
+    ) const {
+        std::filesystem::path dest = root_dir / filename;
+        std::ofstream out(dest, std::ios::binary);
+        out.write("BIG4", 4);
+
+        uint32_t dummy_total = 0;
+        out.write(reinterpret_cast<const char*>(&dummy_total), 4);
+
+        uint32_t num_files = lotm::core::to_big_endian(static_cast<uint32_t>(entries.size()));
+        out.write(reinterpret_cast<const char*>(&num_files), 4);
+
+        uint32_t header_size = 16;
+        for (const auto& entry : entries) {
+            header_size += 8 + static_cast<uint32_t>(entry.first.size()) + 1;
+        }
+
+        uint32_t be_header_size = lotm::core::to_big_endian(header_size);
+        out.write(reinterpret_cast<const char*>(&be_header_size), 4);
+
+        uint32_t current_offset = header_size;
+        for (const auto& entry : entries) {
+            uint32_t be_offset = lotm::core::to_big_endian(current_offset);
+            uint32_t be_size = lotm::core::to_big_endian(static_cast<uint32_t>(entry.second.size()));
+            out.write(reinterpret_cast<const char*>(&be_offset), 4);
+            out.write(reinterpret_cast<const char*>(&be_size), 4);
+            out.write(entry.first.c_str(), static_cast<std::streamsize>(entry.first.size() + 1));
+            current_offset += static_cast<uint32_t>(entry.second.size());
+        }
+
+        for (const auto& entry : entries) {
+            out.write(entry.second.c_str(), static_cast<std::streamsize>(entry.second.size()));
+        }
+
+        out.seekp(4, std::ios::beg);
+        uint32_t le_total_size = lotm::core::to_little_endian(current_offset);
+        out.write(reinterpret_cast<const char*>(&le_total_size), 4);
         return dest;
     }
 };
@@ -134,6 +179,18 @@ TEST_CASE("BigOverlay Load-Order Resolution and Override Semantics", "[big_overl
         overlay.close();
         REQUIRE(overlay.is_closed());
         REQUIRE_THROWS_AS(overlay.resolve("data/ini/weapon.ini"), BigArchiveError);
+    }
+
+    SECTION("Positive scenario: get_entries deduplicates intra-archive case-insensitive duplicates") {
+        auto dup_arc = env.create_raw_archive("dup.big", {
+            { "data\\weapon.ini", "Damage=10" },
+            { "DATA\\WEAPON.INI", "Damage=20" }
+            });
+
+        auto overlay = BigOverlay::from_archives({ dup_arc });
+        const auto entries = overlay.get_entries();
+        REQUIRE(entries.size() == 1);
+        REQUIRE(entries[0].override_count == 1);
     }
 
     SECTION("Negative scenarios: Missing directory or unresolvable entry throws appropriate exception") {
