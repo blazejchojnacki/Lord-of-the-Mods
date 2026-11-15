@@ -107,6 +107,44 @@ namespace lotm::ini {
         void append(AstNode item) { items.emplace_back(std::move(item)); }
         void append(StrEntry item) { items.emplace_back(std::move(item)); }
 
+        [[nodiscard]] ConstructLevel* find_block(
+            std::string_view block_class,
+            std::optional<std::string_view> block_name = std::nullopt,
+            std::optional<std::string_view> block_identifier = std::nullopt,
+            bool recursive = false
+        );
+
+        [[nodiscard]] const ConstructLevel* find_block(
+            std::string_view block_class,
+            std::optional<std::string_view> block_name = std::nullopt,
+            std::optional<std::string_view> block_identifier = std::nullopt,
+            bool recursive = false
+        ) const;
+
+        [[nodiscard]] std::vector<ConstructLevel*> find_all(
+            std::string_view block_class,
+            std::optional<std::string_view> block_name = std::nullopt,
+            std::optional<std::string_view> block_identifier = std::nullopt,
+            bool recursive = false
+        );
+
+        [[nodiscard]] std::vector<const ConstructLevel*> find_all(
+            std::string_view block_class,
+            std::optional<std::string_view> block_name = std::nullopt,
+            std::optional<std::string_view> block_identifier = std::nullopt,
+            bool recursive = false
+        ) const;
+
+        [[nodiscard]] std::optional<std::string> get_value(std::string_view key) const;
+        [[nodiscard]] std::vector<std::string> get_all_values(std::string_view key) const;
+        void set_value(std::string_view key, std::string_view value);
+        bool remove_value(std::string_view key, bool all_occurrences = false);
+        bool remove_block(
+            std::string_view block_class,
+            std::optional<std::string_view> block_name = std::nullopt,
+            std::optional<std::string_view> block_identifier = std::nullopt
+        );
+
         [[nodiscard]] RootItem& operator[](std::size_t index) { return items[index]; }
         [[nodiscard]] const RootItem& operator[](std::size_t index) const { return items[index]; }
 

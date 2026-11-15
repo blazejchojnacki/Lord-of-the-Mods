@@ -16,6 +16,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -178,6 +179,13 @@ namespace lotm::ini {
                 retired_.push_back(std::move(elements_[index]));
             }
             elements_[index] = std::make_unique<T>(std::move(value));
+        }
+
+        void erase_at(size_type index) {
+            if (elements_[index]) {
+                retired_.push_back(std::move(elements_[index]));
+            }
+            elements_.erase(elements_.begin() + static_cast<difference_type>(index));
         }
 
         void assign_from(std::vector<T> vec) {
@@ -430,6 +438,44 @@ namespace lotm::ini {
         [[nodiscard]] bool empty() const noexcept;
 
         void append(AstNode item);
+
+        [[nodiscard]] ConstructLevel* find_block(
+            std::string_view block_class,
+            std::optional<std::string_view> block_name = std::nullopt,
+            std::optional<std::string_view> block_identifier = std::nullopt,
+            bool recursive = false
+        );
+
+        [[nodiscard]] const ConstructLevel* find_block(
+            std::string_view block_class,
+            std::optional<std::string_view> block_name = std::nullopt,
+            std::optional<std::string_view> block_identifier = std::nullopt,
+            bool recursive = false
+        ) const;
+
+        [[nodiscard]] std::vector<ConstructLevel*> find_all(
+            std::string_view block_class,
+            std::optional<std::string_view> block_name = std::nullopt,
+            std::optional<std::string_view> block_identifier = std::nullopt,
+            bool recursive = false
+        );
+
+        [[nodiscard]] std::vector<const ConstructLevel*> find_all(
+            std::string_view block_class,
+            std::optional<std::string_view> block_name = std::nullopt,
+            std::optional<std::string_view> block_identifier = std::nullopt,
+            bool recursive = false
+        ) const;
+
+        [[nodiscard]] std::optional<std::string> get_value(std::string_view key) const;
+        [[nodiscard]] std::vector<std::string> get_all_values(std::string_view key) const;
+        void set_value(std::string_view key, std::string_view value);
+        bool remove_value(std::string_view key, bool all_occurrences = false);
+        bool remove_block(
+            std::string_view block_class,
+            std::optional<std::string_view> block_name = std::nullopt,
+            std::optional<std::string_view> block_identifier = std::nullopt
+        );
 
         [[nodiscard]] AstNode& operator[](std::size_t index);
         [[nodiscard]] const AstNode& operator[](std::size_t index) const;
