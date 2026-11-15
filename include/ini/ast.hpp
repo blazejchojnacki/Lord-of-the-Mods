@@ -11,10 +11,15 @@
 
 #include <algorithm>
 #include <array>
+#include <compare>
 #include <cstddef>
+#include <initializer_list>
+#include <iterator>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -27,6 +32,209 @@ namespace lotm::ini {
     class IniParseError : public std::runtime_error {
     public:
         using std::runtime_error::runtime_error;
+    };
+
+    /**
+     * @brief Heap-stable sequence container that preserves element memory addresses across
+     *        reallocations, insertions, and in-place replacements.
+     */
+    template <typename T>
+    class StableVector {
+    public:
+        using value_type = T;
+        using size_type = std::size_t;
+        using difference_type = std::ptrdiff_t;
+        using reference = T&;
+        using const_reference = const T&;
+        using pointer = T*;
+        using const_pointer = const T*;
+
+        template <bool IsConst>
+        class Iterator {
+        public:
+            using VecIter = std::conditional_t<
+                IsConst,
+                typename std::vector<std::unique_ptr<T>>::const_iterator,
+                typename std::vector<std::unique_ptr<T>>::iterator
+            >;
+            using iterator_category = std::random_access_iterator_tag;
+            using iterator_concept = std::random_access_iterator_tag;
+            using value_type = T;
+            using difference_type = std::ptrdiff_t;
+            using pointer = std::conditional_t<IsConst, const T*, T*>;
+            using reference = std::conditional_t<IsConst, const T&, T&>;
+
+            Iterator() noexcept = default;
+            explicit Iterator(VecIter it) noexcept : it_(it) {}
+
+            template <bool WasConst, typename = std::enable_if_t<IsConst && !WasConst>>
+            Iterator(const Iterator<WasConst>& other) noexcept : it_(other.base()) {}
+
+            [[nodiscard]] VecIter base() const noexcept { return it_; }
+
+            [[nodiscard]] reference operator*() const noexcept { return **it_; }
+            [[nodiscard]] pointer operator->() const noexcept { return it_->get(); }
+            [[nodiscard]] reference operator[](difference_type n) const noexcept { return *it_[n]; }
+
+            Iterator& operator++() noexcept { ++it_; return *this; }
+            Iterator operator++(int) noexcept { Iterator tmp = *this; ++it_; return tmp; }
+            Iterator& operator--() noexcept { --it_; return *this; }
+            Iterator operator--(int) noexcept { Iterator tmp = *this; --it_; return tmp; }
+
+            Iterator& operator+=(difference_type n) noexcept { it_ += n; return *this; }
+            Iterator& operator-=(difference_type n) noexcept { it_ -= n; return *this; }
+
+            [[nodiscard]] friend Iterator operator+(Iterator it, difference_type n) noexcept { return Iterator(it.it_ + n); }
+            [[nodiscard]] friend Iterator operator+(difference_type n, Iterator it) noexcept { return Iterator(it.it_ + n); }
+            [[nodiscard]] friend Iterator operator-(Iterator it, difference_type n) noexcept { return Iterator(it.it_ - n); }
+            [[nodiscard]] friend difference_type operator-(const Iterator& a, const Iterator& b) noexcept { return a.it_ - b.it_; }
+
+            [[nodiscard]] friend bool operator==(const Iterator& a, const Iterator& b) noexcept { return a.it_ == b.it_; }
+            [[nodiscard]] friend auto operator<=>(const Iterator& a, const Iterator& b) noexcept { return a.it_ <=> b.it_; }
+
+        private:
+            VecIter it_{};
+        };
+
+        using iterator = Iterator<false>;
+        using const_iterator = Iterator<true>;
+        using reverse_iterator = std::reverse_iterator<iterator>;
+        using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+
+        StableVector() = default;
+        ~StableVector() = default;
+
+        StableVector(std::initializer_list<T> init) {
+            elements_.reserve(init.size());
+            for (const auto& item : init) {
+                elements_.push_back(std::make_unique<T>(item));
+            }
+        }
+
+        StableVector(std::vector<T> vec) {
+            elements_.reserve(vec.size());
+            for (auto& item : vec) {
+                elements_.push_back(std::make_unique<T>(std::move(item)));
+            }
+        }
+
+        StableVector(const StableVector& other) {
+            elements_.reserve(other.elements_.size());
+            for (const auto& ptr : other.elements_) {
+                elements_.push_back(std::make_unique<T>(*ptr));
+            }
+        }
+
+        StableVector& operator=(const StableVector& other) {
+            if (this != &other) {
+                retire_active();
+                elements_.reserve(other.elements_.size());
+                for (const auto& ptr : other.elements_) {
+                    elements_.push_back(std::make_unique<T>(*ptr));
+                }
+            }
+            return *this;
+        }
+
+        StableVector(StableVector&& other) noexcept = default;
+
+        StableVector& operator=(StableVector&& other) noexcept {
+            if (this != &other) {
+                retire_active();
+                for (auto& ptr : other.retired_) {
+                    if (ptr) {
+                        retired_.push_back(std::move(ptr));
+                    }
+                }
+                other.retired_.clear();
+                elements_ = std::move(other.elements_);
+            }
+            return *this;
+        }
+
+        [[nodiscard]] size_type size() const noexcept { return elements_.size(); }
+        [[nodiscard]] bool empty() const noexcept { return elements_.empty(); }
+        void reserve(size_type n) { elements_.reserve(n); }
+
+        void clear() {
+            retire_active();
+        }
+
+        void push_back(const T& value) {
+            elements_.push_back(std::make_unique<T>(value));
+        }
+
+        void push_back(T&& value) {
+            elements_.push_back(std::make_unique<T>(std::move(value)));
+        }
+
+        template <typename... Args>
+        reference emplace_back(Args&&... args) {
+            return *elements_.emplace_back(std::make_unique<T>(std::forward<Args>(args)...));
+        }
+
+        void replace_at(size_type index, T value) {
+            if (elements_[index]) {
+                retired_.push_back(std::move(elements_[index]));
+            }
+            elements_[index] = std::make_unique<T>(std::move(value));
+        }
+
+        void assign_from(std::vector<T> vec) {
+            retire_active();
+            elements_.reserve(vec.size());
+            for (auto& item : vec) {
+                elements_.push_back(std::make_unique<T>(std::move(item)));
+            }
+        }
+
+        [[nodiscard]] reference operator[](size_type index) noexcept { return *elements_[index]; }
+        [[nodiscard]] const_reference operator[](size_type index) const noexcept { return *elements_[index]; }
+
+        [[nodiscard]] reference front() noexcept { return *elements_.front(); }
+        [[nodiscard]] const_reference front() const noexcept { return *elements_.front(); }
+        [[nodiscard]] reference back() noexcept { return *elements_.back(); }
+        [[nodiscard]] const_reference back() const noexcept { return *elements_.back(); }
+
+        [[nodiscard]] iterator begin() noexcept { return iterator(elements_.begin()); }
+        [[nodiscard]] iterator end() noexcept { return iterator(elements_.end()); }
+        [[nodiscard]] const_iterator begin() const noexcept { return const_iterator(elements_.begin()); }
+        [[nodiscard]] const_iterator end() const noexcept { return const_iterator(elements_.end()); }
+        [[nodiscard]] const_iterator cbegin() const noexcept { return const_iterator(elements_.cbegin()); }
+        [[nodiscard]] const_iterator cend() const noexcept { return const_iterator(elements_.cend()); }
+
+        [[nodiscard]] reverse_iterator rbegin() noexcept { return reverse_iterator(end()); }
+        [[nodiscard]] reverse_iterator rend() noexcept { return reverse_iterator(begin()); }
+        [[nodiscard]] const_reverse_iterator rbegin() const noexcept { return const_reverse_iterator(end()); }
+        [[nodiscard]] const_reverse_iterator rend() const noexcept { return const_reverse_iterator(begin()); }
+        [[nodiscard]] const_reverse_iterator crbegin() const noexcept { return const_reverse_iterator(cend()); }
+        [[nodiscard]] const_reverse_iterator crend() const noexcept { return const_reverse_iterator(cbegin()); }
+
+        [[nodiscard]] bool operator==(const StableVector& other) const {
+            if (elements_.size() != other.elements_.size()) {
+                return false;
+            }
+            for (size_type i = 0; i < elements_.size(); ++i) {
+                if (!(*elements_[i] == *other.elements_[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+    private:
+        void retire_active() {
+            retired_.reserve(retired_.size() + elements_.size());
+            for (auto& ptr : elements_) {
+                if (ptr) {
+                    retired_.push_back(std::move(ptr));
+                }
+            }
+            elements_.clear();
+        }
+
+        std::vector<std::unique_ptr<T>> elements_{};
+        std::vector<std::unique_ptr<T>> retired_{};
     };
 
     inline constexpr std::string_view LEVEL_INDENT = "    ";
@@ -199,7 +407,7 @@ namespace lotm::ini {
         std::string header_comment;
         std::string end_token;
         std::string end_comment;
-        std::vector<AstNode> items;
+        StableVector<AstNode> items;
 
         ConstructLevel();
         explicit ConstructLevel(
@@ -218,24 +426,24 @@ namespace lotm::ini {
         ConstructLevel(ConstructLevel&&) noexcept;
         ConstructLevel& operator=(ConstructLevel&&) noexcept;
 
-        [[nodiscard]] std::size_t size() const noexcept { return items.size(); }
-        [[nodiscard]] bool empty() const noexcept { return items.empty(); }
+        [[nodiscard]] std::size_t size() const noexcept;
+        [[nodiscard]] bool empty() const noexcept;
 
-        void append(AstNode item) { items.push_back(std::move(item)); }
+        void append(AstNode item);
 
-        [[nodiscard]] AstNode& operator[](std::size_t index) { return items[index]; }
-        [[nodiscard]] const AstNode& operator[](std::size_t index) const { return items[index]; }
+        [[nodiscard]] AstNode& operator[](std::size_t index);
+        [[nodiscard]] const AstNode& operator[](std::size_t index) const;
 
-        [[nodiscard]] auto begin() noexcept { return items.begin(); }
-        [[nodiscard]] auto end() noexcept { return items.end(); }
-        [[nodiscard]] auto begin() const noexcept { return items.begin(); }
-        [[nodiscard]] auto end() const noexcept { return items.end(); }
-        [[nodiscard]] auto cbegin() const noexcept { return items.cbegin(); }
-        [[nodiscard]] auto cend() const noexcept { return items.cend(); }
+        [[nodiscard]] StableVector<AstNode>::iterator begin() noexcept;
+        [[nodiscard]] StableVector<AstNode>::iterator end() noexcept;
+        [[nodiscard]] StableVector<AstNode>::const_iterator begin() const noexcept;
+        [[nodiscard]] StableVector<AstNode>::const_iterator end() const noexcept;
+        [[nodiscard]] StableVector<AstNode>::const_iterator cbegin() const noexcept;
+        [[nodiscard]] StableVector<AstNode>::const_iterator cend() const noexcept;
 
         [[nodiscard]] std::string print(int level = 0, std::string_view file_type = ".ini") const;
 
-        [[nodiscard]] bool operator==(const ConstructLevel&) const = default;
+        [[nodiscard]] bool operator==(const ConstructLevel&) const;
     };
 
     inline ConstructLevel::ConstructLevel() = default;
@@ -265,6 +473,19 @@ namespace lotm::ini {
     inline ConstructLevel::ConstructLevel(ConstructLevel&&) noexcept = default;
     inline ConstructLevel& ConstructLevel::operator=(ConstructLevel&&) noexcept = default;
 
+    inline std::size_t ConstructLevel::size() const noexcept { return items.size(); }
+    inline bool ConstructLevel::empty() const noexcept { return items.empty(); }
+    inline void ConstructLevel::append(AstNode item) { items.push_back(std::move(item)); }
+    inline AstNode& ConstructLevel::operator[](std::size_t index) { return items[index]; }
+    inline const AstNode& ConstructLevel::operator[](std::size_t index) const { return items[index]; }
+    inline StableVector<AstNode>::iterator ConstructLevel::begin() noexcept { return items.begin(); }
+    inline StableVector<AstNode>::iterator ConstructLevel::end() noexcept { return items.end(); }
+    inline StableVector<AstNode>::const_iterator ConstructLevel::begin() const noexcept { return items.begin(); }
+    inline StableVector<AstNode>::const_iterator ConstructLevel::end() const noexcept { return items.end(); }
+    inline StableVector<AstNode>::const_iterator ConstructLevel::cbegin() const noexcept { return items.cbegin(); }
+    inline StableVector<AstNode>::const_iterator ConstructLevel::cend() const noexcept { return items.cend(); }
+    inline bool ConstructLevel::operator==(const ConstructLevel&) const = default;
+
     /**
      * @brief Child node variant allowed inside a localized .str entry.
      */
@@ -280,7 +501,7 @@ namespace lotm::ini {
         std::string header_comment{};
         std::string end_token{ "End" };
         std::string end_comment{};
-        std::vector<StrChildNode> items{};
+        StableVector<StrChildNode> items{};
 
         StrEntry() = default;
 
@@ -291,7 +512,7 @@ namespace lotm::ini {
             std::string hdr_cmt = "",
             std::string end_tok = "End",
             std::string end_cmt = "",
-            std::vector<StrChildNode> itms = {}
+            StableVector<StrChildNode> itms = {}
         )
             : category(std::move(cat)),
             identifier(std::move(ident)),
@@ -333,8 +554,20 @@ namespace lotm::ini {
      */
     struct StrDocument {
         std::string name{};
-        std::vector<StrDocEntry> entries{};
+        StableVector<StrDocEntry> entries{};
         std::vector<std::string> errors{};
+
+        StrDocument() = default;
+
+        explicit StrDocument(
+            std::string doc_name,
+            StableVector<StrDocEntry> doc_entries = {},
+            std::vector<std::string> doc_errors = {}
+        )
+            : name(std::move(doc_name)),
+            entries(std::move(doc_entries)),
+            errors(std::move(doc_errors)) {
+        }
 
         [[nodiscard]] std::size_t size() const noexcept { return entries.size(); }
         [[nodiscard]] bool empty() const noexcept { return entries.empty(); }

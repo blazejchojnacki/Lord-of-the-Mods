@@ -78,7 +78,7 @@ namespace lotm::ini {
         bool strict{ false };
         std::optional<std::string> file_content{};
 
-        std::vector<RootItem> items{};
+        StableVector<RootItem> items{};
         int current_level{ 0 };
         std::string last_comment{};
         std::vector<std::string> errors{};

@@ -54,6 +54,15 @@ namespace lotm::python {
             return static_cast<std::size_t>(index);
         }
 
+        template <typename ContainerT, typename ElemT>
+        [[nodiscard]] nb::list make_reference_list(nb::handle self, ContainerT& container) {
+            nb::list result;
+            for (ElemT& elem : container) {
+                result.append(nb::cast(elem, nb::rv_policy::reference_internal, self));
+            }
+            return result;
+        }
+
     } // namespace
 
     void register_ini_bindings(nb::module_& m) {
@@ -193,14 +202,22 @@ namespace lotm::python {
             .def_rw("header_comment", &lotm::ini::ConstructLevel::header_comment, "Inline comment on the header line")
             .def_rw("end_token", &lotm::ini::ConstructLevel::end_token, "Closing keyword (End, END, end)")
             .def_rw("end_comment", &lotm::ini::ConstructLevel::end_comment, "Inline comment on the closing line")
-            .def_rw("items", &lotm::ini::ConstructLevel::items, "Child AST nodes contained in this block")
+            .def_prop_rw("items",
+                [](nb::handle self) {
+                    auto& obj = nb::cast<lotm::ini::ConstructLevel&>(self);
+                    return make_reference_list<lotm::ini::StableVector<lotm::ini::AstNode>, lotm::ini::AstNode>(self, obj.items);
+                },
+                [](lotm::ini::ConstructLevel& self, std::vector<lotm::ini::AstNode> new_items) {
+                    self.items.assign_from(std::move(new_items));
+                },
+                "Child AST nodes contained in this block")
             .def("append", &lotm::ini::ConstructLevel::append, nb::arg("item"), "Appends a child AST node to this block")
             .def("__len__", &lotm::ini::ConstructLevel::size)
             .def("__getitem__", [](lotm::ini::ConstructLevel& self, Py_ssize_t index) -> lotm::ini::AstNode& {
             return self.items[normalize_py_index(index, self.size())];
                 }, nb::arg("index"), nb::rv_policy::reference_internal)
             .def("__setitem__", [](lotm::ini::ConstructLevel& self, Py_ssize_t index, lotm::ini::AstNode item) {
-            self.items[normalize_py_index(index, self.size())] = std::move(item);
+            self.items.replace_at(normalize_py_index(index, self.size()), std::move(item));
                 }, nb::arg("index"), nb::arg("item"))
             .def("__iter__", [](lotm::ini::ConstructLevel& self) {
             return nb::make_iterator<nb::rv_policy::reference_internal>(
@@ -247,14 +264,22 @@ namespace lotm::python {
             .def_rw("header_comment", &lotm::ini::StrEntry::header_comment, "Inline comment on the header line")
             .def_rw("end_token", &lotm::ini::StrEntry::end_token, "Closing keyword")
             .def_rw("end_comment", &lotm::ini::StrEntry::end_comment, "Inline comment on the closing line")
-            .def_rw("items", &lotm::ini::StrEntry::items, "Child comment and statement nodes")
+            .def_prop_rw("items",
+                [](nb::handle self) {
+                    auto& obj = nb::cast<lotm::ini::StrEntry&>(self);
+                    return make_reference_list<lotm::ini::StableVector<lotm::ini::StrChildNode>, lotm::ini::StrChildNode>(self, obj.items);
+                },
+                [](lotm::ini::StrEntry& self, std::vector<lotm::ini::StrChildNode> new_items) {
+                    self.items.assign_from(std::move(new_items));
+                },
+                "Child comment and statement nodes")
             .def("append", &lotm::ini::StrEntry::append, nb::arg("item"), "Appends a child node to this localization entry")
             .def("__len__", &lotm::ini::StrEntry::size)
             .def("__getitem__", [](lotm::ini::StrEntry& self, Py_ssize_t index) -> lotm::ini::StrChildNode& {
             return self.items[normalize_py_index(index, self.size())];
                 }, nb::arg("index"), nb::rv_policy::reference_internal)
             .def("__setitem__", [](lotm::ini::StrEntry& self, Py_ssize_t index, lotm::ini::StrChildNode item) {
-            self.items[normalize_py_index(index, self.size())] = std::move(item);
+            self.items.replace_at(normalize_py_index(index, self.size()), std::move(item));
                 }, nb::arg("index"), nb::arg("item"))
             .def("__iter__", [](lotm::ini::StrEntry& self) {
             return nb::make_iterator<nb::rv_policy::reference_internal>(
@@ -277,7 +302,15 @@ namespace lotm::python {
                 nb::arg("entries") = std::vector<lotm::ini::StrDocEntry>{},
                 nb::arg("errors") = std::vector<std::string>{})
             .def_rw("name", &lotm::ini::StrDocument::name, "Document file path or identifier")
-            .def_rw("entries", &lotm::ini::StrDocument::entries, "Top-level localization entries and comments")
+            .def_prop_rw("entries",
+                [](nb::handle self) {
+                    auto& obj = nb::cast<lotm::ini::StrDocument&>(self);
+                    return make_reference_list<lotm::ini::StableVector<lotm::ini::StrDocEntry>, lotm::ini::StrDocEntry>(self, obj.entries);
+                },
+                [](lotm::ini::StrDocument& self, std::vector<lotm::ini::StrDocEntry> new_entries) {
+                    self.entries.assign_from(std::move(new_entries));
+                },
+                "Top-level localization entries and comments")
             .def_rw("errors", &lotm::ini::StrDocument::errors, "Non-strict parsing warnings and errors")
             .def("append", &lotm::ini::StrDocument::append, nb::arg("entry"), "Appends a top-level entry to the document")
             .def("__len__", &lotm::ini::StrDocument::size)
@@ -285,7 +318,7 @@ namespace lotm::python {
             return self.entries[normalize_py_index(index, self.size())];
                 }, nb::arg("index"), nb::rv_policy::reference_internal)
             .def("__setitem__", [](lotm::ini::StrDocument& self, Py_ssize_t index, lotm::ini::StrDocEntry entry) {
-            self.entries[normalize_py_index(index, self.size())] = std::move(entry);
+            self.entries.replace_at(normalize_py_index(index, self.size()), std::move(entry));
                 }, nb::arg("index"), nb::arg("entry"))
             .def("__iter__", [](lotm::ini::StrDocument& self) {
             return nb::make_iterator<nb::rv_policy::reference_internal>(
@@ -382,7 +415,15 @@ namespace lotm::python {
             .def_rw("start_level", &lotm::ini::ConstructFile::start_level, "Recognized starting nesting depth")
             .def_rw("strict", &lotm::ini::ConstructFile::strict, "Whether to raise IniParseError on delimiter mismatches")
             .def_rw("file_content", &lotm::ini::ConstructFile::file_content, "Optional in-memory source buffer")
-            .def_rw("items", &lotm::ini::ConstructFile::items, "Top-level AST nodes or StrEntry items")
+            .def_prop_rw("items",
+                [](nb::handle self) {
+                    auto& obj = nb::cast<lotm::ini::ConstructFile&>(self);
+                    return make_reference_list<lotm::ini::StableVector<lotm::ini::RootItem>, lotm::ini::RootItem>(self, obj.items);
+                },
+                [](lotm::ini::ConstructFile& self, std::vector<lotm::ini::RootItem> new_items) {
+                    self.items.assign_from(std::move(new_items));
+                },
+                "Top-level AST nodes or StrEntry items")
             .def_rw("current_level", &lotm::ini::ConstructFile::current_level, "Current parser nesting level")
             .def_rw("last_comment", &lotm::ini::ConstructFile::last_comment, "Buffered comment awaiting attachment")
             .def_rw("errors", &lotm::ini::ConstructFile::errors, "Accumulated non-strict parsing warnings and errors")
@@ -397,8 +438,8 @@ namespace lotm::python {
             return self.items[normalize_py_index(index, self.size())];
                 }, nb::arg("index"), nb::rv_policy::reference_internal)
             .def("__setitem__", [](lotm::ini::ConstructFile& self, Py_ssize_t index, lotm::ini::RootItem item) {
-            self.items[normalize_py_index(index, self.size())] = std::move(item);
-                }, nb::arg("index"), nb::arg("item"))
+            self.items.replace_at(normalize_py_index(index, self.size()), std::move(item));
+                }, nb::arg("index"), nb::arg("entry"))
             .def("__iter__", [](lotm::ini::ConstructFile& self) {
             return nb::make_iterator<nb::rv_policy::reference_internal>(
                 nb::type<lotm::ini::ConstructFile>(), "iterator", self.begin(), self.end()
