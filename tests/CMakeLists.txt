@@ -21,6 +21,7 @@ FetchContent_MakeAvailable(Catch2)
 add_executable(lotm_big_tests
     cpp/main.cpp
     cpp/core/test_endian.cpp
+    cpp/core/test_path_utils.cpp
     cpp/big/test_big_archive.cpp
     cpp/big/test_big_packer.cpp
     cpp/big/test_big_diff.cpp
