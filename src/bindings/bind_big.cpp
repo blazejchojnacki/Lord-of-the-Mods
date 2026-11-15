@@ -23,7 +23,6 @@
 #include <big/big_packer.hpp>
 #include <big/exceptions.hpp>
 #include <big/types.hpp>
-
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -153,26 +152,23 @@ namespace lotm::python {
             .def("get_entries", &lotm::big::BigArchive::get_entries,
                 nb::arg("filter_pattern") = "",
                 "Returns list of indexed file entries")
+            .def("resolve", &lotm::big::BigArchive::resolve,
+                nb::arg("entry_name"),
+                nb::call_guard<nb::gil_scoped_release>(),
+                "Resolves the BigEntry metadata record for a specific internal path")
             .def("read_entry", [](const lotm::big::BigArchive& self, std::string_view entry_name) {
-            // Retrieve metadata first to know the exact buffer size
-            const auto entries = self.get_entries();
-            std::string normalized_name(entry_name);
-            for (char& c : normalized_name) {
-                if (c == '\\' || c == '/') c = static_cast<char>(std::filesystem::path::preferred_separator);
+            if (self.is_closed()) {
+                throw lotm::big::BigArchiveError("Cannot read from a closed archive.");
             }
-            auto it = std::find_if(entries.begin(), entries.end(), [&](const lotm::big::BigEntry& e) {
-                if (e.name.size() != normalized_name.size()) return false;
-                return std::equal(e.name.begin(), e.name.end(), normalized_name.begin(),
-                    [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
-                });
-            if (it == entries.end()) throw lotm::big::BigArchiveError("Entry not found in archive: " + std::string(entry_name));
+            // Retrieve metadata first to know the exact buffer size
+            const auto& entry = self.resolve(entry_name);
 
             PythonBytesAllocator allocator;
-            uint8_t* buffer = allocator.allocate(it->size);
+            uint8_t* buffer = allocator.allocate(entry.size);
             std::size_t write_pos = 0;
             {
                 nb::gil_scoped_release release;
-                self.stream_entry(*it, [&](std::span<const uint8_t> chunk) {
+                self.stream_entry(entry, [&](std::span<const uint8_t> chunk) {
                     std::memcpy(buffer + write_pos, chunk.data(), chunk.size());
                     write_pos += chunk.size();
                     return true;

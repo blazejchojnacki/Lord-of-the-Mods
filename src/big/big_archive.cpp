@@ -32,6 +32,8 @@ namespace lotm::big {
         constexpr uintmax_t MAX_AMPLIFICATION_RATIO = 20;
 
         using lotm::core::to_utf8;
+        using lotm::core::matches_glob;
+        using lotm::core::normalize_virtual_path;
         using lotm::core::has_win32_namespace_prefix;
         using lotm::core::is_drive_relative_path;
 
@@ -42,51 +44,6 @@ namespace lotm::big {
             catch (const std::exception&) {
                 throw BigSecurityError("Invalid UTF-8 or unmappable characters in entry path: " + std::string(sv));
             }
-        }
-
-        // Case-insensitive glob matcher supporting '*' and '?' with normalized path separators
-        bool matches_glob(std::string_view text, std::string_view pattern) noexcept {
-            if (pattern.empty() || pattern == "*") {
-                return true;
-            }
-
-            auto norm = [](char c) noexcept -> char {
-                if (c == '\\' || c == '/') {
-                    return static_cast<char>(std::filesystem::path::preferred_separator);
-                }
-                return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                };
-
-            std::size_t t_idx = 0;
-            std::size_t p_idx = 0;
-            std::size_t star_idx = std::string_view::npos;
-            std::size_t match_idx = 0;
-
-            while (t_idx < text.size()) {
-                if (p_idx < pattern.size() && (pattern[p_idx] == '?' || norm(pattern[p_idx]) == norm(text[t_idx]))) {
-                    ++t_idx;
-                    ++p_idx;
-                }
-                else if (p_idx < pattern.size() && pattern[p_idx] == '*') {
-                    star_idx = p_idx;
-                    match_idx = t_idx;
-                    ++p_idx;
-                }
-                else if (star_idx != std::string_view::npos) {
-                    p_idx = star_idx + 1;
-                    ++match_idx;
-                    t_idx = match_idx;
-                }
-                else {
-                    return false;
-                }
-            }
-
-            while (p_idx < pattern.size() && pattern[p_idx] == '*') {
-                ++p_idx;
-            }
-
-            return p_idx == pattern.size();
         }
 
         // Internal helper for reading strings until null-terminator within a byte budget
@@ -195,10 +152,7 @@ namespace lotm::big {
                 }
             }
 
-            std::string lower_name = entry.name;
-            for (char& c : lower_name) {
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            }
+            std::string lower_name = normalize_virtual_path(entry.name);
 
             entries_.push_back(std::move(entry));
             index_map_.emplace(std::move(lower_name), entries_.size() - 1);
@@ -237,35 +191,27 @@ namespace lotm::big {
         return filtered;
     }
 
+    const BigEntry& BigArchive::resolve(std::string_view entry_name) const {
+        if (is_closed_) {
+            throw BigArchiveError("Cannot resolve on a closed archive.");
+        }
+
+        // Match normalized path case-insensitively to mirror SAGE engine lookup semantics
+        const std::string key = normalize_virtual_path(entry_name);
+        auto it = index_map_.find(key);
+        if (it == index_map_.end()) {
+            throw BigArchiveError("Entry not found in archive: " + std::string(entry_name));
+        }
+
+        return entries_[it->second];
+    }
+
     std::vector<uint8_t> BigArchive::read_entry(std::string_view entry_name) const {
         if (is_closed_) {
             throw BigArchiveError("Cannot read from a closed archive.");
         }
 
-        std::string normalized_name(entry_name);
-        for (char& c : normalized_name) {
-            if (c == '\\' || c == '/') {
-                c = static_cast<char>(std::filesystem::path::preferred_separator);
-            }
-        }
-
-        // Match normalized path case-insensitively to mirror SAGE engine lookup semantics
-        auto it = std::find_if(entries_.begin(), entries_.end(),
-            [&normalized_name](const BigEntry& entry) {
-                if (entry.name.size() != normalized_name.size()) {
-                    return false;
-                }
-                return std::equal(entry.name.begin(), entry.name.end(), normalized_name.begin(),
-                    [](unsigned char a, unsigned char b) {
-                        return std::tolower(a) == std::tolower(b);
-                    });
-            });
-
-        if (it == entries_.end()) {
-            throw BigArchiveError("Entry not found in archive: " + std::string(entry_name));
-        }
-
-        return read_entry(*it);
+        return read_entry(resolve(entry_name));
     }
 
     std::vector<uint8_t> BigArchive::read_entry(const BigEntry& entry) const {
@@ -311,18 +257,7 @@ namespace lotm::big {
         }
         if (!chunk_cb) return;
 
-        std::string normalized_name(entry_name);
-        for (char& c : normalized_name) {
-            if (c == '\\' || c == '/') c = static_cast<char>(std::filesystem::path::preferred_separator);
-            else c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        }
-
-        auto it = index_map_.find(normalized_name);
-        if (it == index_map_.end()) {
-            throw BigArchiveError("Entry not found in archive: " + std::string(entry_name));
-        }
-
-        stream_entry(entries_[it->second], std::move(chunk_cb));
+        stream_entry(resolve(entry_name), std::move(chunk_cb));
     }
 
     void BigArchive::stream_entry(const BigEntry& entry, ChunkCallback chunk_cb) const {

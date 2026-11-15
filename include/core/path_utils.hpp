@@ -1,6 +1,6 @@
 /**
  * @file include/core/path_utils.hpp
- * @brief Shared UTF-8 path conversion and Windows NTFS/device security validation helpers.
+ * @brief Shared UTF-8 path conversion, glob matching, and Windows NTFS/device security validation helpers.
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
  * Part of the Lord of the Mods (lotm) project.
@@ -34,6 +34,67 @@ namespace lotm::core {
             utf8_str.size()
         );
         return std::filesystem::path(u8_view);
+    }
+
+    /**
+     * @brief Normalizes a virtual archive entry path to lowercase ASCII with platform-preferred separators.
+     */
+    [[nodiscard]] inline std::string normalize_virtual_path(std::string_view entry_name) {
+        std::string key(entry_name);
+        for (char& c : key) {
+            if (c == '\\' || c == '/') {
+                c = static_cast<char>(std::filesystem::path::preferred_separator);
+            }
+            else {
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            }
+        }
+        return key;
+    }
+
+    // Case-insensitive glob matcher supporting '*' and '?' with normalized path separators
+    [[nodiscard]] inline bool matches_glob(std::string_view text, std::string_view pattern) noexcept {
+        if (pattern.empty() || pattern == "*") {
+            return true;
+        }
+
+        auto norm = [](char c) noexcept -> char {
+            if (c == '\\' || c == '/') {
+                return static_cast<char>(std::filesystem::path::preferred_separator);
+            }
+            return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            };
+
+        std::size_t t_idx = 0;
+        std::size_t p_idx = 0;
+        std::size_t star_idx = std::string_view::npos;
+        std::size_t match_idx = 0;
+
+        while (t_idx < text.size()) {
+            if (p_idx < pattern.size() && (pattern[p_idx] == '?' || norm(pattern[p_idx]) == norm(text[t_idx]))) {
+                ++t_idx;
+                ++p_idx;
+            }
+            else if (p_idx < pattern.size() && pattern[p_idx] == '*') {
+                star_idx = p_idx;
+                match_idx = t_idx;
+                ++p_idx;
+            }
+            else if (star_idx != std::string_view::npos) {
+                p_idx = star_idx + 1;
+                ++match_idx;
+                t_idx = match_idx;
+            }
+            else {
+                return false;
+            }
+        }
+
+        while (p_idx < pattern.size() && pattern[p_idx] == '*') {
+            ++p_idx;
+        }
+
+        return p_idx == pattern.size();
     }
 
     // Checks for extended Win32 and NT namespace prefixes (\\?, \\., \?, \., \??)
