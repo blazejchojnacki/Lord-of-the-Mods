@@ -24,21 +24,43 @@ def unpack(
     create_directories: bool = True,
 ) -> list[big.BigEntry]:
     """
-    Unpacks an EA BIG4 archive into a target directory.
+    Unpack an EA BIG4 archive into a target directory.
 
-    Args:
-        big_path: Path to the .big archive file.
-        output_dir: Destination directory where files will be extracted.
-        filter_pattern: Optional glob pattern (e.g., 'data/ini/*.ini') to selectively extract entries.
-        progress_callback: Optional callback invoked with ProgressReport; returning False cancels extraction.
+    Parameters
+    ----------
+    big_path : str | os.PathLike[str]
+        Path to the source `.big` archive file.
+    output_dir : str | os.PathLike[str]
+        Destination directory where files will be extracted.
+    filter_pattern : str | None, default=None
+        Optional glob pattern (e.g., `'data/ini/*.ini'`) to selectively extract matching entries.
+    progress_callback : Callable[[big.ProgressReport], bool | None] | None, default=None
+        Optional callback invoked with `ProgressReport`; returning `False` cancels extraction.
+    create_directories : bool, default=True
+        If `True`, automatically creates `output_dir` if it does not exist. If `False`,
+        raises `FileNotFoundError` when `output_dir` is missing.
 
-    Returns:
-        List of BigEntry objects describing the extracted files.
+    Returns
+    -------
+    list[big.BigEntry]
+        Metadata records describing the extracted files.
 
-    Raises:
-        FileNotFoundError: If the archive file does not exist.
-        ValueError: If the file header does not match the BIG4 specification.
-        RuntimeError: If archive bounds checking, stream reads, or cancellation occurs.
+    Raises
+    ------
+    FileNotFoundError
+        If the archive file does not exist, or if `create_directories` is `False` and
+        `output_dir` does not exist.
+    lotm.big.BigFormatError
+        If the archive header is malformed or entry offsets exceed physical file bounds.
+    lotm.big.BigSecurityError
+        If Zip-Slip path traversal, reserved Windows device names, Alternate Data Streams,
+        symlinks, or Zip-Bomb amplification limits are triggered.
+    lotm.big.BigArchiveError
+        If stream I/O fails or extraction is cancelled by `progress_callback`.
+
+    Examples
+    --------
+    >>> entries = unpack("my_mod.big", "extracted_files", filter_pattern="*.ini")  # doctest: +SKIP
     """
     archive_path = Path(big_path)
     dest_path = Path(output_dir)

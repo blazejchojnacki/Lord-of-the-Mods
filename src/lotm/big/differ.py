@@ -22,19 +22,36 @@ def diff(
     filter_pattern: str | None = None,
 ) -> big.BigDiffResult:
     """
-    Compares two EA BIG4 archives and categorizes entries into added, removed, modified, and unchanged.
+    Compare two EA BIG4 archives and categorize entries into added, removed, modified, and unchanged.
 
-    Args:
-        base_archive: Path to the baseline .big archive file.
-        target_archive: Path to the target/modified .big archive file.
-        filter_pattern: Optional glob pattern (e.g., 'data/ini/*.ini') to restrict comparison scope.
+    Parameters
+    ----------
+    base_archive : str | os.PathLike[str]
+        Path to the baseline `.big` archive file.
+    target_archive : str | os.PathLike[str]
+        Path to the target or modified `.big` archive file.
+    filter_pattern : str | None, default=None
+        Optional glob pattern (e.g., `'data/ini/*.ini'`) to restrict comparison scope.
 
-    Returns:
-        A BigDiffResult object containing added, removed, modified, and unchanged BigEntry lists.
+    Returns
+    -------
+    big.BigDiffResult
+        Comparison result containing `added`, `removed`, `modified`, and `unchanged` entry lists.
 
-    Raises:
-        FileNotFoundError: If either the base or target archive file does not exist.
-        RuntimeError: If archive headers are malformed or stream reads fail.
+    Raises
+    ------
+    FileNotFoundError
+        If either the base or target archive file does not exist.
+    lotm.big.BigFormatError
+        If archive headers are malformed or entry bounds exceed physical file size.
+    lotm.big.BigSecurityError
+        If either archive exceeds the Zip-Bomb amplification ratio quota.
+    lotm.big.BigArchiveError
+        If stream reads fail during byte-level comparison.
+
+    Examples
+    --------
+    >>> result = diff("vanilla.big", "modded.big", filter_pattern="*.ini")  # doctest: +SKIP
     """
     base_path = Path(base_archive)
     target_path = Path(target_archive)
@@ -66,18 +83,37 @@ def create_patch(
     progress_callback: Callable[[big.ProgressReport], bool | None] | None = None,
 ) -> None:
     """
-    Compares two EA BIG4 archives and packs only the added and modified entries into a standalone patch archive.
+    Compare two EA BIG4 archives and pack only added and modified entries into a standalone patch archive.
 
-    Args:
-        base_archive: Path to the baseline .big archive file.
-        target_archive: Path to the target/modified .big archive file.
-        output_file: Destination path for the generated delta patch .big archive.
-        filter_pattern: Optional glob pattern to restrict which entries are evaluated and packed.
-        progress_callback: Optional callback invoked with ProgressReport; returning False cancels patch creation.
+    Parameters
+    ----------
+    base_archive : str | os.PathLike[str]
+        Path to the baseline `.big` archive file.
+    target_archive : str | os.PathLike[str]
+        Path to the target or modified `.big` archive file.
+    output_file : str | os.PathLike[str]
+        Destination path for the generated delta patch `.big` archive.
+    filter_pattern : str | None, default=None
+        Optional glob pattern to restrict which entries are evaluated and packed.
+    progress_callback : Callable[[big.ProgressReport], bool | None] | None, default=None
+        Optional callback invoked with `ProgressReport`; returning `False` cancels patch creation.
 
-    Raises:
-        FileNotFoundError: If either the base or target archive file or target output directory does not exist.
-        RuntimeError/ValueError: Native C++ exceptions if validation, serialization, or cancellation occurs.
+    Raises
+    ------
+    FileNotFoundError
+        If either the base or target archive file or target output directory does not exist.
+    ValueError
+        If `output_file` aliases an input archive or resolves to an existing directory.
+    lotm.big.BigFormatError
+        If archive headers are malformed or the patch exceeds the 4 GiB (32-bit) format limit.
+    lotm.big.BigSecurityError
+        If either input archive exceeds the Zip-Bomb amplification ratio quota.
+    lotm.big.BigArchiveError
+        If stream I/O fails or patch generation is cancelled by `progress_callback`.
+
+    Examples
+    --------
+    >>> create_patch("vanilla.big", "modded.big", "delta_patch.big")  # doctest: +SKIP
     """
     base_path = Path(base_archive)
     target_path = Path(target_archive)
@@ -113,20 +149,38 @@ def create_patch_to_memory(
     progress_callback: Callable[[big.ProgressReport], bool | None] | None = None,
 ) -> bytes:
     """
-    Compares two EA BIG4 archives and packs only the added and modified entries into an in-memory BIG4 buffer.
+    Compare two EA BIG4 archives and pack only added and modified entries into an in-memory BIG4 buffer.
 
-    Args:
-        base_archive: Path to the baseline .big archive file.
-        target_archive: Path to the target/modified .big archive file.
-        filter_pattern: Optional glob pattern to restrict which entries are evaluated and packed.
-        progress_callback: Optional callback invoked with ProgressReport; returning False cancels patch creation.
+    Parameters
+    ----------
+    base_archive : str | os.PathLike[str]
+        Path to the baseline `.big` archive file.
+    target_archive : str | os.PathLike[str]
+        Path to the target or modified `.big` archive file.
+    filter_pattern : str | None, default=None
+        Optional glob pattern to restrict which entries are evaluated and packed.
+    progress_callback : Callable[[big.ProgressReport], bool | None] | None, default=None
+        Optional callback invoked with `ProgressReport`; returning `False` cancels patch creation.
 
-    Returns:
-        A bytes object containing the serialized delta patch BIG4 archive.
+    Returns
+    -------
+    bytes
+        Serialized delta patch BIG4 archive buffer.
 
-    Raises:
-        FileNotFoundError: If either the base or target archive file does not exist.
-        RuntimeError/ValueError: Native C++ exceptions if validation, serialization, or cancellation occurs.
+    Raises
+    ------
+    FileNotFoundError
+        If either the base or target archive file does not exist.
+    lotm.big.BigFormatError
+        If archive headers are malformed or the patch exceeds the 4 GiB (32-bit) format limit.
+    lotm.big.BigSecurityError
+        If either input archive exceeds the Zip-Bomb amplification ratio quota.
+    lotm.big.BigArchiveError
+        If stream I/O fails or patch generation is cancelled by `progress_callback`.
+
+    Examples
+    --------
+    >>> patch_bytes = create_patch_to_memory("vanilla.big", "modded.big")  # doctest: +SKIP
     """
     base_path = Path(base_archive)
     target_path = Path(target_archive)
