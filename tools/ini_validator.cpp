@@ -8,6 +8,7 @@
  */
 
 #include "ini/parser.hpp"
+#include <core/path_utils.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -23,7 +24,7 @@
 namespace fs = std::filesystem;
 
 static bool is_config_file(const fs::path& path) {
-    const std::string ext = path.extension().string();
+    const std::string ext = lotm::core::to_utf8(path.extension());
     return lotm::ini::detail::iequals_ascii(ext, ".ini") ||
         lotm::ini::detail::iequals_ascii(ext, ".inc") ||
         lotm::ini::detail::iequals_ascii(ext, ".str");
@@ -87,7 +88,7 @@ int main(int argc, char* argv[]) {
     const auto start_time = std::chrono::steady_clock::now();
 
     for (const auto& file_path : files) {
-        const std::string path_str = file_path.string();
+        const std::string path_str = lotm::core::to_utf8(file_path);
         try {
             lotm::ini::ConstructFile parsed{ path_str, strict };
 

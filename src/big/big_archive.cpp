@@ -11,6 +11,7 @@
 #include <big/exceptions.hpp>
 #include <big/types.hpp>
 #include <core/endian.hpp>
+#include <core/path_utils.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -30,15 +31,13 @@ namespace lotm::big {
         constexpr std::size_t EXTRACT_CHUNK_SIZE = 1024 * 1024;
         constexpr uintmax_t MAX_AMPLIFICATION_RATIO = 20;
 
-        inline std::string to_utf8(const std::filesystem::path& p) {
-            auto u8 = p.u8string();
-            return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
-        }
+        using lotm::core::to_utf8;
+        using lotm::core::has_win32_namespace_prefix;
+        using lotm::core::is_drive_relative_path;
 
         inline std::filesystem::path from_utf8(std::string_view sv) {
             try {
-                return std::filesystem::path(std::u8string_view(
-                    reinterpret_cast<const char8_t*>(sv.data()), sv.size()));
+                return lotm::core::utf8_to_path(sv);
             }
             catch (const std::exception&) {
                 throw BigSecurityError("Invalid UTF-8 or unmappable characters in entry path: " + std::string(sv));
@@ -105,74 +104,6 @@ namespace lotm::big {
             }
             stream.setstate(std::ios::failbit);
             return result;
-        }
-
-        // Checks for extended Win32 and NT namespace prefixes (\\?, \\., \?, \., \??)
-        bool has_win32_namespace_prefix(std::string_view path) {
-            constexpr char sep = static_cast<char>(std::filesystem::path::preferred_separator);
-            std::size_t pos = 0;
-            while (pos < path.size() && path[pos] == sep) {
-                ++pos;
-            }
-            return pos > 0 && pos < path.size() && (path[pos] == '?' || path[pos] == '.');
-        }
-
-        // Checks for Windows drive-relative paths (e.g., C:file.txt, D:..\escaped.txt)
-        bool is_drive_relative_path(std::string_view path) {
-            constexpr char sep = static_cast<char>(std::filesystem::path::preferred_separator);
-            return path.size() >= 2 &&
-                std::isalpha(static_cast<unsigned char>(path[0])) != 0 &&
-                path[1] == ':' &&
-                (path.size() == 2 || path[2] != sep);
-        }
-
-        // Checks for Windows reserved device names and Alternate Data Streams (ADS)
-        bool is_unsafe_filename(std::string_view name) {
-            if (name.empty() || name.back() == ' ' || name.back() == '.') {
-                return true;
-            }
-
-            std::string upper_name;
-            upper_name.reserve(name.size());
-            for (char c : name) {
-                const auto uc = static_cast<unsigned char>(c);
-                if (uc < 32 || c == ':' || c == '<' || c == '>' ||
-                    c == '"' || c == '|' || c == '?' || c == '*') {
-                    return true;
-                }
-                upper_name.push_back(static_cast<char>(std::toupper(uc)));
-            }
-
-            auto dot_pos = upper_name.find('.');
-            std::string_view base = (dot_pos != std::string_view::npos)
-                ? std::string_view(upper_name).substr(0, dot_pos)
-                : upper_name;
-
-            // Strip trailing spaces and dots (Win32 path normalization trims them before device check)
-            while (!base.empty() && (base.back() == ' ' || base.back() == '.')) {
-                base.remove_suffix(1);
-            }
-
-            if (base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" ||
-                base == "CONIN$" || base == "CONOUT$" || base == "CLOCK$") {
-                return true;
-            }
-            if (base.starts_with("COM") || base.starts_with("LPT")) {
-                if (base.size() == 4) {
-                    const auto digit = static_cast<unsigned char>(base[3]);
-                    if ((digit >= '0' && digit <= '9') ||
-                        digit == 0xB9 || digit == 0xB2 || digit == 0xB3) {
-                        return true;
-                    }
-                }
-                else if (base.size() == 5 && static_cast<unsigned char>(base[3]) == 0xC2) {
-                    const auto sup = static_cast<unsigned char>(base[4]);
-                    if (sup == 0xB9 || sup == 0xB2 || sup == 0xB3) {
-                        return true;
-                    }
-                }
-            }
-            return false;
         }
     } // namespace
 
@@ -510,7 +441,7 @@ namespace lotm::big {
                 if (part == "..") {
                     throw BigSecurityError("Directory traversal (..) detected in entry: " + entry.name);
                 }
-                if (is_unsafe_filename(to_utf8(part))) {
+                if (lotm::core::is_unsafe_ntfs_component(to_utf8(part))) {
                     throw BigSecurityError("Unsafe Windows device name or ADS stream in path: " + entry.name);
                 }
 

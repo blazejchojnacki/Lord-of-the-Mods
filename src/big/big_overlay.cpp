@@ -9,6 +9,7 @@
 
 #include <big/big_overlay.hpp>
 #include <big/exceptions.hpp>
+#include <core/path_utils.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -20,9 +21,10 @@
 namespace lotm::big {
 
     namespace {
-        inline std::string to_utf8(const std::filesystem::path& p) {
-            auto u8 = p.u8string();
-            return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
+        using lotm::core::utf8_to_path;
+        using path_to_utf8 = decltype(&lotm::core::to_utf8);
+        inline std::string path_to_utf8(const std::filesystem::path& p) {
+            return lotm::core::to_utf8(p);
         }
 
         std::string to_lower_ascii(std::string_view sv) {

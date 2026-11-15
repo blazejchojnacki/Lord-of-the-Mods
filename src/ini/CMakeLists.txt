@@ -22,4 +22,5 @@ target_compile_options(lotm_ini PRIVATE
 target_include_directories(lotm_ini PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
 )
+target_link_libraries(lotm_ini PUBLIC lotm_core)
 target_compile_features(lotm_ini PUBLIC cxx_std_20)

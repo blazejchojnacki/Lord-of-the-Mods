@@ -11,6 +11,7 @@
 #include <big/exceptions.hpp>
 #include <big/types.hpp>
 #include <core/endian.hpp>
+#include <core/path_utils.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -31,58 +32,7 @@
 namespace lotm::big {
 
     namespace {
-        inline std::string to_utf8(const std::filesystem::path& p) {
-            auto u8 = p.u8string();
-            return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
-        }
-
-        bool is_unsafe_pack_component(std::string_view name) {
-            if (name.empty() || name == "." || name == ".." ||
-                name.back() == ' ' || name.back() == '.') {
-                return true;
-            }
-
-            std::string upper_name;
-            upper_name.reserve(name.size());
-            for (char c : name) {
-                const auto uc = static_cast<unsigned char>(c);
-                if (uc < 32 || c == ':' || c == '<' || c == '>' ||
-                    c == '"' || c == '|' || c == '?' || c == '*') {
-                    return true;
-                }
-                upper_name.push_back(static_cast<char>(std::toupper(uc)));
-            }
-
-            auto dot_pos = upper_name.find('.');
-            std::string_view base = (dot_pos != std::string_view::npos)
-                ? std::string_view(upper_name).substr(0, dot_pos)
-                : upper_name;
-
-            while (!base.empty() && (base.back() == ' ' || base.back() == '.')) {
-                base.remove_suffix(1);
-            }
-
-            if (base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" ||
-                base == "CONIN$" || base == "CONOUT$" || base == "CLOCK$") {
-                return true;
-            }
-            if (base.starts_with("COM") || base.starts_with("LPT")) {
-                if (base.size() == 4) {
-                    const auto digit = static_cast<unsigned char>(base[3]);
-                    if ((digit >= '0' && digit <= '9') ||
-                        digit == 0xB9 || digit == 0xB2 || digit == 0xB3) {
-                        return true;
-                    }
-                }
-                else if (base.size() == 5 && static_cast<unsigned char>(base[3]) == 0xC2) {
-                    const auto sup = static_cast<unsigned char>(base[4]);
-                    if (sup == 0xB9 || sup == 0xB2 || sup == 0xB3) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
+        using lotm::core::to_utf8;
 
         void validate_pack_rel_path(std::string_view rel_path) {
             if (rel_path.empty() ||
@@ -101,7 +51,7 @@ namespace lotm::big {
                     ? rel_path.substr(start)
                     : rel_path.substr(start, end - start);
 
-                if (is_unsafe_pack_component(segment)) {
+                if (lotm::core::is_unsafe_ntfs_component(segment)) {
                     throw std::invalid_argument("Invalid or unsafe archive entry path: " + std::string(rel_path));
                 }
 

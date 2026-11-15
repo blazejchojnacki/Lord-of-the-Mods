@@ -12,6 +12,7 @@
 #include <big/exceptions.hpp>
 #include <big/types.hpp>
 #include <core/endian.hpp>
+#include <core/path_utils.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -30,10 +31,7 @@ namespace lotm::big {
     namespace {
         constexpr std::size_t DIFF_CHUNK_SIZE = 1024 * 1024;
 
-        inline std::string to_utf8(const std::filesystem::path& p) {
-            auto u8 = p.u8string();
-            return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
-        }
+        using lotm::core::to_utf8;
 
         struct IndexedEntry {
             std::string lower_name;
