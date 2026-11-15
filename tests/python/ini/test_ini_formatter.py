@@ -1,6 +1,6 @@
 """
 @file tests/python/ini/test_ini_formatter.py
-@brief Unit tests for lotm.ini.formatter (format_ini and atomic sibling writes).
+@brief Unit tests for lotm.ini.formatter (format_ini, normalization toggles, and atomic sibling writes).
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
 Part of the Lord of the Mods (lotm) project.
@@ -30,6 +30,50 @@ def test_format_ini_in_memory_string_and_buffer() -> None:
         file_content=b"Armor A\nArmor = DEFAULT 10%\nEnd\n",
     )
     assert formatted_buf == formatted_str
+
+
+def test_format_ini_normalization_toggles() -> None:
+    """Verify normalize_end_tokens, normalize_header_spacing, and coalesce_blank_lines across .ini and .str inputs."""
+    messy_ini = (
+        "Object GondorFighter ModTag_A\n"
+        "    ; comment 1\n"
+        "\n"
+        "    ; comment 2\n"
+        "    beginscript InitTag\n"
+        "        x = 1\n"
+        "\n"
+        "\n"
+        "        y = 2\n"
+        "    endscript\n"
+        "ENd\n"
+    )
+    normalized_ini = ini.format_ini(
+        "messy.ini",
+        file_content=messy_ini,
+        strict=True,
+        normalize_end_tokens=True,
+        normalize_header_spacing=True,
+        coalesce_blank_lines=True,
+    )
+    assert "    BeginScript InitTag\n" in normalized_ini
+    assert "    EndScript\n" in normalized_ini
+    assert normalized_ini.endswith("End\n\n")
+    assert "\n\n\n" not in normalized_ini
+
+    messy_str = (
+        "OBJECT:GondorFighter\n"
+        '    "Gondor Fighter"\n'
+        "end\n"
+    )
+    normalized_str = ini.format_ini(
+        "messy.str",
+        file_content=messy_str,
+        strict=True,
+        normalize_end_tokens=True,
+        normalize_header_spacing=True,
+    )
+    assert "OBJECT:GondorFighter\n" in normalized_str
+    assert normalized_str.endswith("End\n\n")
 
 
 def test_format_ini_atomic_file_output_and_cleanup_on_failure(

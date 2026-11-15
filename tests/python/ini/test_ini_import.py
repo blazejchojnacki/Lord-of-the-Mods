@@ -27,11 +27,15 @@ def test_public_ini_exports_all_symbols() -> None:
         "LEVEL_INDENT",
         "INI_ENDS",
         "MAX_INI_DEPTH",
+        "MAX_INI_FILE_SIZE",
+        "SAGE_MAX_BLOCK_NAME_LEN",
+        "SAGE_MAX_IDENTIFIER_LEN",
         "SUPPORTED_EXTENSIONS",
         "IniParseError",
         "CommentNode",
         "StatementNode",
         "IncludeNode",
+        "DefineNode",
         "ScriptNode",
         "ConstructLevel",
         "StrEntry",
@@ -61,8 +65,8 @@ def test_constants_and_exception_inheritance() -> None:
     assert ini.LEVEL_INDENT == "    "
     assert ini.INI_ENDS == ("End", "END", "end")
     assert ini.MAX_INI_DEPTH == 16
-    assert _core.ini.MAX_INI_FILE_SIZE == 64 * 1024 * 1024
-    assert _core.ini.SAGE_MAX_BLOCK_NAME_LEN == 256
-    assert _core.ini.SAGE_MAX_IDENTIFIER_LEN == 512
+    assert ini.MAX_INI_FILE_SIZE == 64 * 1024 * 1024
+    assert ini.SAGE_MAX_BLOCK_NAME_LEN == 256
+    assert ini.SAGE_MAX_IDENTIFIER_LEN == 512
     assert ini.SUPPORTED_EXTENSIONS == (".ini", ".inc", ".str")
     assert issubclass(ini.IniParseError, ValueError)
