@@ -8,6 +8,7 @@
  */
 
 #include "ini/parser.hpp"
+#include <core/path_utils.hpp>
 
 #include <algorithm>
 #include <array>
@@ -26,17 +27,10 @@ namespace lotm::ini {
 
     namespace {
 
-        [[nodiscard]] std::filesystem::path utf8_to_path(std::string_view utf8_str) {
-            const std::u8string_view u8_view(
-                reinterpret_cast<const char8_t*>(utf8_str.data()),
-                utf8_str.size()
-            );
-            return std::filesystem::path(u8_view);
-        }
+        using lotm::core::utf8_to_path;
 
-        [[nodiscard]] std::string path_to_utf8(const std::filesystem::path& p) {
-            const auto u8 = p.u8string();
-            return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
+        inline std::string path_to_utf8(const std::filesystem::path& p) {
+            return lotm::core::to_utf8(p);
         }
 
         // Windows-1252 code page mapping for bytes 0x80..0x9F to Unicode code points.
@@ -429,7 +423,7 @@ namespace lotm::ini {
         std::string_view file_type
     ) {
         std::string output;
-        const std::string_view sep = (ends_with_ci(file_type, ".ini") || ends_with_ci(file_type, ".inc")) ? " " : ":";
+        const std::string_view sep = ends_with_ci(file_type, ".str") ? ":" : " ";
 
         std::vector<SerializationFrame> stack;
         stack.reserve(items.size() * 2 + 8);
@@ -571,6 +565,16 @@ namespace lotm::ini {
                         frame.level
                     );
                 }
+                else if constexpr (std::is_same_v<NodeT, DefineNode>) {
+                    std::string directive = node_ptr->text.starts_with("#define")
+                        ? node_ptr->text
+                        : ("#define " + node_ptr->text);
+                    append_indented_text(
+                        output,
+                        combine_text_and_comment(directive, node_ptr->comment),
+                        frame.level
+                    );
+                }
                 else if constexpr (std::is_same_v<NodeT, CommentNode>) {
                     append_indented_text(output, node_ptr->text, frame.level);
                 }
@@ -650,24 +654,29 @@ namespace lotm::ini {
             throw IniParseError("Invalid virtual root: " + path_to_utf8(virtual_root));
         }
 
-        std::filesystem::path candidate = std::filesystem::weakly_canonical(
+        const std::filesystem::path local_candidate = std::filesystem::weakly_canonical(
             current_file.parent_path() / target_rel, ec
         );
-        if (ec || !std::filesystem::is_regular_file(candidate, ec)) {
-            candidate = std::filesystem::weakly_canonical(canon_root / target_rel, ec);
+        const bool local_in_root = !ec && is_path_within_root(local_candidate, canon_root);
+        if (local_in_root && std::filesystem::is_regular_file(local_candidate, ec)) {
+            return local_candidate;
         }
 
-        if (!is_path_within_root(candidate, canon_root)) {
+        const std::filesystem::path root_candidate = std::filesystem::weakly_canonical(
+            canon_root / target_rel, ec
+        );
+        const bool root_in_root = !ec && is_path_within_root(root_candidate, canon_root);
+        if (root_in_root && std::filesystem::is_regular_file(root_candidate, ec)) {
+            return root_candidate;
+        }
+
+        if (!local_in_root && !root_in_root) {
             throw IniParseError(
                 "Security violation: " + node.raw_path + " escapes virtual root " + path_to_utf8(virtual_root)
             );
         }
 
-        if (!std::filesystem::is_regular_file(candidate, ec)) {
-            throw IniParseError("Include file not found: " + node.raw_path);
-        }
-
-        return candidate;
+        throw IniParseError("Include file not found: " + node.raw_path);
     }
 
     StrDocument StrParser::parse_file(
@@ -700,6 +709,33 @@ namespace lotm::ini {
         std::string last_comment;
         LexedLine lexed;
 
+        struct OrphanSpan {
+            std::size_t start_line{ 0 };
+            std::size_t end_line{ 0 };
+            std::string first_line_text{};
+        };
+        std::optional<OrphanSpan> orphan_span = std::nullopt;
+
+        auto flush_orphan_span = [&]() {
+            if (!orphan_span.has_value()) {
+                return;
+            }
+            if (orphan_span->start_line == orphan_span->end_line) {
+                doc.errors.push_back(
+                    "Unexpected statement outside entry at " + std::string{ file_path } + ":" +
+                    std::to_string(orphan_span->start_line) + ": " + orphan_span->first_line_text
+                );
+            }
+            else {
+                doc.errors.push_back(
+                    "Unexpected statement outside entry at " + std::string{ file_path } + ":" +
+                    std::to_string(orphan_span->start_line) + "-" + std::to_string(orphan_span->end_line) +
+                    " (starting with: " + orphan_span->first_line_text + ")"
+                );
+            }
+            orphan_span.reset();
+            };
+
         for_each_line_view(content_view, [&](std::string_view raw_line, std::size_t line_num) {
             lex_line_into(raw_line, lexed);
 
@@ -724,6 +760,8 @@ namespace lotm::ini {
 
             const DelimiterRule* matched_rule = match_delimiter_rule(lexed.line_tokens, STR_DELIMITER_RULES);
             if (matched_rule != nullptr) {
+                flush_orphan_span();
+
                 if (active_entry.has_value()) {
                     const std::string active_id = active_entry->identifier.empty()
                         ? active_entry->category
@@ -771,6 +809,14 @@ namespace lotm::ini {
 
             if (is_ini_end(lexed.words[0])) {
                 if (!active_entry.has_value()) {
+                    if (orphan_span.has_value() && orphan_span->end_line > orphan_span->start_line) {
+                        orphan_span->end_line = line_num;
+                        flush_orphan_span();
+                        doc.entries.emplace_back(StatementNode{ join_views(lexed.words), lexed.comment });
+                        return;
+                    }
+                    flush_orphan_span();
+
                     std::string err_msg = "Delimiter mismatch: negative level reached at " +
                         std::string{ file_path } + ":" + std::to_string(line_num) +
                         " on closing keyword '" + std::string{ lexed.words[0] } + "': " +
@@ -795,16 +841,27 @@ namespace lotm::ini {
                 active_entry->items.emplace_back(std::move(stmt));
             }
             else {
-                std::string err_msg = "Unexpected statement outside entry at " +
-                    std::string{ file_path } + ":" + std::to_string(line_num) +
-                    ": " + std::string{ detail::trim_view(raw_line) };
-                doc.errors.push_back(err_msg);
                 if (strict) {
-                    throw IniParseError(err_msg);
+                    throw IniParseError(
+                        "Unexpected statement outside entry at " + std::string{ file_path } + ":" +
+                        std::to_string(line_num) + ": " + std::string{ detail::trim_view(raw_line) }
+                    );
+                }
+                if (!orphan_span.has_value()) {
+                    orphan_span = OrphanSpan{
+                        line_num,
+                        line_num,
+                        std::string{ detail::trim_view(raw_line) }
+                    };
+                }
+                else {
+                    orphan_span->end_line = line_num;
                 }
                 doc.entries.emplace_back(std::move(stmt));
             }
             });
+
+        flush_orphan_span();
 
         if (!last_comment.empty()) {
             if (active_entry.has_value()) {
@@ -860,7 +917,9 @@ namespace lotm::ini {
                 buffer.empty() ? "" : reinterpret_cast<const char*>(buffer.data()),
                 buffer.size()
             );
-            construct_from_view(raw_view);
+            std::string transcoded;
+            const std::string_view utf8_view = prepare_utf8_view(raw_view, transcoded);
+            construct_from_utf8_view(utf8_view, false);
         }
     }
 
@@ -880,15 +939,43 @@ namespace lotm::ini {
             else if (utf8_view.size() != file_content->size()) {
                 *file_content = std::string{ utf8_view };
             }
-            construct_from_view(*file_content);
+            construct_from_utf8_view(*file_content, false);
             return;
         }
 
         MMapFile mmap{ fs_path };
-        construct_from_view(mmap.view());
+        std::string transcoded;
+        const std::string_view utf8_view = prepare_utf8_view(mmap.view(), transcoded);
+        construct_from_utf8_view(utf8_view, false);
     }
 
-    void ConstructFile::construct_from_view(std::string_view raw_view) {
+    void ConstructFile::construct_with_metadata() {
+        const std::filesystem::path fs_path = utf8_to_path(name);
+        if (!is_supported_config_ext(name) ||
+            (!file_content.has_value() && !std::filesystem::is_regular_file(fs_path))) {
+            throw IniParseError("file " + name + " invalid.");
+        }
+
+        if (file_content.has_value()) {
+            std::string transcoded;
+            const std::string_view utf8_view = prepare_utf8_view(*file_content, transcoded);
+            if (!transcoded.empty()) {
+                *file_content = std::move(transcoded);
+            }
+            else if (utf8_view.size() != file_content->size()) {
+                *file_content = std::string{ utf8_view };
+            }
+            construct_from_utf8_view(*file_content, true);
+            return;
+        }
+
+        MMapFile mmap{ fs_path };
+        std::string transcoded;
+        const std::string_view utf8_view = prepare_utf8_view(mmap.view(), transcoded);
+        construct_from_utf8_view(utf8_view, true);
+    }
+
+    void ConstructFile::construct_from_utf8_view(std::string_view content_view, bool preserve_metadata) {
         struct TransientStateGuard {
             ConstructFile& self;
             ~TransientStateGuard() noexcept {
@@ -898,22 +985,26 @@ namespace lotm::ini {
         } state_guard{ *this };
 
         items.clear();
-        defines.clear();
+        if (!preserve_metadata) {
+            defines.clear();
+        }
         errors.clear();
         last_comment.clear();
         context_stack_.clear();
         context_stack_.emplace_back(this);
 
         if (ends_with_ci(name, ".str")) {
-            StrDocument str_doc = StrParser::parse_file(name, strict, raw_view);
+            StrDocument str_doc = StrParser::parse_file(name, strict, content_view);
 
-            std::vector<std::string> str_delims;
-            str_delims.reserve(STR_DELIMITERS.size());
-            for (const auto kw : STR_DELIMITERS) {
-                str_delims.emplace_back(kw);
+            if (!preserve_metadata || delimiters.empty()) {
+                std::vector<std::string> str_delims;
+                str_delims.reserve(STR_DELIMITERS.size());
+                for (const auto kw : STR_DELIMITERS) {
+                    str_delims.emplace_back(kw);
+                }
+                delimiters = { std::move(str_delims), std::vector<std::string>{} };
+                start_level = 0;
             }
-            delimiters = { std::move(str_delims), std::vector<std::string>{} };
-            start_level = 0;
 
             items.reserve(str_doc.entries.size());
             for (auto& entry : str_doc.entries) {
@@ -931,12 +1022,13 @@ namespace lotm::ini {
             return;
         }
 
-        std::string transcoded_buffer;
-        const std::string_view content_view = prepare_utf8_view(raw_view, transcoded_buffer);
-
-        auto [recognized_delims, recognized_start] = recognize_structure_from_utf8(name, content_view);
-        delimiters = std::move(recognized_delims);
-        start_level = recognized_start;
+        if (!preserve_metadata || delimiters.empty()) {
+            auto [recognized_delims, recognized_start] = recognize_structure_from_utf8(name, content_view);
+            delimiters = std::move(recognized_delims);
+            if (!preserve_metadata || !delimiters.empty()) {
+                start_level = recognized_start;
+            }
+        }
 
         active_rules_.clear();
         active_rules_.reserve(delimiters.size());
@@ -1113,9 +1205,11 @@ namespace lotm::ini {
 
         // At base level, check if the line starts a block from a different schema group
         if (current_level == start_level && !is_ini_end(lexed.words[0]) && !lexed.words[0].starts_with('#')) {
+            const auto base_lookup_lvl = static_cast<std::size_t>(get_lookup_level());
             for (std::size_t group_idx = 0; group_idx < INI_DELIMITER_RULES.size(); ++group_idx) {
                 const auto& group_rules = INI_DELIMITER_RULES[group_idx];
-                if (!group_rules.empty() && match_delimiter_rule(lexed.line_tokens, group_rules[0]) != nullptr) {
+                if (base_lookup_lvl < group_rules.size() &&
+                    match_delimiter_rule(lexed.line_tokens, group_rules[base_lookup_lvl]) != nullptr) {
                     delimiters = materialize_delimiter_group(INI_DELIMITERS[group_idx]);
                     active_rules_.clear();
                     active_rules_.reserve(delimiters.size());
@@ -1264,7 +1358,9 @@ namespace lotm::ini {
         std::string_view inline_comment
     ) {
         if (words[0] == "#define") {
-            defines.push_back(combine_text_and_comment(join_views(words_signs), inline_comment));
+            std::string def_text = join_views(words_signs);
+            defines.push_back(combine_text_and_comment(def_text, inline_comment));
+            append_to_active_context(DefineNode{ std::move(def_text), std::string{ inline_comment } });
             return true;
         }
         if (words[0] == "#include") {
@@ -1286,9 +1382,22 @@ namespace lotm::ini {
 
     std::string ConstructFile::print() const {
         std::string output;
-        for (const auto& def_line : defines) {
-            output.append(def_line);
-            output.push_back('\n');
+
+        bool has_define_nodes = false;
+        for (const auto& item : items) {
+            if (const auto* ast_ptr = std::get_if<AstNode>(&item)) {
+                if (std::holds_alternative<DefineNode>(*ast_ptr)) {
+                    has_define_nodes = true;
+                    break;
+                }
+            }
+        }
+
+        if (!has_define_nodes) {
+            for (const auto& def_line : defines) {
+                output.append(def_line);
+                output.push_back('\n');
+            }
         }
 
         const std::string_view file_type = name.size() >= 4
@@ -1298,7 +1407,9 @@ namespace lotm::ini {
         for (const auto& item : items) {
             const SerializableNodeRef ref = to_serializable_ref(item);
             output.append(serialize_iterative(std::span<const SerializableNodeRef>{&ref, 1}, start_level, file_type));
-            output.push_back('\n');
+            if (!std::holds_alternative<const DefineNode*>(ref)) {
+                output.push_back('\n');
+            }
         }
         return output;
     }
@@ -1313,20 +1424,12 @@ namespace lotm::ini {
         }
 
         if (is_supported_config_ext(full_path)) {
-            try {
-                ConstructFile file_object{ std::string{ full_path }, false };
-                std::string printed = file_object.print();
-                if (printed.empty()) {
-                    return { read_normalized_utf8_file(fs_path),{} };
-                }
-                return { std::move(printed), std::move(file_object.delimiters) };
-            }
-            catch (const IniParseError&) {
+            ConstructFile file_object{ std::string{ full_path }, false };
+            std::string printed = file_object.print();
+            if (printed.empty()) {
                 return { read_normalized_utf8_file(fs_path),{} };
             }
-            catch (const std::out_of_range&) {
-                return { read_normalized_utf8_file(fs_path),{} };
-            }
+            return { std::move(printed), std::move(file_object.delimiters) };
         }
 
         if (ends_with_ci(full_path, ".txt")) {

@@ -42,6 +42,7 @@ namespace lotm::python {
     namespace {
 
         using lotm::core::to_utf8;
+        using lotm::core::utf8_to_path;
 
         [[nodiscard]] std::size_t normalize_py_index(Py_ssize_t index, std::size_t size) {
             if (index < 0) {
@@ -104,6 +105,17 @@ namespace lotm::python {
                 })
             .def("__repr__", [](const lotm::ini::IncludeNode& self) {
             return "<IncludeNode raw_path='" + self.raw_path + "'>";
+                });
+
+        nb::class_<lotm::ini::DefineNode>(sub, "DefineNode", "Represents a #define preprocessor macro directive")
+            .def(nb::init<std::string, std::string>(), nb::arg("text") = "", nb::arg("comment") = "")
+            .def_rw("text", &lotm::ini::DefineNode::text, "Macro definition text")
+            .def_rw("comment", &lotm::ini::DefineNode::comment, "Optional inline comment")
+            .def("__eq__", [](const lotm::ini::DefineNode& self, const lotm::ini::DefineNode& other) {
+            return self == other;
+                })
+            .def("__repr__", [](const lotm::ini::DefineNode& self) {
+            return "<DefineNode text='" + self.text + "'>";
                 });
 
         nb::class_<lotm::ini::ScriptNode>(sub, "ScriptNode", "Represents an opaque embedded script block (BeginScript ... EndScript)")
@@ -327,7 +339,6 @@ namespace lotm::python {
                 "Initializes and parses a SAGE .ini, .inc, or .str configuration document")
             .def("__init__", [](lotm::ini::ConstructFile* t,
                 const std::filesystem::path& name,
-                std::string comment,
                 std::vector<std::string> defines,
                 std::vector<std::vector<std::string>> delimiters,
                 int start_level,
@@ -337,18 +348,17 @@ namespace lotm::python {
                     nb::gil_scoped_release release;
                     new (t) lotm::ini::ConstructFile();
                     t->name = std::move(name_str);
-                    t->comment = std::move(comment);
                     t->defines = std::move(defines);
                     t->delimiters = std::move(delimiters);
                     t->start_level = start_level;
                     t->strict = strict;
                     t->file_content = std::move(file_content);
-                    if (!t->name.empty()) {
-                        t->construct();
+                    if (!t->name.empty() &&
+                        (t->file_content.has_value() || std::filesystem::is_regular_file(utf8_to_path(t->name)))) {
+                        t->construct_with_metadata();
                     }
                 },
                 nb::arg("name"),
-                nb::arg("comment"),
                 nb::arg("defines") = std::vector<std::string>{},
                 nb::arg("delimiters") = std::vector<std::vector<std::string>>{},
                 nb::arg("start_level") = 0,
@@ -367,7 +377,6 @@ namespace lotm::python {
                 nb::arg("name"), nb::arg("strict"), nb::arg("file_buffer"),
                 "Initializes and parses a configuration document from a Python memoryview or bytes buffer")
             .def_rw("name", &lotm::ini::ConstructFile::name, "File path or document name")
-            .def_rw("comment", &lotm::ini::ConstructFile::comment, "Document-level comment")
             .def_rw("defines", &lotm::ini::ConstructFile::defines, "Collected #define macro lines")
             .def_rw("delimiters", &lotm::ini::ConstructFile::delimiters, "Active schema delimiter hierarchy")
             .def_rw("start_level", &lotm::ini::ConstructFile::start_level, "Recognized starting nesting depth")

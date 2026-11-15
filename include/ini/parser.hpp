@@ -72,7 +72,6 @@ namespace lotm::ini {
     class ConstructFile {
     public:
         std::string name{};
-        std::string comment{};
         std::vector<std::string> defines{};
         std::vector<std::vector<std::string>> delimiters{};
         int start_level{ 0 };
@@ -99,6 +98,7 @@ namespace lotm::ini {
         );
 
         void construct();
+        void construct_with_metadata();
 
         [[nodiscard]] std::size_t size() const noexcept { return items.size(); }
         [[nodiscard]] bool empty() const noexcept { return items.empty(); }
@@ -121,7 +121,6 @@ namespace lotm::ini {
 
         [[nodiscard]] bool operator==(const ConstructFile& other) const noexcept {
             return name == other.name &&
-                comment == other.comment &&
                 defines == other.defines &&
                 delimiters == other.delimiters &&
                 start_level == other.start_level &&
@@ -136,7 +135,7 @@ namespace lotm::ini {
         std::vector<std::vector<DelimiterRule>> active_rules_{};
         std::vector<ContextPtr> context_stack_{};
 
-        void construct_from_view(std::string_view raw_view);
+        void construct_from_utf8_view(std::string_view content_view, bool preserve_metadata = false);
         [[nodiscard]] int get_lookup_level() const noexcept;
         void append_to_active_context(AstNode node);
         void parse_line(std::string_view raw_line, std::size_t line_num, LexedLine& lex_scratch);

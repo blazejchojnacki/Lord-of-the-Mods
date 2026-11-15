@@ -98,7 +98,7 @@ namespace lotm::ini {
 
         /**
          * @brief Finds the starting index of a comment (';' or '//') outside of double quotes
-         *        while ignoring '//' immediately preceded by ':' (such as 'http://').
+         *        while ignoring escaped quotes ('\"') and '//' immediately preceded by ':' (such as 'http://').
          */
         [[nodiscard]] constexpr std::size_t find_comment_start(std::string_view raw_line) noexcept {
             bool in_quotes = false;
@@ -106,6 +106,10 @@ namespace lotm::ini {
 
             for (std::size_t i = 0; i < len; ++i) {
                 const char c = raw_line[i];
+                if (c == '\\' && in_quotes && (i + 1) < len && raw_line[i + 1] == '"') {
+                    ++i;
+                    continue;
+                }
                 if (c == '"') {
                     in_quotes = !in_quotes;
                 }
@@ -144,7 +148,7 @@ namespace lotm::ini {
 
         const std::size_t len = code_part.size();
 
-        // 1. Populate words_signs (whitespace-delimited slices)
+        // Populate words_signs (whitespace-delimited slices)
         {
             std::size_t pos = 0;
             while (pos < len) {
@@ -162,7 +166,7 @@ namespace lotm::ini {
             }
         }
 
-        // 2. Populate words and line_tokens in a single zero-copy pass without mutating '=' or ':'
+        // Populate words and line_tokens in a single zero-copy pass without mutating '=' or ':'
         {
             std::size_t pos = 0;
             while (pos < len) {

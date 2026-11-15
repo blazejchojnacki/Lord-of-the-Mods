@@ -66,15 +66,16 @@ namespace lotm::ini {
     }
 
     /**
-     * @brief Checks whether a token matches any valid SAGE block closing keyword ("End", "END", "end").
+     * @brief Checks case-insensitively whether a token matches the SAGE block closing keyword ("End").
      */
     [[nodiscard]] constexpr bool is_ini_end(std::string_view token) noexcept {
-        for (const auto end_kw : INI_ENDS) {
-            if (token == end_kw) {
-                return true;
-            }
+        if (token.size() != 3) {
+            return false;
         }
-        return false;
+        const char c0 = (token[0] >= 'A' && token[0] <= 'Z') ? static_cast<char>(token[0] + ('a' - 'A')) : token[0];
+        const char c1 = (token[1] >= 'A' && token[1] <= 'Z') ? static_cast<char>(token[1] + ('a' - 'A')) : token[1];
+        const char c2 = (token[2] >= 'A' && token[2] <= 'Z') ? static_cast<char>(token[2] + ('a' - 'A')) : token[2];
+        return c0 == 'e' && c1 == 'n' && c2 == 'd';
     }
 
     /**
@@ -126,6 +127,16 @@ namespace lotm::ini {
     };
 
     /**
+     * @brief Represents a #define preprocessor macro directive.
+     */
+    struct DefineNode {
+        std::string text{};
+        std::string comment{};
+
+        [[nodiscard]] bool operator==(const DefineNode&) const = default;
+    };
+
+    /**
      * @brief Represents an opaque embedded script block (BeginScript ... EndScript).
      */
     struct ScriptNode {
@@ -172,6 +183,7 @@ namespace lotm::ini {
         CommentNode,
         StatementNode,
         IncludeNode,
+        DefineNode,
         ScriptNode,
         ConstructLevel
     >;
@@ -356,6 +368,7 @@ namespace lotm::ini {
         const CommentNode*,
         const StatementNode*,
         const IncludeNode*,
+        const DefineNode*,
         const ScriptNode*,
         const ConstructLevel*,
         const StrEntry*

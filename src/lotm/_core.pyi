@@ -223,6 +223,13 @@ class ini:
         def __eq__(self, other: object) -> bool: ...
         def __repr__(self) -> str: ...
 
+    class DefineNode:
+        text: str
+        comment: str
+        def __init__(self, text: str = "", comment: str = "") -> None: ...
+        def __eq__(self, other: object) -> bool: ...
+        def __repr__(self) -> str: ...
+
     class ScriptNode:
         name: str
         identifier: str
@@ -246,7 +253,7 @@ class ini:
         def __repr__(self) -> str: ...
 
     AstNode: TypeAlias = (
-        CommentNode | StatementNode | IncludeNode | ScriptNode | 'ini.ConstructLevel'
+        CommentNode | StatementNode | IncludeNode | DefineNode | ScriptNode | 'ini.ConstructLevel'
     )
     StrChildNode: TypeAlias = CommentNode | StatementNode
 
@@ -337,7 +344,6 @@ class ini:
 
     class ConstructFile:
         name: str
-        comment: str
         defines: list[str]
         delimiters: list[list[str]]
         start_level: int
@@ -365,7 +371,6 @@ class ini:
         def __init__(
             self,
             name: str | os.PathLike[str],
-            comment: str,
             defines: Sequence[str] = (),
             delimiters: Sequence[Sequence[str]] = (),
             start_level: int = 0,
