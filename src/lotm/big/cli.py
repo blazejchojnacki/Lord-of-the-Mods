@@ -16,6 +16,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import NoReturn
 
+from lotm import __version__
 from lotm.big.differ import create_patch, diff
 from lotm.big.overlay import load_overlay
 from lotm.big.packer import pack
@@ -138,6 +139,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="lotm-big",
         description="Command-line interface for EA BIG4 archive manipulation.",
+    )
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     _configure_subparsers(subparsers)
