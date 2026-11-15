@@ -1,4 +1,11 @@
-# demo_selective_extraction.py
+"""
+@file examples/demo_selective_extraction.py
+@brief Demonstration of selective glob extraction and cooperative progress telemetry.
+
+Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
+Part of the Lord of the Mods (lotm) project.
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
 import shutil
 from pathlib import Path
 import lotm.big as big

@@ -1,4 +1,11 @@
-# demo_archive_diff.py
+"""
+@file examples/demo_archive_diff.py
+@brief Demonstration of BIG4 archive comparison and scoped glob diffing.
+
+Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
+Part of the Lord of the Mods (lotm) project.
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
 from pathlib import Path
 import lotm.big as big
 
