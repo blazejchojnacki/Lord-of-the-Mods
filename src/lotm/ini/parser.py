@@ -18,6 +18,7 @@ from lotm._core import ini as _ini
 CommentNode = _ini.CommentNode
 StatementNode = _ini.StatementNode
 IncludeNode = _ini.IncludeNode
+DefineNode = _ini.DefineNode
 ScriptNode = _ini.ScriptNode
 ConstructLevel = _ini.ConstructLevel
 StrEntry = _ini.StrEntry
@@ -27,11 +28,57 @@ ConstructFile = _ini.ConstructFile
 IniParseError = _ini.IniParseError
 
 AstNode: TypeAlias = (
-    CommentNode | StatementNode | IncludeNode | ScriptNode | ConstructLevel
+    CommentNode
+    | StatementNode
+    | IncludeNode
+    | DefineNode
+    | ScriptNode
+    | ConstructLevel
 )
 RootItem: TypeAlias = AstNode | StrEntry
 
 SUPPORTED_EXTENSIONS = (".ini", ".inc", ".str")
+
+
+def recognize_structure(
+    file_path: str | os.PathLike[str],
+    file_content: str | Buffer | None = None,
+) -> tuple[list[list[str]], int]:
+    """
+    Recognize the delimiter hierarchy and starting nesting depth of a SAGE .ini, .inc, or .str file.
+
+    Parameters
+    ----------
+    file_path : str | os.PathLike[str]
+        Path to the configuration file (used for extension recognition and disk reading
+        when `file_content` is `None`).
+    file_content : str | Buffer | None, default=None
+        Optional in-memory string or binary buffer protocol object (`bytes`, `bytearray`,
+        `memoryview`). Reads from disk when `None`.
+
+    Returns
+    -------
+    tuple[list[list[str]], int]
+        A tuple of `(delimiters, start_level)` where `delimiters` is the active schema
+        hierarchy by nesting level and `start_level` is the detected starting depth.
+
+    Raises
+    ------
+    IniParseError
+        If `file_content` is `None` and the file cannot be opened or mapped from disk,
+        or if the input exceeds `MAX_INI_FILE_SIZE`.
+
+    Examples
+    --------
+    >>> delims, start_lvl = recognize_structure("Weapon.ini", b"Weapon Sword\\nEnd\\n")
+    >>> start_lvl
+    0
+    >>> "Weapon" in delims[0]
+    True
+    """
+    if isinstance(file_content, Buffer):
+        return _ini.recognize_structure_buffer(os.fspath(file_path), file_content)
+    return _ini.recognize_structure(os.fspath(file_path), file_content)
 
 
 def parse_ini(
