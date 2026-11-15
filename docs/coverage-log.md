@@ -1,6 +1,10 @@
 # Lord-of-the-Mods
 # coverage-log
 
+## 0.6.0 - 2026-11
+```text
+```
+
 ## 0.5.0 - 2026-11-13
 
 ```text
