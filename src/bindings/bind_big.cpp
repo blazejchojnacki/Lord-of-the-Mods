@@ -16,12 +16,14 @@
 #include <nanobind/stl/function.h>
 
 #include "register.hpp"
+#include "py_utils.hpp"
 #include <big/big_archive.hpp>
 #include <big/big_diff.hpp>
 #include <big/big_overlay.hpp>
 #include <big/big_packer.hpp>
 #include <big/exceptions.hpp>
 #include <big/types.hpp>
+
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -37,50 +39,6 @@ namespace nb = nanobind;
 namespace lotm::python {
 
     namespace {
-        struct ScopedPyBuffer {
-            Py_buffer view{};
-            bool valid{ false };
-
-            explicit ScopedPyBuffer(nb::handle obj) {
-                if (PyObject_GetBuffer(obj.ptr(), &view, PyBUF_SIMPLE) != 0) {
-                    throw nb::python_error();
-                }
-                valid = true;
-            }
-
-            ScopedPyBuffer(const ScopedPyBuffer&) = delete;
-            ScopedPyBuffer& operator=(const ScopedPyBuffer&) = delete;
-
-            ScopedPyBuffer(ScopedPyBuffer&& other) noexcept
-                : view(other.view), valid(other.valid) {
-                other.valid = false;
-            }
-
-            ScopedPyBuffer& operator=(ScopedPyBuffer&& other) noexcept {
-                if (this != &other) {
-                    if (valid) {
-                        PyBuffer_Release(&view);
-                    }
-                    view = other.view;
-                    valid = other.valid;
-                    other.valid = false;
-                }
-                return *this;
-            }
-
-            ~ScopedPyBuffer() {
-                if (valid) {
-                    PyBuffer_Release(&view);
-                }
-            }
-
-            [[nodiscard]] std::span<const uint8_t> as_span() const noexcept {
-                return std::span<const uint8_t>(
-                    static_cast<const uint8_t*>(view.buf),
-                    static_cast<std::size_t>(view.len)
-                );
-            }
-        };
 
         // Helper allocator to allocate Python bytes object and return its internal mutable buffer safely
         struct PythonBytesAllocator {

@@ -18,6 +18,8 @@
 #include <nanobind/stl/vector.h>
 
 #include "register.hpp"
+#include "py_utils.hpp"
+#include <core/path_utils.hpp>
 #include <ini/lexer.hpp>
 #include <ini/parser.hpp>
 #include <ini/schema.hpp>
@@ -39,10 +41,7 @@ namespace lotm::python {
 
     namespace {
 
-        [[nodiscard]] std::string path_to_utf8(const std::filesystem::path& p) {
-            const auto u8 = p.u8string();
-            return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
-        }
+        using lotm::core::to_utf8;
 
         [[nodiscard]] std::size_t normalize_py_index(Py_ssize_t index, std::size_t size) {
             if (index < 0) {
@@ -53,34 +52,6 @@ namespace lotm::python {
             }
             return static_cast<std::size_t>(index);
         }
-
-        struct ScopedPyBuffer {
-            Py_buffer view{};
-            bool valid{ false };
-
-            explicit ScopedPyBuffer(nb::handle obj) {
-                if (PyObject_GetBuffer(obj.ptr(), &view, PyBUF_SIMPLE) != 0) {
-                    throw nb::python_error();
-                }
-                valid = true;
-            }
-
-            ScopedPyBuffer(const ScopedPyBuffer&) = delete;
-            ScopedPyBuffer& operator=(const ScopedPyBuffer&) = delete;
-
-            ~ScopedPyBuffer() {
-                if (valid) {
-                    PyBuffer_Release(&view);
-                }
-            }
-
-            [[nodiscard]] std::span<const uint8_t> as_span() const noexcept {
-                return std::span<const uint8_t>(
-                    static_cast<const uint8_t*>(view.buf),
-                    static_cast<std::size_t>(view.len)
-                );
-            }
-        };
 
     } // namespace
 
@@ -322,7 +293,7 @@ namespace lotm::python {
 
         nb::class_<lotm::ini::StrParser>(sub, "StrParser", "Dedicated single-level parser for SAGE .str localization files")
             .def_static("parse_file", [](const std::filesystem::path& file_path, bool strict, std::optional<std::string_view> file_content) {
-            const std::string path_str = path_to_utf8(file_path);
+            const std::string path_str = to_utf8(file_path);
             nb::gil_scoped_release release;
             return lotm::ini::StrParser::parse_file(path_str, strict, file_content);
                 },
@@ -332,7 +303,7 @@ namespace lotm::python {
                 "Parses a SAGE .str file from disk or an in-memory string");
 
         sub.def("parse_str_buffer", [](const std::filesystem::path& file_path, bool strict, nb::object file_buffer) {
-            const std::string path_str = path_to_utf8(file_path);
+            const std::string path_str = to_utf8(file_path);
             ScopedPyBuffer py_buf(file_buffer);
             std::string_view content_view(reinterpret_cast<const char*>(py_buf.view.buf), py_buf.view.len);
             nb::gil_scoped_release release;
@@ -346,7 +317,7 @@ namespace lotm::python {
                 const std::filesystem::path& name,
                 bool strict,
                 std::optional<std::string> file_content) {
-                    std::string name_str = path_to_utf8(name);
+                    std::string name_str = to_utf8(name);
                     nb::gil_scoped_release release;
                     new (t) lotm::ini::ConstructFile(std::move(name_str), strict, std::move(file_content));
                 },
@@ -362,7 +333,7 @@ namespace lotm::python {
                 int start_level,
                 bool strict,
                 std::optional<std::string> file_content) {
-                    std::string name_str = path_to_utf8(name);
+                    std::string name_str = to_utf8(name);
                     nb::gil_scoped_release release;
                     new (t) lotm::ini::ConstructFile();
                     t->name = std::move(name_str);
@@ -388,7 +359,7 @@ namespace lotm::python {
                 const std::filesystem::path& name,
                 bool strict,
                 nb::object file_buffer) {
-                    std::string name_str = path_to_utf8(name);
+                    std::string name_str = to_utf8(name);
                     ScopedPyBuffer py_buf(file_buffer);
                     nb::gil_scoped_release release;
                     new (t) lotm::ini::ConstructFile(std::move(name_str), strict, py_buf.as_span());
@@ -436,7 +407,7 @@ namespace lotm::python {
                 });
 
         sub.def("recognize_structure", [](const std::filesystem::path& file_path, std::optional<std::string_view> file_content) {
-            const std::string path_str = path_to_utf8(file_path);
+            const std::string path_str = to_utf8(file_path);
             nb::gil_scoped_release release;
             return lotm::ini::recognize_structure(path_str, file_content);
             },
@@ -445,7 +416,7 @@ namespace lotm::python {
             "Recognizes the delimiter hierarchy and starting nesting depth of a SAGE .ini, .inc, or .str file");
 
         sub.def("recognize_structure_buffer", [](const std::filesystem::path& file_path, nb::object file_buffer) {
-            const std::string path_str = path_to_utf8(file_path);
+            const std::string path_str = to_utf8(file_path);
             ScopedPyBuffer py_buf(file_buffer);
             std::string_view content_view(reinterpret_cast<const char*>(py_buf.view.buf), py_buf.view.len);
             nb::gil_scoped_release release;
@@ -462,7 +433,7 @@ namespace lotm::python {
             "Validates and resolves a #include directive path strictly within the virtual root jail");
 
         sub.def("load_file", [](const std::filesystem::path& full_path) {
-            const std::string path_str = path_to_utf8(full_path);
+            const std::string path_str = to_utf8(full_path);
             nb::gil_scoped_release release;
             return lotm::ini::load_file(path_str);
             },
@@ -470,7 +441,7 @@ namespace lotm::python {
             "Loads and normalizes a structured (.ini, .inc, .str) or raw (.txt) file");
 
         sub.def("scan_file_for_errors", [](const std::filesystem::path& file_path) {
-            const std::string path_str = path_to_utf8(file_path);
+            const std::string path_str = to_utf8(file_path);
             nb::gil_scoped_release release;
             return lotm::ini::scan_file_for_errors(path_str);
             },
