@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <cctype>
+#include <core/string_utils.hpp>
 #include <cstddef>
 #include <filesystem>
 #include <string>
@@ -46,7 +46,7 @@ namespace lotm::core {
                 c = static_cast<char>(std::filesystem::path::preferred_separator);
             }
             else {
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                c = to_lower_ascii_char(c);
             }
         }
         return key;
@@ -62,7 +62,7 @@ namespace lotm::core {
             if (c == '\\' || c == '/') {
                 return static_cast<char>(std::filesystem::path::preferred_separator);
             }
-            return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            return to_lower_ascii_char(c);
             };
 
         std::size_t t_idx = 0;
@@ -111,7 +111,7 @@ namespace lotm::core {
     [[nodiscard]] inline bool is_drive_relative_path(std::string_view path) noexcept {
         constexpr char sep = static_cast<char>(std::filesystem::path::preferred_separator);
         return path.size() >= 2 &&
-            std::isalpha(static_cast<unsigned char>(path[0])) != 0 &&
+            is_ascii_alpha(path[0]) &&
             path[1] == ':' &&
             (path.size() == 2 || path[2] != sep);
     }
@@ -131,7 +131,7 @@ namespace lotm::core {
                 c == '"' || c == '|' || c == '?' || c == '*') {
                 return true;
             }
-            upper_name.push_back(static_cast<char>(std::toupper(uc)));
+            upper_name.push_back(to_upper_ascii_char(c));
         }
 
         auto dot_pos = upper_name.find('.');

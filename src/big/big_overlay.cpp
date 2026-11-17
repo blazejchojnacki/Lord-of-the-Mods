@@ -10,9 +10,9 @@
 #include <big/big_overlay.hpp>
 #include <big/exceptions.hpp>
 #include <core/path_utils.hpp>
+#include <core/string_utils.hpp>
 
 #include <algorithm>
-#include <cctype>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -24,13 +24,8 @@ namespace lotm::big {
         using lotm::core::to_utf8;
         using lotm::core::matches_glob;
         using lotm::core::normalize_virtual_path;
-
-        std::string to_lower_ascii(std::string_view sv) {
-            std::string res(sv);
-            std::transform(res.begin(), res.end(), res.begin(),
-                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-            return res;
-        }
+        using lotm::core::to_lower_ascii;
+        using lotm::core::to_lower_ascii_char;
     } // namespace
 
     void BigOverlay::close() noexcept {
@@ -134,8 +129,8 @@ namespace lotm::big {
                 return std::lexicographical_compare(
                     a.entry.name.begin(), a.entry.name.end(),
                     b.entry.name.begin(), b.entry.name.end(),
-                    [](unsigned char c1, unsigned char c2) {
-                        return std::tolower(c1) < std::tolower(c2);
+                    [](char c1, char c2) {
+                        return to_lower_ascii_char(c1) < to_lower_ascii_char(c2);
                     }
                 );
             });

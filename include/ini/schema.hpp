@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <core/string_utils.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -37,22 +39,10 @@ namespace lotm::ini {
 
     namespace detail {
 
-        [[nodiscard]] constexpr bool is_delim_space(char c) noexcept {
-            return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f';
-        }
+        using lotm::core::iequals_ascii;
 
-        [[nodiscard]] constexpr bool iequals_ascii(std::string_view a, std::string_view b) noexcept {
-            if (a.size() != b.size()) {
-                return false;
-            }
-            for (std::size_t i = 0; i < a.size(); ++i) {
-                const char ca = (a[i] >= 'A' && a[i] <= 'Z') ? static_cast<char>(a[i] + ('a' - 'A')) : a[i];
-                const char cb = (b[i] >= 'A' && b[i] <= 'Z') ? static_cast<char>(b[i] + ('a' - 'A')) : b[i];
-                if (ca != cb) {
-                    return false;
-                }
-            }
-            return true;
+        [[nodiscard]] constexpr bool is_delim_space(char c) noexcept {
+            return lotm::core::is_ascii_space(c);
         }
 
     } // namespace detail

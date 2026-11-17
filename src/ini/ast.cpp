@@ -350,6 +350,17 @@ namespace lotm::ini {
             if (trimmed_key.empty()) {
                 throw std::invalid_argument("Property key cannot be empty.");
             }
+            for (const char c : trimmed_key) {
+                if (detail::is_lex_space(c) || c == '=' || c == ':' || c == '\r' || c == '\n') {
+                    throw std::invalid_argument("Property key contains invalid whitespace or separator characters.");
+                }
+            }
+            for (const char c : value) {
+                if (c == '\r' || c == '\n') {
+                    throw std::invalid_argument("Property value cannot contain newline characters.");
+                }
+            }
+            validate_sage_bounds(trimmed_key, value);
 
             StatementNode* target_stmt = nullptr;
             ParsedStatementView target_parsed;

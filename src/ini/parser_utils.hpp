@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <core/string_utils.hpp>
+
 #include <filesystem>
 #include <span>
 #include <string>
@@ -19,12 +21,14 @@ namespace lotm::ini::detail {
     /**
      * @brief Case-insensitive suffix check.
      */
-    [[nodiscard]] bool ends_with_ci(std::string_view str, std::string_view suffix) noexcept;
+    using lotm::core::ends_with_ci;
 
     /**
      * @brief Validates if a file extension is recognized (.ini, .inc, .str).
      */
-    [[nodiscard]] bool is_supported_config_ext(std::string_view path) noexcept;
+    [[nodiscard]] constexpr bool is_supported_config_ext(std::string_view path) noexcept {
+        return ends_with_ci(path, ".ini") || ends_with_ci(path, ".inc") || ends_with_ci(path, ".str");
+    }
 
     /**
      * @brief Joins a span of string_views into a single string separated by `sep`.

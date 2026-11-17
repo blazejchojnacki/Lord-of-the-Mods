@@ -9,11 +9,13 @@
 
 #pragma once
 
+#include <core/string_utils.hpp>
+
 #include <algorithm>
-#include <cctype>
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 namespace lotm::ini {
@@ -33,28 +35,13 @@ namespace lotm::ini {
 
     namespace detail {
 
+        using lotm::core::lstrip_view;
+        using lotm::core::rstrip_view;
+        using lotm::core::trim_view;
+        using lotm::core::iequals_ascii;
+
         [[nodiscard]] constexpr bool is_lex_space(char c) noexcept {
-            return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f';
-        }
-
-        [[nodiscard]] constexpr std::string_view lstrip_view(std::string_view sv) noexcept {
-            std::size_t pos = 0;
-            while (pos < sv.size() && is_lex_space(sv[pos])) {
-                ++pos;
-            }
-            return sv.substr(pos);
-        }
-
-        [[nodiscard]] constexpr std::string_view rstrip_view(std::string_view sv) noexcept {
-            std::size_t end = sv.size();
-            while (end > 0 && is_lex_space(sv[end - 1])) {
-                --end;
-            }
-            return sv.substr(0, end);
-        }
-
-        [[nodiscard]] constexpr std::string_view trim_view(std::string_view sv) noexcept {
-            return rstrip_view(lstrip_view(sv));
+            return lotm::core::is_ascii_space(c);
         }
 
         [[nodiscard]] inline std::string collapse_whitespace(std::string_view sv) {

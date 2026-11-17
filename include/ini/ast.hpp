@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <core/string_utils.hpp>
+
 #include <algorithm>
 #include <array>
 #include <compare>
@@ -334,13 +336,7 @@ namespace lotm::ini {
      * @brief Checks case-insensitively whether a token matches the SAGE block closing keyword ("End").
      */
     [[nodiscard]] constexpr bool is_ini_end(std::string_view token) noexcept {
-        if (token.size() != 3) {
-            return false;
-        }
-        const char c0 = (token[0] >= 'A' && token[0] <= 'Z') ? static_cast<char>(token[0] + ('a' - 'A')) : token[0];
-        const char c1 = (token[1] >= 'A' && token[1] <= 'Z') ? static_cast<char>(token[1] + ('a' - 'A')) : token[1];
-        const char c2 = (token[2] >= 'A' && token[2] <= 'Z') ? static_cast<char>(token[2] + ('a' - 'A')) : token[2];
-        return c0 == 'e' && c1 == 'n' && c2 == 'd';
+        return lotm::core::iequals_ascii(token, "end");
     }
 
     /**
