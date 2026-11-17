@@ -7,6 +7,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#include "parser_utils.hpp"
 #include "ini/parser.hpp"
 
 #include <algorithm>
@@ -16,28 +17,6 @@ namespace lotm::ini {
 
     namespace {
 
-        [[nodiscard]] bool ends_with_ci(std::string_view str, std::string_view suffix) noexcept {
-            if (str.size() < suffix.size()) {
-                return false;
-            }
-            return detail::iequals_ascii(str.substr(str.size() - suffix.size()), suffix);
-        }
-
-        [[nodiscard]] std::string combine_text_and_comment(std::string_view text, std::string_view comment) {
-            if (!text.empty() && !comment.empty()) {
-                std::string combined;
-                combined.reserve(text.size() + 1 + comment.size());
-                combined.append(text);
-                combined.push_back(' ');
-                combined.append(comment);
-                return combined;
-            }
-            if (!text.empty()) {
-                return std::string{ text };
-            }
-            return std::string{ comment };
-        }
-
         void append_indent(std::string& out, int level) {
             for (int i = 0; i < level; ++i) {
                 out.append(LEVEL_INDENT);
@@ -46,17 +25,17 @@ namespace lotm::ini {
 
         void append_indented_text(std::string& out, std::string_view text, int level) {
             const int safe_level = std::max(0, level);
-            if (text.find('\\n') != std::string_view::npos) {
+            if (text.find('\n') != std::string_view::npos) {
                 std::size_t pos = 0;
                 while (pos <= text.size()) {
-                    const std::size_t next_nl = text.find('\\n', pos);
+                    const std::size_t next_nl = text.find('\n', pos);
                     const std::string_view slice = (next_nl == std::string_view::npos)
                         ? text.substr(pos)
                         : text.substr(pos, next_nl - pos);
 
                     append_indent(out, safe_level);
                     out.append(detail::lstrip_view(slice));
-                    out.push_back('\\n');
+                    out.push_back('\n');
 
                     if (next_nl == std::string_view::npos) {
                         break;
@@ -68,7 +47,7 @@ namespace lotm::ini {
 
             append_indent(out, safe_level);
             out.append(text);
-            out.push_back('\\n');
+            out.push_back('\n');
         }
 
     } // namespace
@@ -79,7 +58,7 @@ namespace lotm::ini {
         std::string_view file_type
     ) {
         std::string output;
-        const std::string_view sep = ends_with_ci(file_type, ".str") ? ":" : " ";
+        const std::string_view sep = detail::ends_with_ci(file_type, ".str") ? ":" : " ";
 
         std::vector<SerializationFrame> stack;
         stack.reserve(items.size() * 2 + 8);
@@ -97,21 +76,21 @@ namespace lotm::ini {
                     using NodeT = std::decay_t<decltype(*node_ptr)>;
                     if constexpr (std::is_same_v<NodeT, ConstructLevel>) {
                         if (!node_ptr->end_token.empty()) {
-                            const std::string end_line = combine_text_and_comment(
+                            const std::string end_line = detail::combine_text_and_comment(
                                 node_ptr->end_token, node_ptr->end_comment
                             );
                             append_indent(output, std::max(0, frame.level));
                             output.append(end_line);
-                            output.push_back('\\n');
+                            output.push_back('\n');
                         }
                     }
                     else if constexpr (std::is_same_v<NodeT, StrEntry>) {
                         if (!node_ptr->end_token.empty()) {
-                            const std::string end_line = combine_text_and_comment(
+                            const std::string end_line = detail::combine_text_and_comment(
                                 node_ptr->end_token, node_ptr->end_comment
                             );
                             output.append(end_line);
-                            output.push_back('\\n');
+                            output.push_back('\n');
                         }
                     }
                     }, frame.node);
@@ -141,7 +120,7 @@ namespace lotm::ini {
                     }
 
                     if (!header_joined.empty()) {
-                        const std::string header_line = combine_text_and_comment(
+                        const std::string header_line = detail::combine_text_and_comment(
                             header_joined, node_ptr->header_comment
                         );
                         append_indented_text(output, detail::lstrip_view(header_line), frame.level);
@@ -165,7 +144,7 @@ namespace lotm::ini {
                         }
                         header_base.append(node_ptr->identifier);
                     }
-                    const std::string header_line = combine_text_and_comment(
+                    const std::string header_line = detail::combine_text_and_comment(
                         detail::trim_view(header_base), node_ptr->header_comment
                     );
                     append_indented_text(output, detail::lstrip_view(header_line), frame.level);
@@ -176,17 +155,17 @@ namespace lotm::ini {
                             append_indented_text(output, line, inner_level);
                         }
                         else {
-                            output.push_back('\\n');
+                            output.push_back('\n');
                         }
                     }
 
                     if (!node_ptr->end_token.empty()) {
-                        const std::string end_line = combine_text_and_comment(
+                        const std::string end_line = detail::combine_text_and_comment(
                             node_ptr->end_token, node_ptr->end_comment
                         );
                         append_indent(output, std::max(0, frame.level));
                         output.append(end_line);
-                        output.push_back('\\n');
+                        output.push_back('\n');
                     }
                 }
                 else if constexpr (std::is_same_v<NodeT, StrEntry>) {
@@ -197,9 +176,9 @@ namespace lotm::ini {
                     const std::string header = !node_ptr->identifier.empty()
                         ? (node_ptr->category + ":" + node_ptr->identifier)
                         : node_ptr->category;
-                    const std::string header_line = combine_text_and_comment(header, node_ptr->header_comment);
+                    const std::string header_line = detail::combine_text_and_comment(header, node_ptr->header_comment);
                     output.append(header_line);
-                    output.push_back('\\n');
+                    output.push_back('\n');
 
                     stack.push_back(SerializationFrame{ node_ptr, frame.level, true });
                     for (auto it = node_ptr->items.rbegin(); it != node_ptr->items.rend(); ++it) {
@@ -209,7 +188,7 @@ namespace lotm::ini {
                 else if constexpr (std::is_same_v<NodeT, StatementNode>) {
                     append_indented_text(
                         output,
-                        combine_text_and_comment(node_ptr->text, node_ptr->comment),
+                        detail::combine_text_and_comment(node_ptr->text, node_ptr->comment),
                         frame.level
                     );
                 }
@@ -217,7 +196,7 @@ namespace lotm::ini {
                     std::string directive = "#include " + node_ptr->raw_path;
                     append_indented_text(
                         output,
-                        combine_text_and_comment(directive, node_ptr->comment),
+                        detail::combine_text_and_comment(directive, node_ptr->comment),
                         frame.level
                     );
                 }
@@ -227,7 +206,7 @@ namespace lotm::ini {
                         : ("#define " + node_ptr->text);
                     append_indented_text(
                         output,
-                        combine_text_and_comment(directive, node_ptr->comment),
+                        detail::combine_text_and_comment(directive, node_ptr->comment),
                         frame.level
                     );
                 }
@@ -260,7 +239,7 @@ namespace lotm::ini {
         for (const auto& entry : entries) {
             const SerializableNodeRef ref = to_serializable_ref(entry);
             output.append(serialize_iterative(std::span<const SerializableNodeRef>{&ref, 1}, 0, ".str"));
-            output.push_back('\\n');
+            output.push_back('\n');
         }
         return output;
     }
@@ -281,7 +260,7 @@ namespace lotm::ini {
         if (!has_define_nodes) {
             for (const auto& def_line : defines) {
                 output.append(def_line);
-                output.push_back('\\n');
+                output.push_back('\n');
             }
         }
 
@@ -293,7 +272,7 @@ namespace lotm::ini {
             const SerializableNodeRef ref = to_serializable_ref(item);
             output.append(serialize_iterative(std::span<const SerializableNodeRef>{&ref, 1}, start_level, file_type));
             if (!std::holds_alternative<const DefineNode*>(ref)) {
-                output.push_back('\\n');
+                output.push_back('\n');
             }
         }
         return output;

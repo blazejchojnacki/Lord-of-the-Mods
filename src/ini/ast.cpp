@@ -9,6 +9,7 @@
 
 #include "ini/parser.hpp"
 #include "ini/lexer.hpp"
+#include "parser_utils.hpp"
 
 #include <algorithm>
 #include <stdexcept>

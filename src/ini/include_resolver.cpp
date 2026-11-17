@@ -1,12 +1,13 @@
 /**
- * @file src / ini / include_resolver.cpp
- * @brief Implementation of chroot - jailed #include path validation and resolution.
+ * @file src/ini/include_resolver.cpp
+ * @brief Implementation of chroot-jailed #include path validation and resolution.
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
  * Part of the Lord of the Mods (lotm) project.
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#include "parser_utils.hpp"
 #include "ini/parser.hpp"
 #include <core/path_utils.hpp>
 

@@ -1,12 +1,13 @@
 /**
- * @file src / ini / file_io.cpp
- * @brief Implementation of OS - level memory mapping, UTF - 8 / CP1252 normalization, and file loading for lotm::ini.
+ * @file src/ini/file_io.cpp
+ * @brief Implementation of OS-level memory mapping, UTF-8/CP1252 normalization, and file loading for lotm::ini.
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
  * Part of the Lord of the Mods (lotm) project.
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#include "parser_utils.hpp"
 #include "ini/parser.hpp"
 #include <core/path_utils.hpp>
 
@@ -15,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
+#include <utility>
 
 // Windows specific. Change for POSIX
 #define WIN32_LEAN_AND_MEAN
@@ -22,14 +24,54 @@
 #include <windows.h>
 
 namespace lotm::ini {
+namespace detail {
+
+    bool ends_with_ci(std::string_view str, std::string_view suffix) noexcept {
+        if (str.size() < suffix.size()) {
+            return false;
+        }
+        return lotm::ini::detail::iequals_ascii(str.substr(str.size() - suffix.size()), suffix);
+    }
+
+    bool is_supported_config_ext(std::string_view path) noexcept {
+        return ends_with_ci(path, ".ini") || ends_with_ci(path, ".inc") || ends_with_ci(path, ".str");
+    }
+
+    std::string join_views(std::span<const std::string_view> tokens, std::string_view sep) {
+        if (tokens.empty()) {
+            return {};
+        }
+        std::size_t total_len = sep.size() * (tokens.size() - 1);
+        for (const auto tok : tokens) {
+            total_len += tok.size();
+        }
+        std::string result;
+        result.reserve(total_len);
+        for (std::size_t i = 0; i < tokens.size(); ++i) {
+            if (i > 0) {
+                result.append(sep);
+            }
+            result.append(tokens[i]);
+        }
+        return result;
+    }
+
+    std::string combine_text_and_comment(std::string_view text, std::string_view comment) {
+        if (!text.empty() && !comment.empty()) {
+            std::string combined;
+            combined.reserve(text.size() + 1 + comment.size());
+            combined.append(text);
+            combined.push_back(' ');
+            combined.append(comment);
+            return combined;
+        }
+        if (!text.empty()) {
+            return std::string{ text };
+        }
+        return std::string{ comment };
+    }
 
     namespace {
-
-        using lotm::core::utf8_to_path;
-
-        inline std::string path_to_utf8(const std::filesystem::path& p) {
-            return lotm::core::to_utf8(p);
-        }
 
         // Windows-1252 code page mapping for bytes 0x80..0x9F to Unicode code points.
         inline constexpr std::array<std::uint16_t, 32> CP1252_80_9F_TABLE = {
@@ -163,123 +205,115 @@ namespace lotm::ini {
         return transcoded_storage;
     }
 
-    namespace {
+    MMapFile::MMapFile(const std::filesystem::path& path) {
+        // Windows specific. Change for POSIX
+        HANDLE hFile = CreateFileW(
+            path.c_str(),
+            GENERIC_READ,
+            FILE_SHARE_READ,
+            nullptr,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            nullptr
+        );
+        if (hFile == INVALID_HANDLE_VALUE) {
+            throw IniParseError("Failed to open file for mapping: " + lotm::core::to_utf8(path));
+        }
+        file_handle_ = hFile;
 
-        /**
-         * @brief RAII Memory Mapped File for zero-copy file reading on Windows.
-         */
-        class MMapFile {
-        public:
-            explicit MMapFile(const std::filesystem::path& path) {
-                // Windows specific. Change for POSIX
-                file_handle_ = CreateFileW(
-                    path.c_str(),
-                    GENERIC_READ,
-                    FILE_SHARE_READ,
-                    nullptr,
-                    OPEN_EXISTING,
-                    FILE_ATTRIBUTE_NORMAL,
-                    nullptr
-                );
-                if (file_handle_ == INVALID_HANDLE_VALUE) {
-                    throw IniParseError("Failed to open file for mapping: " + path_to_utf8(path));
-                }
+        LARGE_INTEGER size;
+        if (!GetFileSizeEx(hFile, &size)) {
+            CloseHandle(hFile);
+            throw IniParseError("Failed to get file size: " + lotm::core::to_utf8(path));
+        }
+        if (size.QuadPart < 0 || static_cast<std::uintmax_t>(size.QuadPart) > MAX_INI_FILE_SIZE) {
+            CloseHandle(hFile);
+            throw IniParseError("Security abort: File size exceeds maximum allowed INI size: " + lotm::core::to_utf8(path));
+        }
+        size_ = static_cast<std::size_t>(size.QuadPart);
 
-                LARGE_INTEGER size;
-                if (!GetFileSizeEx(file_handle_, &size)) {
-                    CloseHandle(file_handle_);
-                    throw IniParseError("Failed to get file size: " + path_to_utf8(path));
-                }
-                if (size.QuadPart < 0 || static_cast<std::uintmax_t>(size.QuadPart) > MAX_INI_FILE_SIZE) {
-                    CloseHandle(file_handle_);
-                    throw IniParseError("Security abort: File size exceeds maximum allowed INI size: " + path_to_utf8(path));
-                }
-                size_ = static_cast<std::size_t>(size.QuadPart);
-
-                if (size_ > 0) {
-                    map_handle_ = CreateFileMappingW(
-                        file_handle_,
-                        nullptr,
-                        PAGE_READONLY,
-                        0,
-                        0,
-                        nullptr
-                    );
-                    if (map_handle_ == nullptr) {
-                        CloseHandle(file_handle_);
-                        throw IniParseError("Failed to create file mapping: " + path_to_utf8(path));
-                    }
-
-                    data_ = static_cast<const char*>(MapViewOfFile(
-                        map_handle_,
-                        FILE_MAP_READ,
-                        0,
-                        0,
-                        0
-                    ));
-                    if (data_ == nullptr) {
-                        CloseHandle(map_handle_);
-                        CloseHandle(file_handle_);
-                        throw IniParseError("Failed to map view of file: " + path_to_utf8(path));
-                    }
-                }
+        if (size_ > 0) {
+            HANDLE hMap = CreateFileMappingW(
+                hFile,
+                nullptr,
+                PAGE_READONLY,
+                0,
+                0,
+                nullptr
+            );
+            if (hMap == nullptr) {
+                CloseHandle(hFile);
+                throw IniParseError("Failed to create file mapping: " + lotm::core::to_utf8(path));
             }
+            map_handle_ = hMap;
 
-            ~MMapFile() {
-                // Windows specific. Change for POSIX
-                if (data_) UnmapViewOfFile(data_);
-                if (map_handle_) CloseHandle(map_handle_);
-                if (file_handle_ != INVALID_HANDLE_VALUE) CloseHandle(file_handle_);
+            data_ = static_cast<const char*>(MapViewOfFile(
+                hMap,
+                FILE_MAP_READ,
+                0,
+                0,
+                0
+            ));
+            if (data_ == nullptr) {
+                CloseHandle(hMap);
+                CloseHandle(hFile);
+                throw IniParseError("Failed to map view of file: " + lotm::core::to_utf8(path));
             }
+        }
+    }
 
-            MMapFile(const MMapFile&) = delete;
-            MMapFile& operator=(const MMapFile&) = delete;
+    MMapFile::~MMapFile() {
+        // Windows specific. Change for POSIX
+        if (data_) UnmapViewOfFile(const_cast<char*>(data_));
+        if (map_handle_) CloseHandle(static_cast<HANDLE>(map_handle_));
+        if (file_handle_ && file_handle_ != INVALID_HANDLE_VALUE) CloseHandle(static_cast<HANDLE>(file_handle_));
+    }
 
-            [[nodiscard]] std::string_view view() const noexcept {
-                return { data_ ? data_ : "", size_ };
-            }
+    MMapFile::MMapFile(MMapFile&& other) noexcept 
+        : size_(std::exchange(other.size_, 0)),
+          data_(std::exchange(other.data_, nullptr)),
+          file_handle_(std::exchange(other.file_handle_, nullptr)),
+          map_handle_(std::exchange(other.map_handle_, nullptr)) {}
 
-        private:
-            std::size_t size_{ 0 };
-            const char* data_{ nullptr };
+    MMapFile& MMapFile::operator=(MMapFile&& other) noexcept {
+        if (this != &other) {
             // Windows specific. Change for POSIX
-            HANDLE file_handle_{ INVALID_HANDLE_VALUE };
-            HANDLE map_handle_{ nullptr };
-        };
+            if (data_) UnmapViewOfFile(const_cast<char*>(data_));
+            if (map_handle_) CloseHandle(static_cast<HANDLE>(map_handle_));
+            if (file_handle_ && file_handle_ != INVALID_HANDLE_VALUE) CloseHandle(static_cast<HANDLE>(file_handle_));
+            
+            size_ = std::exchange(other.size_, 0);
+            data_ = std::exchange(other.data_, nullptr);
+            file_handle_ = std::exchange(other.file_handle_, nullptr);
+            map_handle_ = std::exchange(other.map_handle_, nullptr);
+        }
+        return *this;
+    }
 
+} // namespace detail
+
+    namespace {
         [[nodiscard]] std::string read_normalized_utf8_file(const std::filesystem::path& path) {
-            MMapFile mmap{ path };
+            detail::MMapFile mmap{ path };
             std::string transcoded;
-            const std::string_view utf8_view = prepare_utf8_view(mmap.view(), transcoded);
+            const std::string_view utf8_view = detail::prepare_utf8_view(mmap.view(), transcoded);
             if (!transcoded.empty()) {
                 return transcoded;
             }
             return std::string{ utf8_view };
         }
-
-        [[nodiscard]] bool ends_with_ci(std::string_view str, std::string_view suffix) noexcept {
-            if (str.size() < suffix.size()) {
-                return false;
-            }
-            return detail::iequals_ascii(str.substr(str.size() - suffix.size()), suffix);
-        }
-
-        [[nodiscard]] bool is_supported_config_ext(std::string_view path) noexcept {
-            return ends_with_ci(path, ".ini") || ends_with_ci(path, ".inc") || ends_with_ci(path, ".str");
-        }
-
     } // namespace
 
     std::pair<std::string, std::vector<std::vector<std::string>>> load_file(std::string_view full_path) {
         if (full_path.empty()) {
             throw IniParseError("empty path.");
         }
-        const std::filesystem::path fs_path = utf8_to_path(full_path);
+        const std::filesystem::path fs_path = lotm::core::utf8_to_path(full_path);
         if (!std::filesystem::is_regular_file(fs_path)) {
             throw IniParseError("wrong path: " + std::string{ full_path });
         }
 
-        if (is_supported_config_ext(full_path)) {
+        if (detail::is_supported_config_ext(full_path)) {
             ConstructFile file_object{ std::string{ full_path }, false };
             std::string printed = file_object.print();
             if (printed.empty()) {
@@ -288,7 +322,7 @@ namespace lotm::ini {
             return { std::move(printed), std::move(file_object.delimiters) };
         }
 
-        if (ends_with_ci(full_path, ".txt")) {
+        if (detail::ends_with_ci(full_path, ".txt")) {
             return { read_normalized_utf8_file(fs_path),{} };
         }
 

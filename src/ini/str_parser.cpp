@@ -1,12 +1,13 @@
 /**
  * @file src/ini/str_parser.cpp
- * @brief Implementation of the dedicated single - level SAGE.str localization file parser.
+ * @brief Implementation of the dedicated single-level SAGE .str localization file parser.
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
  * Part of the Lord of the Mods (lotm) project.
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#include "parser_utils.hpp"
 #include "ini/parser.hpp"
 #include <core/path_utils.hpp>
 
@@ -15,139 +16,20 @@
 #include <span>
 #include <stdexcept>
 
-// Windows specific. Change for POSIX
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-
 namespace lotm::ini {
-
-    namespace {
-
-        using lotm::core::utf8_to_path;
-
-        [[nodiscard]] bool ends_with_ci(std::string_view str, std::string_view suffix) noexcept {
-            if (str.size() < suffix.size()) {
-                return false;
-            }
-            return detail::iequals_ascii(str.substr(str.size() - suffix.size()), suffix);
-        }
-
-        [[nodiscard]] std::string join_views(std::span<const std::string_view> tokens, std::string_view sep = " ") {
-            if (tokens.empty()) {
-                return {};
-            }
-            std::size_t total_len = sep.size() * (tokens.size() - 1);
-            for (const auto tok : tokens) {
-                total_len += tok.size();
-            }
-            std::string result;
-            result.reserve(total_len);
-            for (std::size_t i = 0; i < tokens.size(); ++i) {
-                if (i > 0) {
-                    result.append(sep);
-                }
-                result.append(tokens[i]);
-            }
-            return result;
-        }
-
-        /**
-         * @brief RAII Memory Mapped File for zero-copy file reading on Windows.
-         */
-        class MMapFile {
-        public:
-            explicit MMapFile(const std::filesystem::path& path) {
-                // Windows specific. Change for POSIX
-                file_handle_ = CreateFileW(
-                    path.c_str(),
-                    GENERIC_READ,
-                    FILE_SHARE_READ,
-                    nullptr,
-                    OPEN_EXISTING,
-                    FILE_ATTRIBUTE_NORMAL,
-                    nullptr
-                );
-                if (file_handle_ == INVALID_HANDLE_VALUE) {
-                    throw IniParseError("Failed to open file for mapping: " + lotm::core::to_utf8(path));
-                }
-
-                LARGE_INTEGER size;
-                if (!GetFileSizeEx(file_handle_, &size)) {
-                    CloseHandle(file_handle_);
-                    throw IniParseError("Failed to get file size: " + lotm::core::to_utf8(path));
-                }
-                if (size.QuadPart < 0 || static_cast<std::uintmax_t>(size.QuadPart) > MAX_INI_FILE_SIZE) {
-                    CloseHandle(file_handle_);
-                    throw IniParseError("Security abort: File size exceeds maximum allowed INI size: " + lotm::core::to_utf8(path));
-                }
-                size_ = static_cast<std::size_t>(size.QuadPart);
-
-                if (size_ > 0) {
-                    map_handle_ = CreateFileMappingW(
-                        file_handle_,
-                        nullptr,
-                        PAGE_READONLY,
-                        0,
-                        0,
-                        nullptr
-                    );
-                    if (map_handle_ == nullptr) {
-                        CloseHandle(file_handle_);
-                        throw IniParseError("Failed to create file mapping: " + lotm::core::to_utf8(path));
-                    }
-
-                    data_ = static_cast<const char*>(MapViewOfFile(
-                        map_handle_,
-                        FILE_MAP_READ,
-                        0,
-                        0,
-                        0
-                    ));
-                    if (data_ == nullptr) {
-                        CloseHandle(map_handle_);
-                        CloseHandle(file_handle_);
-                        throw IniParseError("Failed to map view of file: " + lotm::core::to_utf8(path));
-                    }
-                }
-            }
-
-            ~MMapFile() {
-                // Windows specific. Change for POSIX
-                if (data_) UnmapViewOfFile(data_);
-                if (map_handle_) CloseHandle(map_handle_);
-                if (file_handle_ != INVALID_HANDLE_VALUE) CloseHandle(file_handle_);
-            }
-
-            MMapFile(const MMapFile&) = delete;
-            MMapFile& operator=(const MMapFile&) = delete;
-
-            [[nodiscard]] std::string_view view() const noexcept {
-                return { data_ ? data_ : "", size_ };
-            }
-
-        private:
-            std::size_t size_{ 0 };
-            const char* data_{ nullptr };
-            // Windows specific. Change for POSIX
-            HANDLE file_handle_{ INVALID_HANDLE_VALUE };
-            HANDLE map_handle_{ nullptr };
-        };
-
-    } // namespace
 
     StrDocument StrParser::parse_file(
         std::string_view file_path,
         bool strict,
         std::optional<std::string_view> file_content
     ) {
-        const std::filesystem::path fs_path = utf8_to_path(file_path);
-        if (!ends_with_ci(file_path, ".str") ||
+        const std::filesystem::path fs_path = lotm::core::utf8_to_path(file_path);
+        if (!detail::ends_with_ci(file_path, ".str") ||
             (!file_content.has_value() && !std::filesystem::is_regular_file(fs_path))) {
             throw IniParseError("file " + std::string{ file_path } + " invalid.");
         }
 
-        std::optional<MMapFile> mmap;
+        std::optional<detail::MMapFile> mmap;
         std::string transcoded_buffer;
         std::string_view raw_view;
         if (file_content.has_value()) {
@@ -157,7 +39,7 @@ namespace lotm::ini {
             mmap.emplace(fs_path);
             raw_view = mmap->view();
         }
-        const std::string_view content_view = prepare_utf8_view(raw_view, transcoded_buffer);
+        const std::string_view content_view = detail::prepare_utf8_view(raw_view, transcoded_buffer);
 
         StrDocument doc;
         doc.name = std::string{ file_path };
@@ -199,7 +81,7 @@ namespace lotm::ini {
             if (lexed.words.empty()) {
                 if (!lexed.comment.empty()) {
                     if (!last_comment.empty()) {
-                        last_comment.push_back('\\n');
+                        last_comment.push_back('\n');
                     }
                     last_comment.append(lexed.comment);
                 }
@@ -238,7 +120,7 @@ namespace lotm::ini {
                 );
 
                 std::string cat{ matched_rule->raw };
-                std::string ident = join_views(remaining);
+                std::string ident = detail::join_views(remaining);
                 validate_sage_bounds(cat, ident);
 
                 active_entry = StrEntry{
@@ -269,7 +151,7 @@ namespace lotm::ini {
                     if (orphan_span.has_value() && orphan_span->end_line > orphan_span->start_line) {
                         orphan_span->end_line = line_num;
                         flush_orphan_span();
-                        doc.entries.emplace_back(StatementNode{ join_views(lexed.words), lexed.comment });
+                        doc.entries.emplace_back(StatementNode{ detail::join_views(lexed.words), lexed.comment });
                         return;
                     }
                     flush_orphan_span();
@@ -282,10 +164,10 @@ namespace lotm::ini {
                     if (strict) {
                         throw IniParseError(err_msg);
                     }
-                    doc.entries.emplace_back(StatementNode{ join_views(lexed.words), lexed.comment });
+                    doc.entries.emplace_back(StatementNode{ detail::join_views(lexed.words), lexed.comment });
                 }
                 else {
-                    active_entry->end_token = join_views(lexed.words);
+                    active_entry->end_token = detail::join_views(lexed.words);
                     active_entry->end_comment = lexed.comment;
                     doc.entries.emplace_back(std::move(*active_entry));
                     active_entry.reset();
@@ -293,7 +175,7 @@ namespace lotm::ini {
                 return;
             }
 
-            StatementNode stmt{ join_views(lexed.words_signs), lexed.comment };
+            StatementNode stmt{ detail::join_views(lexed.words_signs), lexed.comment };
             if (active_entry.has_value()) {
                 active_entry->items.emplace_back(std::move(stmt));
             }
