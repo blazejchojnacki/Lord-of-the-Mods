@@ -522,8 +522,13 @@ def test_diff_archives_and_error_handling(tmp_path: Path):
     assert [e.name for e in result.modified] == ["data\\weapon.ini"]
     assert [e.name for e in result.unchanged] == ["data\\armor.ini"]
 
-    # Compare open BigArchive instances directly
+    # Compare open BigArchive instances directly via high-level big.diff() and BigDiff.compare()
     with big.BigArchive(base_path) as b_arc, big.BigArchive(target_path) as t_arc:
+        high_level_res = big.diff(b_arc, t_arc, filter_pattern="*armor.ini")
+        assert not high_level_res.has_differences
+        assert not b_arc.closed
+        assert not t_arc.closed
+
         filtered_res = big.BigDiff.compare(b_arc, t_arc, filter_pattern="*armor.ini")
         assert not filtered_res.has_differences
 
@@ -612,11 +617,19 @@ def test_create_patch_and_create_patch_to_memory(tmp_path: Path):
         assert names == ["data\\new_unit.ini", "data\\weapon.ini"]
         assert patch_arc.read_entry("data/weapon.ini") == b"Damage=75"
 
-    # Exercise BigArchive overloads and progress callbacks directly
+    # Exercise BigArchive overloads and progress callbacks via high-level and low-level APIs
     cb_mem: list[str] = []
     cb_disk: list[str] = []
     direct_patch_path = tmp_path / "direct_patch.big"
+    hl_patch_path = tmp_path / "hl_patch.big"
     with big.BigArchive(base_path) as b_arc, big.BigArchive(target_path) as t_arc:
+        hl_raw = big.create_patch_to_memory(b_arc, t_arc)
+        assert hl_raw == mem_patch
+        big.create_patch(b_arc, t_arc, hl_patch_path)
+        assert hl_patch_path.read_bytes() == mem_patch
+        assert not b_arc.closed
+        assert not t_arc.closed
+
         raw = big.BigDiff.create_patch_to_memory(
             b_arc, t_arc, progress_callback=lambda r: (cb_mem.append(r.entry_name), True)[1]
         )

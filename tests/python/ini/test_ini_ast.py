@@ -347,6 +347,7 @@ def test_module_level_functions_and_security_guards(
     errs = ini.scan_file_for_errors(malformed_ini_file)
     assert len(errs) == 2
 
+
 def test_ast_reallocation_and_replacement_memory_safety() -> None:
     """Verify Python AST node references remain valid across .append() reallocations, __setitem__, and .items assignment."""
     doc = ini.parse_ini(
@@ -390,3 +391,44 @@ def test_ast_reallocation_and_replacement_memory_safety() -> None:
     doc.construct()
     assert hero_block.name == "GondorEliteArcher"
     assert health_stmt.text == "Health = 500"
+
+
+def test_ast_query_mutation_and_set_value_validation(sample_ini_file: Path) -> None:
+    """Verify find_block, find_all, get_value, set_value, remove_value, remove_block, and set_value validation."""
+    doc = ini.parse_ini(sample_ini_file, strict=True)
+
+    obj = doc.find_block("Object", "GondorAragorn")
+    assert obj is not None
+    assert obj.get_value("Side") == "Men"
+    assert obj.get_value("MissingKey", default="Fallback") == "Fallback"
+
+    obj.set_value("Side", "Dunedain")
+    assert obj.get_value("Side") == "Dunedain"
+    assert obj.get_all_values("Side") == ["Dunedain"]
+
+    draw_blocks = obj.find_all("Draw")
+    assert len(draw_blocks) == 1
+    nested_state = doc.find_block("DefaultModelConditionState", recursive=True)
+    assert nested_state is not None
+    assert nested_state.get_value("Model") == "GUAragorn_SKN"
+
+    # Validation checks on set_value
+    with pytest.raises(ValueError, match="cannot be empty"):
+        obj.set_value("   ", "10")
+    with pytest.raises(ValueError, match="invalid whitespace or separator"):
+        obj.set_value("Bad Key", "10")
+    with pytest.raises(ValueError, match="invalid whitespace or separator"):
+        obj.set_value("Bad=Key", "10")
+    with pytest.raises(ValueError, match="newline"):
+        obj.set_value("ValidKey", "Line1\nLine2")
+    with pytest.raises(ini.IniParseError, match="exceeds SAGE engine limit"):
+        obj.set_value("K" * (ini.SAGE_MAX_BLOCK_NAME_LEN + 1), "10")
+    with pytest.raises(ini.IniParseError, match="exceeds SAGE engine limit"):
+        obj.set_value("ValidKey", "V" * (ini.SAGE_MAX_IDENTIFIER_LEN + 1))
+
+    assert obj.remove_value("Side")
+    assert obj.get_value("Side") is None
+    assert obj.remove_block("Draw", "W3DScriptedModelDraw", "ModuleTag_Draw")
+    assert obj.find_block("Draw") is None
+    assert doc.remove_block("Object", "GondorAragorn")
+    assert doc.find_block("Object") is None

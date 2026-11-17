@@ -9,6 +9,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include "ini/ast.hpp"
+#include "ini/parser.hpp"
+#include <stdexcept>
 
 using namespace lotm::ini;
 
@@ -181,6 +183,120 @@ TEST_CASE("AST types, node operations, and SerializableNodeRef conversions", "[i
         const RootItem root_ast = ast_stmt;
         const RootItem root_str = StrEntry{ "GUI", "Start" };
         CHECK(std::holds_alternative<const StatementNode*>(to_serializable_ref(root_ast)));
+        CHECK(std::holds_alternative<const StatementNode*>(to_serializable_ref(root_ast)));
         CHECK(std::holds_alternative<const StrEntry*>(to_serializable_ref(root_str)));
+    }
+}
+
+TEST_CASE("ConstructLevel and ConstructFile AST query, mutation, and key/value validation", "[ini][ast][query]") {
+    const std::string sample_ini =
+        "TopKey = InitialTop\n"
+        "TopKey = OverriddenTop\n"
+        "Object GondorHero\n"
+        "    Side = Men\n"
+        "    Side = Gondor\n"
+        "    EmptyEq =\n"
+        "    SpaceSep   100\n"
+        "    BareKey\n"
+        "    Draw = W3DScriptedModelDraw ModuleTag_Draw01\n"
+        "        DefaultModelConditionState\n"
+        "            Model = GUHero_SKN\n"
+        "        End\n"
+        "    End\n"
+        "    Behavior = AIUpdateInterface ModuleTag_AI\n"
+        "        AutoAcquireEnemiesWhenIdle = YES\n"
+        "    End\n"
+        "End\n";
+
+    ConstructFile doc{ "query_test.ini", true, sample_ini };
+
+    SECTION("find_block and find_all support direct, recursive, and const queries") {
+        const ConstructFile& const_doc = doc;
+        REQUIRE(const_doc.find_block("Object", "GondorHero") != nullptr);
+        CHECK(const_doc.find_block("Object", "MissingHero") == nullptr);
+        CHECK(const_doc.find_block("DefaultModelConditionState", std::nullopt, std::nullopt, false) == nullptr);
+
+        const ConstructLevel* nested_state = const_doc.find_block(
+            "DefaultModelConditionState", std::nullopt, std::nullopt, true
+        );
+        REQUIRE(nested_state != nullptr);
+        CHECK(nested_state->get_value("Model") == "GUHero_SKN");
+
+        ConstructLevel* hero = doc.find_block("Object", "GondorHero");
+        REQUIRE(hero != nullptr);
+        const ConstructLevel& const_hero = *hero;
+
+        CHECK(const_hero.find_block("Draw", "W3DScriptedModelDraw", "ModuleTag_Draw01") != nullptr);
+        CHECK(const_hero.find_block("Draw =", "W3DScriptedModelDraw", "ModuleTag_Draw01") != nullptr);
+        CHECK(const_hero.find_block("Draw", "W3DScriptedModelDraw", "WrongTag") == nullptr);
+
+        CHECK(const_doc.find_all("Behavior", std::nullopt, std::nullopt, true).size() == 1);
+        CHECK(const_hero.find_all("Behavior").size() == 1);
+        CHECK(const_hero.find_all("DefaultModelConditionState", std::nullopt, std::nullopt, true).size() == 1);
+
+        CHECK(hero->remove_block("Behavior", "AIUpdateInterface", "ModuleTag_AI"));
+        CHECK_FALSE(hero->remove_block("Behavior", "AIUpdateInterface", "ModuleTag_AI"));
+        CHECK(doc.remove_block("Object", "GondorHero"));
+        CHECK_FALSE(doc.remove_block("Object", "GondorHero"));
+    }
+
+    SECTION("get_value, get_all_values, set_value, and remove_value preserve formatting and handle edge cases") {
+        CHECK(doc.get_value("TopKey") == "OverriddenTop");
+        CHECK(doc.get_value("   ").has_value() == false);
+        CHECK(doc.get_all_values("TopKey") == std::vector<std::string>{ "InitialTop", "OverriddenTop" });
+        CHECK(doc.get_all_values("").empty());
+
+        doc.set_value("TopKey", "FinalTop");
+        CHECK(doc.get_value("TopKey") == "FinalTop");
+        doc.set_value("NewTopEmpty", "");
+        CHECK(doc.get_value("NewTopEmpty") == "");
+        doc.set_value("NewTopVal", "42");
+        CHECK(doc.get_value("NewTopVal") == "42");
+
+        CHECK(doc.remove_value("TopKey", false));
+        CHECK(doc.get_value("TopKey") == "InitialTop");
+        CHECK(doc.remove_value("TopKey", true));
+        CHECK_FALSE(doc.get_value("TopKey").has_value());
+        CHECK_FALSE(doc.remove_value(""));
+
+        ConstructLevel* hero = doc.find_block("Object", "GondorHero");
+        REQUIRE(hero != nullptr);
+        CHECK(hero->get_value("Side") == "Gondor");
+        CHECK(hero->get_value("") == std::nullopt);
+        CHECK(hero->get_all_values("Side") == std::vector<std::string>{ "Men", "Gondor" });
+        CHECK(hero->get_all_values("").empty());
+
+        hero->set_value("EmptyEq", "Filled");
+        CHECK(hero->get_value("EmptyEq") == "Filled");
+        hero->set_value("SpaceSep", "200");
+        CHECK(hero->get_value("SpaceSep") == "200");
+        hero->set_value("BareKey", "300");
+        CHECK(hero->get_value("BareKey") == "300");
+        hero->set_value("AppendedEmpty", "");
+        CHECK(hero->get_value("AppendedEmpty") == "");
+
+        CHECK(hero->remove_value("Side", true));
+        CHECK(hero->get_all_values("Side").empty());
+        CHECK_FALSE(hero->remove_value("   "));
+    }
+
+    SECTION("set_value validates keys and values against separators, newlines, and 32-bit SAGE bounds") {
+        ConstructLevel* hero = doc.find_block("Object", "GondorHero");
+        REQUIRE(hero != nullptr);
+
+        CHECK_THROWS_AS(hero->set_value("", "10"), std::invalid_argument);
+        CHECK_THROWS_AS(hero->set_value("   ", "10"), std::invalid_argument);
+        CHECK_THROWS_AS(hero->set_value("Bad Key", "10"), std::invalid_argument);
+        CHECK_THROWS_AS(hero->set_value("Bad=Key", "10"), std::invalid_argument);
+        CHECK_THROWS_AS(hero->set_value("Bad:Key", "10"), std::invalid_argument);
+        CHECK_THROWS_AS(hero->set_value("ValidKey", "Line1\nLine2"), std::invalid_argument);
+        CHECK_THROWS_AS(hero->set_value("ValidKey", "Line1\rLine2"), std::invalid_argument);
+
+        const std::string overlong_key(SAGE_MAX_BLOCK_NAME_LEN + 1, 'K');
+        const std::string overlong_val(SAGE_MAX_IDENTIFIER_LEN + 1, 'V');
+        CHECK_THROWS_AS(hero->set_value(overlong_key, "10"), IniParseError);
+        CHECK_THROWS_AS(hero->set_value("ValidKey", overlong_val), IniParseError);
+        CHECK_THROWS_AS(doc.set_value(overlong_key, "10"), IniParseError);
+        CHECK_THROWS_AS(doc.set_value("ValidKey", overlong_val), IniParseError);
     }
 }
