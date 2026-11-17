@@ -346,7 +346,8 @@ def test_module_level_functions_and_security_guards(
     assert ini.scan_file_for_errors(sample_ini_file) == []
     errs = ini.scan_file_for_errors(malformed_ini_file)
     assert len(errs) == 2
-    def test_ast_reallocation_and_replacement_memory_safety() -> None:
+
+def test_ast_reallocation_and_replacement_memory_safety() -> None:
     """Verify Python AST node references remain valid across .append() reallocations, __setitem__, and .items assignment."""
     doc = ini.parse_ini(
         "memory_safety.ini",
