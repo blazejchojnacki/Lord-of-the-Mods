@@ -15,6 +15,14 @@
 
 using namespace lotm::ini;
 
+TEST_CASE("Helpers") {
+    SECTION("iequals_ascii") {
+        STATIC_REQUIRE(detail::iequals_ascii("BeginScript", "bEgInScRiPt"));
+        STATIC_REQUIRE_FALSE(detail::iequals_ascii("Begin", "BeginScript"));
+        STATIC_REQUIRE_FALSE(detail::iequals_ascii("End", "Enx"));
+    }
+}
+
 TEST_CASE("Compile-time and runtime delimiter schema rules", "[ini][schema]") {
     SECTION("compile_delimiter_rule handles operators, whitespace, and MAX_RULE_TOKENS cap") {
         constexpr auto eq_rule = compile_delimiter_rule("AddEmotion = OVERRIDE");

@@ -30,10 +30,6 @@ TEST_CASE("Zero-copy lexer, whitespace helpers, and line view iterator", "[ini][
         STATIC_REQUIRE(detail::trim_view(" \t\v\f ") == "");
         STATIC_REQUIRE(detail::trim_view("") == "");
 
-        STATIC_REQUIRE(detail::iequals_ascii("BeginScript", "bEgInScRiPt"));
-        STATIC_REQUIRE_FALSE(detail::iequals_ascii("Begin", "BeginScript"));
-        STATIC_REQUIRE_FALSE(detail::iequals_ascii("End", "Enx"));
-
         CHECK(detail::collapse_whitespace("") == "");
         CHECK(detail::collapse_whitespace("   \t\r\n ") == "");
         CHECK(detail::collapse_whitespace("  ;  comment \t with \v multiple   spaces ") == "; comment with multiple spaces");

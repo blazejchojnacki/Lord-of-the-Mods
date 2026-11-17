@@ -57,20 +57,6 @@ namespace lotm::ini {
             return rstrip_view(lstrip_view(sv));
         }
 
-        [[nodiscard]] constexpr bool iequals_ascii(std::string_view a, std::string_view b) noexcept {
-            if (a.size() != b.size()) {
-                return false;
-            }
-            for (std::size_t i = 0; i < a.size(); ++i) {
-                const char ca = (a[i] >= 'A' && a[i] <= 'Z') ? static_cast<char>(a[i] + ('a' - 'A')) : a[i];
-                const char cb = (b[i] >= 'A' && b[i] <= 'Z') ? static_cast<char>(b[i] + ('a' - 'A')) : b[i];
-                if (ca != cb) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
         [[nodiscard]] inline std::string collapse_whitespace(std::string_view sv) {
             std::string result;
             result.reserve(sv.size());
