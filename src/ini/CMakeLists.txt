@@ -6,7 +6,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 add_library(lotm_ini STATIC
-    parser.cpp
+    ast.cpp
+    serializer.cpp
+    file_io.cpp
+    str_parser.cpp
+    ini_parser.cpp
+    include_resolver.cpp
 )
 
 set_target_properties(lotm_ini PROPERTIES
