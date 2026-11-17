@@ -23,6 +23,7 @@
 #include <big/big_packer.hpp>
 #include <big/exceptions.hpp>
 #include <big/types.hpp>
+
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -78,6 +79,40 @@ namespace lotm::python {
                 }
                 return nb::cast<bool>(res);
                 };
+        }
+
+        // Wraps a Python chunk callback with zero-copy memoryview creation and GIL acquisition
+        lotm::big::ChunkCallback make_safe_chunk_cb(const nb::object& cb) {
+            if (cb.is_none()) {
+                return {};
+            }
+            return [&cb](std::span<const uint8_t> chunk) -> bool {
+                nb::gil_scoped_acquire acquire;
+                nb::object mv = nb::steal(PyMemoryView_FromMemory(
+                    const_cast<char*>(reinterpret_cast<const char*>(chunk.data())),
+                    static_cast<Py_ssize_t>(chunk.size()),
+                    PyBUF_READ
+                ));
+                nb::object res = cb(mv);
+                return res.is_none() ? true : nb::cast<bool>(res);
+                };
+        }
+
+        // Allocates a Python bytes object and populates it via a GIL-released stream_entry call
+        template <typename SourceT, typename KeyT>
+        nb::bytes read_entry_to_py_bytes(const SourceT& source, const KeyT& key, std::size_t entry_size) {
+            PythonBytesAllocator allocator;
+            uint8_t* buffer = allocator.allocate(entry_size);
+            std::size_t write_pos = 0;
+            {
+                nb::gil_scoped_release release;
+                source.stream_entry(key, [&](std::span<const uint8_t> chunk) {
+                    std::memcpy(buffer + write_pos, chunk.data(), chunk.size());
+                    write_pos += chunk.size();
+                    return true;
+                    });
+            }
+            return allocator.steal();
         }
     } // namespace
 
@@ -162,67 +197,26 @@ namespace lotm::python {
             }
             // Retrieve metadata first to know the exact buffer size
             const auto& entry = self.resolve(entry_name);
-
-            PythonBytesAllocator allocator;
-            uint8_t* buffer = allocator.allocate(entry.size);
-            std::size_t write_pos = 0;
-            {
-                nb::gil_scoped_release release;
-                self.stream_entry(entry, [&](std::span<const uint8_t> chunk) {
-                    std::memcpy(buffer + write_pos, chunk.data(), chunk.size());
-                    write_pos += chunk.size();
-                    return true;
-                    });
-            }
-            return allocator.steal();
+            return read_entry_to_py_bytes(self, entry, entry.size);
                 },
                 nb::arg("entry"),
                 "Reads a single entry by path directly into memory as a buffer-protocol bytes object")
             .def("read_entry", [](const lotm::big::BigArchive& self, const lotm::big::BigEntry& entry) {
-            PythonBytesAllocator allocator;
-            uint8_t* buffer = allocator.allocate(entry.size);
-            std::size_t write_pos = 0;
-            {
-                nb::gil_scoped_release release;
-                self.stream_entry(entry, [&](std::span<const uint8_t> chunk) {
-                    std::memcpy(buffer + write_pos, chunk.data(), chunk.size());
-                    write_pos += chunk.size();
-                    return true;
-                    });
-            }
-            return allocator.steal();
+            return read_entry_to_py_bytes(self, entry, entry.size);
                 },
                 nb::arg("entry"),
                 "Reads a single BigEntry record directly into memory as a buffer-protocol bytes object")
             .def("stream_entry", [](const lotm::big::BigArchive& self, std::string_view entry_name, nb::object cb) {
-            if (cb.is_none()) return;
-            auto safe_cb = [&cb](std::span<const uint8_t> chunk) -> bool {
-                nb::gil_scoped_acquire acquire;
-                nb::object mv = nb::steal(PyMemoryView_FromMemory(
-                    const_cast<char*>(reinterpret_cast<const char*>(chunk.data())),
-                    chunk.size(),
-                    PyBUF_READ
-                ));
-                nb::object res = cb(mv);
-                return res.is_none() ? true : nb::cast<bool>(res);
-                };
+            auto safe_cb = make_safe_chunk_cb(cb);
+            if (!safe_cb) return;
             nb::gil_scoped_release release;
             self.stream_entry(entry_name, safe_cb);
                 },
                 nb::arg("entry"), nb::arg("chunk_callback"),
                 "Streams an entry's payload in chunks to the provided callback.")
             .def("stream_entry", [](const lotm::big::BigArchive& self, const lotm::big::BigEntry& entry, nb::object cb) {
-            if (cb.is_none()) return;
-            auto safe_cb = [&cb](std::span<const uint8_t> chunk) -> bool {
-                nb::gil_scoped_acquire acquire;
-                nb::object mv = nb::steal(PyMemoryView_FromMemory(
-                    const_cast<char*>(reinterpret_cast<const char*>(chunk.data())),
-                    chunk.size(),
-                    PyBUF_READ
-                ));
-                nb::object res = cb(mv);
-                return res.is_none() ? true : nb::cast<bool>(res);
-                };
+            auto safe_cb = make_safe_chunk_cb(cb);
+            if (!safe_cb) return;
             nb::gil_scoped_release release;
             self.stream_entry(entry, safe_cb);
                 },
@@ -420,33 +414,13 @@ namespace lotm::python {
                 "Resolves the winning BigOverlayEntry for a specific internal path")
             .def("read_entry", [](const lotm::big::BigOverlay& self, std::string_view entry_name) {
             const auto overlay_entry = self.resolve(entry_name);
-            PythonBytesAllocator allocator;
-            uint8_t* buffer = allocator.allocate(overlay_entry.entry.size);
-            std::size_t write_pos = 0;
-            {
-                nb::gil_scoped_release release;
-                self.stream_entry(entry_name, [&](std::span<const uint8_t> chunk) {
-                    std::memcpy(buffer + write_pos, chunk.data(), chunk.size());
-                    write_pos += chunk.size();
-                    return true;
-                    });
-            }
-            return allocator.steal();
+            return read_entry_to_py_bytes(self, entry_name, overlay_entry.entry.size);
                 },
                 nb::arg("entry_name"),
                 "Reads the effective winning entry payload directly into memory as bytes")
             .def("stream_entry", [](const lotm::big::BigOverlay& self, std::string_view entry_name, nb::object cb) {
-            if (cb.is_none()) return;
-            auto safe_cb = [&cb](std::span<const uint8_t> chunk) -> bool {
-                nb::gil_scoped_acquire acquire;
-                nb::object mv = nb::steal(PyMemoryView_FromMemory(
-                    const_cast<char*>(reinterpret_cast<const char*>(chunk.data())),
-                    chunk.size(),
-                    PyBUF_READ
-                ));
-                nb::object res = cb(mv);
-                return res.is_none() ? true : nb::cast<bool>(res);
-                };
+            auto safe_cb = make_safe_chunk_cb(cb);
+            if (!safe_cb) return;
             nb::gil_scoped_release release;
             self.stream_entry(entry_name, safe_cb);
                 },

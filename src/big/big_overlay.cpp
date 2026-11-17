@@ -138,15 +138,23 @@ namespace lotm::big {
         return result;
     }
 
-    BigOverlayEntry BigOverlay::resolve(std::string_view entry_name) const {
-        if (is_closed_) throw BigArchiveError("Cannot resolve on a closed overlay.");
+    const BigOverlay::OverlayRecord& BigOverlay::find_record(
+        std::string_view entry_name,
+        const char* closed_error_msg
+    ) const {
+        if (is_closed_) {
+            throw BigArchiveError(closed_error_msg);
+        }
         const std::string key = normalize_virtual_path(entry_name);
         auto it = index_map_.find(key);
         if (it == index_map_.end()) {
             throw BigArchiveError("Entry not found in overlay: " + std::string(entry_name));
         }
+        return it->second;
+    }
 
-        const auto& rec = it->second;
+    BigOverlayEntry BigOverlay::resolve(std::string_view entry_name) const {
+        const auto& rec = find_record(entry_name, "Cannot resolve on a closed overlay.");
         return BigOverlayEntry{
             rec.entry,
             archives_[rec.archive_index].first,
@@ -155,26 +163,12 @@ namespace lotm::big {
     }
 
     std::vector<uint8_t> BigOverlay::read_entry(std::string_view entry_name) const {
-        if (is_closed_) throw BigArchiveError("Cannot read from a closed overlay.");
-        const std::string key = normalize_virtual_path(entry_name);
-        auto it = index_map_.find(key);
-        if (it == index_map_.end()) {
-            throw BigArchiveError("Entry not found in overlay: " + std::string(entry_name));
-        }
-
-        const auto& rec = it->second;
+        const auto& rec = find_record(entry_name, "Cannot read from a closed overlay.");
         return archives_[rec.archive_index].second.read_entry(rec.entry);
     }
 
     void BigOverlay::stream_entry(std::string_view entry_name, ChunkCallback chunk_cb) const {
-        if (is_closed_) throw BigArchiveError("Cannot read from a closed overlay.");
-        const std::string key = normalize_virtual_path(entry_name);
-        auto it = index_map_.find(key);
-        if (it == index_map_.end()) {
-            throw BigArchiveError("Entry not found in overlay: " + std::string(entry_name));
-        }
-
-        const auto& rec = it->second;
+        const auto& rec = find_record(entry_name, "Cannot read from a closed overlay.");
         archives_[rec.archive_index].second.stream_entry(rec.entry, std::move(chunk_cb));
     }
 
