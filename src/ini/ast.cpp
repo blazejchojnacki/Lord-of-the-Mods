@@ -18,6 +18,22 @@ namespace lotm::ini {
 
     namespace {
 
+        [[nodiscard]] constexpr AstNode* as_ast_node(AstNode& item) noexcept {
+            return &item;
+        }
+
+        [[nodiscard]] constexpr const AstNode* as_ast_node(const AstNode& item) noexcept {
+            return &item;
+        }
+
+        [[nodiscard]] constexpr AstNode* as_ast_node(RootItem& item) noexcept {
+            return std::get_if<AstNode>(&item);
+        }
+
+        [[nodiscard]] constexpr const AstNode* as_ast_node(const RootItem& item) noexcept {
+            return std::get_if<AstNode>(&item);
+        }
+
         [[nodiscard]] std::vector<std::string_view> tokenize_class_spec(std::string_view spec) {
             std::vector<std::string_view> tokens;
             std::size_t pos = 0;
@@ -179,6 +195,245 @@ namespace lotm::ini {
             }
         }
 
+        template <typename ItemT>
+        [[nodiscard]] ConstructLevel* find_block_impl(
+            StableVector<ItemT>& items,
+            std::string_view block_class,
+            std::optional<std::string_view> block_name,
+            std::optional<std::string_view> block_identifier,
+            bool recursive
+        ) {
+            if (!recursive) {
+                for (auto& item : items) {
+                    if (auto* ast = as_ast_node(item)) {
+                        if (auto* lvl = std::get_if<ConstructLevel>(ast)) {
+                            if (matches_block_criteria(*lvl, block_class, block_name, block_identifier)) {
+                                return lvl;
+                            }
+                        }
+                    }
+                }
+                return nullptr;
+            }
+
+            std::vector<ConstructLevel*> stack;
+            for (auto it = items.rbegin(); it != items.rend(); ++it) {
+                if (auto* ast = as_ast_node(*it)) {
+                    if (auto* lvl = std::get_if<ConstructLevel>(ast)) {
+                        stack.push_back(lvl);
+                    }
+                }
+            }
+
+            while (!stack.empty()) {
+                ConstructLevel* current = stack.back();
+                stack.pop_back();
+
+                if (matches_block_criteria(*current, block_class, block_name, block_identifier)) {
+                    return current;
+                }
+
+                for (auto it = current->items.rbegin(); it != current->items.rend(); ++it) {
+                    if (auto* child_lvl = std::get_if<ConstructLevel>(&(*it))) {
+                        stack.push_back(child_lvl);
+                    }
+                }
+            }
+            return nullptr;
+        }
+
+        template <typename ItemT>
+        [[nodiscard]] std::vector<ConstructLevel*> find_all_impl(
+            StableVector<ItemT>& items,
+            std::string_view block_class,
+            std::optional<std::string_view> block_name,
+            std::optional<std::string_view> block_identifier,
+            bool recursive
+        ) {
+            std::vector<ConstructLevel*> matches;
+            if (!recursive) {
+                for (auto& item : items) {
+                    if (auto* ast = as_ast_node(item)) {
+                        if (auto* lvl = std::get_if<ConstructLevel>(ast)) {
+                            if (matches_block_criteria(*lvl, block_class, block_name, block_identifier)) {
+                                matches.push_back(lvl);
+                            }
+                        }
+                    }
+                }
+                return matches;
+            }
+
+            std::vector<ConstructLevel*> stack;
+            for (auto it = items.rbegin(); it != items.rend(); ++it) {
+                if (auto* ast = as_ast_node(*it)) {
+                    if (auto* lvl = std::get_if<ConstructLevel>(ast)) {
+                        stack.push_back(lvl);
+                    }
+                }
+            }
+
+            while (!stack.empty()) {
+                ConstructLevel* current = stack.back();
+                stack.pop_back();
+
+                if (matches_block_criteria(*current, block_class, block_name, block_identifier)) {
+                    matches.push_back(current);
+                }
+
+                for (auto it = current->items.rbegin(); it != current->items.rend(); ++it) {
+                    if (auto* child_lvl = std::get_if<ConstructLevel>(&(*it))) {
+                        stack.push_back(child_lvl);
+                    }
+                }
+            }
+            return matches;
+        }
+
+        template <typename ItemT>
+        [[nodiscard]] std::optional<std::string> get_value_impl(
+            const StableVector<ItemT>& items,
+            std::string_view key
+        ) {
+            const std::string_view trimmed_key = detail::trim_view(key);
+            if (trimmed_key.empty()) {
+                return std::nullopt;
+            }
+
+            std::optional<std::string> last_match;
+            for (const auto& item : items) {
+                if (const auto* ast = as_ast_node(item)) {
+                    if (const auto* stmt = std::get_if<StatementNode>(ast)) {
+                        if (const auto parsed = parse_statement_key_value(stmt->text)) {
+                            if (detail::iequals_ascii(parsed->key, trimmed_key)) {
+                                last_match = std::string{ parsed->value };
+                            }
+                        }
+                    }
+                }
+            }
+            return last_match;
+        }
+
+        template <typename ItemT>
+        [[nodiscard]] std::vector<std::string> get_all_values_impl(
+            const StableVector<ItemT>& items,
+            std::string_view key
+        ) {
+            std::vector<std::string> values;
+            const std::string_view trimmed_key = detail::trim_view(key);
+            if (trimmed_key.empty()) {
+                return values;
+            }
+
+            for (const auto& item : items) {
+                if (const auto* ast = as_ast_node(item)) {
+                    if (const auto* stmt = std::get_if<StatementNode>(ast)) {
+                        if (const auto parsed = parse_statement_key_value(stmt->text)) {
+                            if (detail::iequals_ascii(parsed->key, trimmed_key)) {
+                                values.emplace_back(parsed->value);
+                            }
+                        }
+                    }
+                }
+            }
+            return values;
+        }
+
+        template <typename ItemT>
+        void set_value_impl(
+            StableVector<ItemT>& items,
+            std::string_view key,
+            std::string_view value
+        ) {
+            const std::string_view trimmed_key = detail::trim_view(key);
+            if (trimmed_key.empty()) {
+                throw std::invalid_argument("Property key cannot be empty.");
+            }
+
+            StatementNode* target_stmt = nullptr;
+            ParsedStatementView target_parsed;
+
+            for (auto& item : items) {
+                if (auto* ast = as_ast_node(item)) {
+                    if (auto* stmt = std::get_if<StatementNode>(ast)) {
+                        if (const auto parsed = parse_statement_key_value(stmt->text)) {
+                            if (detail::iequals_ascii(parsed->key, trimmed_key)) {
+                                target_stmt = stmt;
+                                target_parsed = *parsed;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (target_stmt != nullptr) {
+                apply_statement_value(*target_stmt, target_parsed, value);
+                return;
+            }
+
+            std::string new_line{ trimmed_key };
+            if (value.empty()) {
+                new_line.append(" =");
+            }
+            else {
+                new_line.append(" = ");
+                new_line.append(value);
+            }
+            items.emplace_back(AstNode{ StatementNode{ std::move(new_line), "" } });
+        }
+
+        template <typename ItemT>
+        [[nodiscard]] bool remove_value_impl(
+            StableVector<ItemT>& items,
+            std::string_view key,
+            bool all_occurrences
+        ) {
+            const std::string_view trimmed_key = detail::trim_view(key);
+            if (trimmed_key.empty()) {
+                return false;
+            }
+
+            bool removed_any = false;
+            for (std::size_t i = items.size(); i > 0; --i) {
+                const std::size_t idx = i - 1;
+                if (const auto* ast = as_ast_node(items[idx])) {
+                    if (const auto* stmt = std::get_if<StatementNode>(ast)) {
+                        if (const auto parsed = parse_statement_key_value(stmt->text)) {
+                            if (detail::iequals_ascii(parsed->key, trimmed_key)) {
+                                items.erase_at(idx);
+                                removed_any = true;
+                                if (!all_occurrences) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return removed_any;
+        }
+
+        template <typename ItemT>
+        [[nodiscard]] bool remove_block_impl(
+            StableVector<ItemT>& items,
+            std::string_view block_class,
+            std::optional<std::string_view> block_name,
+            std::optional<std::string_view> block_identifier
+        ) {
+            for (std::size_t i = 0; i < items.size(); ++i) {
+                if (const auto* ast = as_ast_node(items[i])) {
+                    if (const auto* lvl = std::get_if<ConstructLevel>(ast)) {
+                        if (matches_block_criteria(*lvl, block_class, block_name, block_identifier)) {
+                            items.erase_at(i);
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
     } // namespace
 
     ConstructLevel* ConstructLevel::find_block(
@@ -187,39 +442,7 @@ namespace lotm::ini {
         std::optional<std::string_view> block_identifier,
         bool recursive
     ) {
-        if (!recursive) {
-            for (auto& child : items) {
-                if (auto* lvl = std::get_if<ConstructLevel>(&child)) {
-                    if (matches_block_criteria(*lvl, block_class, block_name, block_identifier)) {
-                        return lvl;
-                    }
-                }
-            }
-            return nullptr;
-        }
-
-        std::vector<ConstructLevel*> stack;
-        for (auto it = items.rbegin(); it != items.rend(); ++it) {
-            if (auto* lvl = std::get_if<ConstructLevel>(&(*it))) {
-                stack.push_back(lvl);
-            }
-        }
-
-        while (!stack.empty()) {
-            ConstructLevel* current = stack.back();
-            stack.pop_back();
-
-            if (matches_block_criteria(*current, block_class, block_name, block_identifier)) {
-                return current;
-            }
-
-            for (auto it = current->items.rbegin(); it != current->items.rend(); ++it) {
-                if (auto* child_lvl = std::get_if<ConstructLevel>(&(*it))) {
-                    stack.push_back(child_lvl);
-                }
-            }
-        }
-        return nullptr;
+        return find_block_impl(items, block_class, block_name, block_identifier, recursive);
     }
 
     const ConstructLevel* ConstructLevel::find_block(
@@ -237,40 +460,7 @@ namespace lotm::ini {
         std::optional<std::string_view> block_identifier,
         bool recursive
     ) {
-        std::vector<ConstructLevel*> matches;
-        if (!recursive) {
-            for (auto& child : items) {
-                if (auto* lvl = std::get_if<ConstructLevel>(&child)) {
-                    if (matches_block_criteria(*lvl, block_class, block_name, block_identifier)) {
-                        matches.push_back(lvl);
-                    }
-                }
-            }
-            return matches;
-        }
-
-        std::vector<ConstructLevel*> stack;
-        for (auto it = items.rbegin(); it != items.rend(); ++it) {
-            if (auto* lvl = std::get_if<ConstructLevel>(&(*it))) {
-                stack.push_back(lvl);
-            }
-        }
-
-        while (!stack.empty()) {
-            ConstructLevel* current = stack.back();
-            stack.pop_back();
-
-            if (matches_block_criteria(*current, block_class, block_name, block_identifier)) {
-                matches.push_back(current);
-            }
-
-            for (auto it = current->items.rbegin(); it != current->items.rend(); ++it) {
-                if (auto* child_lvl = std::get_if<ConstructLevel>(&(*it))) {
-                    stack.push_back(child_lvl);
-                }
-            }
-        }
-        return matches;
+        return find_all_impl(items, block_class, block_name, block_identifier, recursive);
     }
 
     std::vector<const ConstructLevel*> ConstructLevel::find_all(
@@ -286,101 +476,19 @@ namespace lotm::ini {
     }
 
     std::optional<std::string> ConstructLevel::get_value(std::string_view key) const {
-        const std::string_view trimmed_key = detail::trim_view(key);
-        if (trimmed_key.empty()) {
-            return std::nullopt;
-        }
-
-        std::optional<std::string> last_match;
-        for (const auto& child : items) {
-            if (const auto* stmt = std::get_if<StatementNode>(&child)) {
-                if (const auto parsed = parse_statement_key_value(stmt->text)) {
-                    if (detail::iequals_ascii(parsed->key, trimmed_key)) {
-                        last_match = std::string{ parsed->value };
-                    }
-                }
-            }
-        }
-        return last_match;
+        return get_value_impl(items, key);
     }
 
     std::vector<std::string> ConstructLevel::get_all_values(std::string_view key) const {
-        std::vector<std::string> values;
-        const std::string_view trimmed_key = detail::trim_view(key);
-        if (trimmed_key.empty()) {
-            return values;
-        }
-
-        for (const auto& child : items) {
-            if (const auto* stmt = std::get_if<StatementNode>(&child)) {
-                if (const auto parsed = parse_statement_key_value(stmt->text)) {
-                    if (detail::iequals_ascii(parsed->key, trimmed_key)) {
-                        values.emplace_back(parsed->value);
-                    }
-                }
-            }
-        }
-        return values;
+        return get_all_values_impl(items, key);
     }
 
     void ConstructLevel::set_value(std::string_view key, std::string_view value) {
-        const std::string_view trimmed_key = detail::trim_view(key);
-        if (trimmed_key.empty()) {
-            throw std::invalid_argument("Property key cannot be empty.");
-        }
-
-        StatementNode* target_stmt = nullptr;
-        ParsedStatementView target_parsed;
-
-        for (auto& child : items) {
-            if (auto* stmt = std::get_if<StatementNode>(&child)) {
-                if (const auto parsed = parse_statement_key_value(stmt->text)) {
-                    if (detail::iequals_ascii(parsed->key, trimmed_key)) {
-                        target_stmt = stmt;
-                        target_parsed = *parsed;
-                    }
-                }
-            }
-        }
-
-        if (target_stmt != nullptr) {
-            apply_statement_value(*target_stmt, target_parsed, value);
-            return;
-        }
-
-        std::string new_line{ trimmed_key };
-        if (value.empty()) {
-            new_line.append(" =");
-        }
-        else {
-            new_line.append(" = ");
-            new_line.append(value);
-        }
-        items.push_back(StatementNode{ std::move(new_line), "" });
+        set_value_impl(items, key, value);
     }
 
     bool ConstructLevel::remove_value(std::string_view key, bool all_occurrences) {
-        const std::string_view trimmed_key = detail::trim_view(key);
-        if (trimmed_key.empty()) {
-            return false;
-        }
-
-        bool removed_any = false;
-        for (std::size_t i = items.size(); i > 0; --i) {
-            const std::size_t idx = i - 1;
-            if (const auto* stmt = std::get_if<StatementNode>(&items[idx])) {
-                if (const auto parsed = parse_statement_key_value(stmt->text)) {
-                    if (detail::iequals_ascii(parsed->key, trimmed_key)) {
-                        items.erase_at(idx);
-                        removed_any = true;
-                        if (!all_occurrences) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-        return removed_any;
+        return remove_value_impl(items, key, all_occurrences);
     }
 
     bool ConstructLevel::remove_block(
@@ -388,15 +496,7 @@ namespace lotm::ini {
         std::optional<std::string_view> block_name,
         std::optional<std::string_view> block_identifier
     ) {
-        for (std::size_t i = 0; i < items.size(); ++i) {
-            if (const auto* lvl = std::get_if<ConstructLevel>(&items[i])) {
-                if (matches_block_criteria(*lvl, block_class, block_name, block_identifier)) {
-                    items.erase_at(i);
-                    return true;
-                }
-            }
-        }
-        return false;
+        return remove_block_impl(items, block_class, block_name, block_identifier);
     }
 
     ConstructLevel* ConstructFile::find_block(
@@ -405,21 +505,7 @@ namespace lotm::ini {
         std::optional<std::string_view> block_identifier,
         bool recursive
     ) {
-        for (auto& root_item : items) {
-            if (auto* ast_node = std::get_if<AstNode>(&root_item)) {
-                if (auto* lvl = std::get_if<ConstructLevel>(ast_node)) {
-                    if (matches_block_criteria(*lvl, block_class, block_name, block_identifier)) {
-                        return lvl;
-                    }
-                    if (recursive) {
-                        if (auto* nested = lvl->find_block(block_class, block_name, block_identifier, true)) {
-                            return nested;
-                        }
-                    }
-                }
-            }
-        }
-        return nullptr;
+        return find_block_impl(items, block_class, block_name, block_identifier, recursive);
     }
 
     const ConstructLevel* ConstructFile::find_block(
@@ -437,21 +523,7 @@ namespace lotm::ini {
         std::optional<std::string_view> block_identifier,
         bool recursive
     ) {
-        std::vector<ConstructLevel*> matches;
-        for (auto& root_item : items) {
-            if (auto* ast_node = std::get_if<AstNode>(&root_item)) {
-                if (auto* lvl = std::get_if<ConstructLevel>(ast_node)) {
-                    if (matches_block_criteria(*lvl, block_class, block_name, block_identifier)) {
-                        matches.push_back(lvl);
-                    }
-                    if (recursive) {
-                        auto nested = lvl->find_all(block_class, block_name, block_identifier, true);
-                        matches.insert(matches.end(), nested.begin(), nested.end());
-                    }
-                }
-            }
-        }
-        return matches;
+        return find_all_impl(items, block_class, block_name, block_identifier, recursive);
     }
 
     std::vector<const ConstructLevel*> ConstructFile::find_all(
@@ -467,109 +539,19 @@ namespace lotm::ini {
     }
 
     std::optional<std::string> ConstructFile::get_value(std::string_view key) const {
-        const std::string_view trimmed_key = detail::trim_view(key);
-        if (trimmed_key.empty()) {
-            return std::nullopt;
-        }
-
-        std::optional<std::string> last_match;
-        for (const auto& root_item : items) {
-            if (const auto* ast_node = std::get_if<AstNode>(&root_item)) {
-                if (const auto* stmt = std::get_if<StatementNode>(ast_node)) {
-                    if (const auto parsed = parse_statement_key_value(stmt->text)) {
-                        if (detail::iequals_ascii(parsed->key, trimmed_key)) {
-                            last_match = std::string{ parsed->value };
-                        }
-                    }
-                }
-            }
-        }
-        return last_match;
+        return get_value_impl(items, key);
     }
 
     std::vector<std::string> ConstructFile::get_all_values(std::string_view key) const {
-        std::vector<std::string> values;
-        const std::string_view trimmed_key = detail::trim_view(key);
-        if (trimmed_key.empty()) {
-            return values;
-        }
-
-        for (const auto& root_item : items) {
-            if (const auto* ast_node = std::get_if<AstNode>(&root_item)) {
-                if (const auto* stmt = std::get_if<StatementNode>(ast_node)) {
-                    if (const auto parsed = parse_statement_key_value(stmt->text)) {
-                        if (detail::iequals_ascii(parsed->key, trimmed_key)) {
-                            values.emplace_back(parsed->value);
-                        }
-                    }
-                }
-            }
-        }
-        return values;
+        return get_all_values_impl(items, key);
     }
 
     void ConstructFile::set_value(std::string_view key, std::string_view value) {
-        const std::string_view trimmed_key = detail::trim_view(key);
-        if (trimmed_key.empty()) {
-            throw std::invalid_argument("Property key cannot be empty.");
-        }
-
-        StatementNode* target_stmt = nullptr;
-        ParsedStatementView target_parsed;
-
-        for (auto& root_item : items) {
-            if (auto* ast_node = std::get_if<AstNode>(&root_item)) {
-                if (auto* stmt = std::get_if<StatementNode>(ast_node)) {
-                    if (const auto parsed = parse_statement_key_value(stmt->text)) {
-                        if (detail::iequals_ascii(parsed->key, trimmed_key)) {
-                            target_stmt = stmt;
-                            target_parsed = *parsed;
-                        }
-                    }
-                }
-            }
-        }
-
-        if (target_stmt != nullptr) {
-            apply_statement_value(*target_stmt, target_parsed, value);
-            return;
-        }
-
-        std::string new_line{ trimmed_key };
-        if (value.empty()) {
-            new_line.append(" =");
-        }
-        else {
-            new_line.append(" = ");
-            new_line.append(value);
-        }
-        items.emplace_back(AstNode{ StatementNode{ std::move(new_line), "" } });
+        set_value_impl(items, key, value);
     }
 
     bool ConstructFile::remove_value(std::string_view key, bool all_occurrences) {
-        const std::string_view trimmed_key = detail::trim_view(key);
-        if (trimmed_key.empty()) {
-            return false;
-        }
-
-        bool removed_any = false;
-        for (std::size_t i = items.size(); i > 0; --i) {
-            const std::size_t idx = i - 1;
-            if (const auto* ast_node = std::get_if<AstNode>(&items[idx])) {
-                if (const auto* stmt = std::get_if<StatementNode>(ast_node)) {
-                    if (const auto parsed = parse_statement_key_value(stmt->text)) {
-                        if (detail::iequals_ascii(parsed->key, trimmed_key)) {
-                            items.erase_at(idx);
-                            removed_any = true;
-                            if (!all_occurrences) {
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return removed_any;
+        return remove_value_impl(items, key, all_occurrences);
     }
 
     bool ConstructFile::remove_block(
@@ -577,17 +559,7 @@ namespace lotm::ini {
         std::optional<std::string_view> block_name,
         std::optional<std::string_view> block_identifier
     ) {
-        for (std::size_t i = 0; i < items.size(); ++i) {
-            if (const auto* ast_node = std::get_if<AstNode>(&items[i])) {
-                if (const auto* lvl = std::get_if<ConstructLevel>(ast_node)) {
-                    if (matches_block_criteria(*lvl, block_class, block_name, block_identifier)) {
-                        items.erase_at(i);
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
+        return remove_block_impl(items, block_class, block_name, block_identifier);
     }
 
 } // namespace lotm::ini

@@ -141,32 +141,14 @@ namespace lotm::ini {
     }
 
     void ConstructFile::construct() {
-        const std::filesystem::path fs_path = lotm::core::utf8_to_path(name);
-        if (!detail::is_supported_config_ext(name) ||
-            (!file_content.has_value() && !std::filesystem::is_regular_file(fs_path))) {
-            throw IniParseError("file " + name + " invalid.");
-        }
-
-        if (file_content.has_value()) {
-            std::string transcoded;
-            const std::string_view utf8_view = detail::prepare_utf8_view(*file_content, transcoded);
-            if (!transcoded.empty()) {
-                *file_content = std::move(transcoded);
-            }
-            else if (utf8_view.size() != file_content->size()) {
-                *file_content = std::string{ utf8_view };
-            }
-            construct_from_utf8_view(*file_content, false);
-            return;
-        }
-
-        detail::MMapFile mmap{ fs_path };
-        std::string transcoded;
-        const std::string_view utf8_view = detail::prepare_utf8_view(mmap.view(), transcoded);
-        construct_from_utf8_view(utf8_view, false);
+        construct_impl(false);
     }
 
     void ConstructFile::construct_with_metadata() {
+        construct_impl(true);
+    }
+
+    void ConstructFile::construct_impl(bool preserve_metadata) {
         const std::filesystem::path fs_path = lotm::core::utf8_to_path(name);
         if (!detail::is_supported_config_ext(name) ||
             (!file_content.has_value() && !std::filesystem::is_regular_file(fs_path))) {
@@ -182,14 +164,14 @@ namespace lotm::ini {
             else if (utf8_view.size() != file_content->size()) {
                 *file_content = std::string{ utf8_view };
             }
-            construct_from_utf8_view(*file_content, true);
+            construct_from_utf8_view(*file_content, preserve_metadata);
             return;
         }
 
         detail::MMapFile mmap{ fs_path };
         std::string transcoded;
         const std::string_view utf8_view = detail::prepare_utf8_view(mmap.view(), transcoded);
-        construct_from_utf8_view(utf8_view, true);
+        construct_from_utf8_view(utf8_view, preserve_metadata);
     }
 
     void ConstructFile::construct_from_utf8_view(std::string_view content_view, bool preserve_metadata) {
@@ -298,6 +280,27 @@ namespace lotm::ini {
             }, context_stack_.back());
     }
 
+    template <typename NodeT>
+    NodeT* ConstructFile::push_context_node(NodeT&& node) {
+        using CleanNodeT = std::decay_t<NodeT>;
+        CleanNodeT* pushed_ptr = nullptr;
+        std::visit([&](auto* ptr) {
+            using PtrT = std::decay_t<decltype(ptr)>;
+            if constexpr (std::is_same_v<PtrT, ConstructFile*>) {
+                ptr->items.emplace_back(AstNode{ std::forward<NodeT>(node) });
+                pushed_ptr = &std::get<CleanNodeT>(std::get<AstNode>(ptr->items.back()));
+            }
+            else if constexpr (std::is_same_v<PtrT, ConstructLevel*>) {
+                ptr->items.emplace_back(std::forward<NodeT>(node));
+                pushed_ptr = &std::get<CleanNodeT>(ptr->items.back());
+            }
+            }, context_stack_.back());
+        context_stack_.emplace_back(pushed_ptr);
+        last_comment.clear();
+        ++current_level;
+        return pushed_ptr;
+    }
+
     void ConstructFile::parse_line(std::string_view raw_line, std::size_t line_num, LexedLine& lexed) {
         lex_line_into(raw_line, lexed);
 
@@ -340,7 +343,7 @@ namespace lotm::ini {
             std::string ident = detail::join_views(ident_span);
             validate_sage_bounds(n, ident);
 
-            ScriptNode new_script{
+            push_context_node(ScriptNode{
                 std::move(n),
                 std::move(ident),
                 std::move(last_comment),
@@ -348,24 +351,7 @@ namespace lotm::ini {
                 "EndScript",
                 "",
                 {}
-            };
-
-            ScriptNode* pushed_script = nullptr;
-            std::visit([&](auto* ptr) {
-                using PtrT = std::decay_t<decltype(ptr)>;
-                if constexpr (std::is_same_v<PtrT, ConstructFile*>) {
-                    ptr->items.emplace_back(AstNode{ std::move(new_script) });
-                    pushed_script = &std::get<ScriptNode>(std::get<AstNode>(ptr->items.back()));
-                }
-                else if constexpr (std::is_same_v<PtrT, ConstructLevel*>) {
-                    ptr->items.emplace_back(std::move(new_script));
-                    pushed_script = &std::get<ScriptNode>(ptr->items.back());
-                }
-                }, context_stack_.back());
-
-            context_stack_.emplace_back(pushed_script);
-            last_comment.clear();
-            ++current_level;
+                });
             return;
         }
 
@@ -389,30 +375,13 @@ namespace lotm::ini {
             std::string ident = detail::join_views(ident_span);
             validate_sage_bounds(block_name, ident, class_str);
 
-            ConstructLevel new_fcurve{
+            push_context_node(ConstructLevel{
                 std::move(class_str),
                 std::move(block_name),
                 std::move(ident),
                 std::move(last_comment),
                 lexed.comment
-            };
-
-            ConstructLevel* pushed_level = nullptr;
-            std::visit([&](auto* ptr) {
-                using PtrT = std::decay_t<decltype(ptr)>;
-                if constexpr (std::is_same_v<PtrT, ConstructFile*>) {
-                    ptr->items.emplace_back(AstNode{ std::move(new_fcurve) });
-                    pushed_level = &std::get<ConstructLevel>(std::get<AstNode>(ptr->items.back()));
-                }
-                else if constexpr (std::is_same_v<PtrT, ConstructLevel*>) {
-                    ptr->items.emplace_back(std::move(new_fcurve));
-                    pushed_level = &std::get<ConstructLevel>(ptr->items.back());
-                }
-                }, context_stack_.back());
-
-            context_stack_.emplace_back(pushed_level);
-            last_comment.clear();
-            ++current_level;
+                });
             return;
         }
 
@@ -505,30 +474,13 @@ namespace lotm::ini {
 
         validate_sage_bounds(block_name, block_identifier, class_token);
 
-        ConstructLevel new_block{
+        push_context_node(ConstructLevel{
             std::move(class_token),
             std::move(block_name),
             std::move(block_identifier),
             std::move(last_comment),
             std::string{ inline_comment }
-        };
-
-        ConstructLevel* pushed_level = nullptr;
-        std::visit([&](auto* ptr) {
-            using PtrT = std::decay_t<decltype(ptr)>;
-            if constexpr (std::is_same_v<PtrT, ConstructFile*>) {
-                ptr->items.emplace_back(AstNode{ std::move(new_block) });
-                pushed_level = &std::get<ConstructLevel>(std::get<AstNode>(ptr->items.back()));
-            }
-            else if constexpr (std::is_same_v<PtrT, ConstructLevel*>) {
-                ptr->items.emplace_back(std::move(new_block));
-                pushed_level = &std::get<ConstructLevel>(ptr->items.back());
-            }
-            }, context_stack_.back());
-
-        context_stack_.emplace_back(pushed_level);
-        last_comment.clear();
-        ++current_level;
+            });
         return true;
     }
 

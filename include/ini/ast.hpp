@@ -245,6 +245,55 @@ namespace lotm::ini {
         std::vector<std::unique_ptr<T>> retired_{};
     };
 
+    /**
+     * @brief CRTP mixin providing standard sequence operations over an underlying StableVector member.
+     */
+    template <typename Derived, typename ElementT>
+    struct SequenceMixin {
+        using value_type = ElementT;
+        using size_type = std::size_t;
+        using iterator = typename StableVector<ElementT>::iterator;
+        using const_iterator = typename StableVector<ElementT>::const_iterator;
+
+        [[nodiscard]] std::size_t size() const noexcept { return storage().size(); }
+        [[nodiscard]] bool empty() const noexcept { return storage().empty(); }
+
+        void append(ElementT item) { storage().push_back(std::move(item)); }
+
+        [[nodiscard]] ElementT& operator[](std::size_t index) noexcept { return storage()[index]; }
+        [[nodiscard]] const ElementT& operator[](std::size_t index) const noexcept { return storage()[index]; }
+
+        [[nodiscard]] iterator begin() noexcept { return storage().begin(); }
+        [[nodiscard]] iterator end() noexcept { return storage().end(); }
+        [[nodiscard]] const_iterator begin() const noexcept { return storage().begin(); }
+        [[nodiscard]] const_iterator end() const noexcept { return storage().end(); }
+        [[nodiscard]] const_iterator cbegin() const noexcept { return storage().cbegin(); }
+        [[nodiscard]] const_iterator cend() const noexcept { return storage().cend(); }
+
+        [[nodiscard]] constexpr bool operator==(const SequenceMixin&) const noexcept = default;
+
+    private:
+        [[nodiscard]] constexpr StableVector<ElementT>& storage() noexcept {
+            auto& self = static_cast<Derived&>(*this);
+            if constexpr (requires { (self.items); }) {
+                return self.items;
+            }
+            else {
+                return self.entries;
+            }
+        }
+
+        [[nodiscard]] constexpr const StableVector<ElementT>& storage() const noexcept {
+            const auto& self = static_cast<const Derived&>(*this);
+            if constexpr (requires { (self.items); }) {
+                return self.items;
+            }
+            else {
+                return self.entries;
+            }
+        }
+    };
+
     inline constexpr std::string_view LEVEL_INDENT = "    ";
     inline constexpr std::array<std::string_view, 3> INI_ENDS = { "End", "END", "end" };
     inline constexpr std::size_t MAX_INI_DEPTH = 16;
@@ -407,7 +456,7 @@ namespace lotm::ini {
     /**
      * @brief Represents an inner block or defined object within a parsed SAGE configuration file.
      */
-    struct ConstructLevel {
+    struct ConstructLevel : SequenceMixin<ConstructLevel, AstNode> {
         std::string _class;
         std::string name;
         std::string identifier;
@@ -433,11 +482,6 @@ namespace lotm::ini {
         ConstructLevel& operator=(const ConstructLevel&);
         ConstructLevel(ConstructLevel&&) noexcept;
         ConstructLevel& operator=(ConstructLevel&&) noexcept;
-
-        [[nodiscard]] std::size_t size() const noexcept;
-        [[nodiscard]] bool empty() const noexcept;
-
-        void append(AstNode item);
 
         [[nodiscard]] ConstructLevel* find_block(
             std::string_view block_class,
@@ -477,16 +521,6 @@ namespace lotm::ini {
             std::optional<std::string_view> block_identifier = std::nullopt
         );
 
-        [[nodiscard]] AstNode& operator[](std::size_t index);
-        [[nodiscard]] const AstNode& operator[](std::size_t index) const;
-
-        [[nodiscard]] StableVector<AstNode>::iterator begin() noexcept;
-        [[nodiscard]] StableVector<AstNode>::iterator end() noexcept;
-        [[nodiscard]] StableVector<AstNode>::const_iterator begin() const noexcept;
-        [[nodiscard]] StableVector<AstNode>::const_iterator end() const noexcept;
-        [[nodiscard]] StableVector<AstNode>::const_iterator cbegin() const noexcept;
-        [[nodiscard]] StableVector<AstNode>::const_iterator cend() const noexcept;
-
         [[nodiscard]] std::string print(int level = 0, std::string_view file_type = ".ini") const;
 
         [[nodiscard]] bool operator==(const ConstructLevel&) const;
@@ -518,18 +552,6 @@ namespace lotm::ini {
     inline ConstructLevel& ConstructLevel::operator=(const ConstructLevel&) = default;
     inline ConstructLevel::ConstructLevel(ConstructLevel&&) noexcept = default;
     inline ConstructLevel& ConstructLevel::operator=(ConstructLevel&&) noexcept = default;
-
-    inline std::size_t ConstructLevel::size() const noexcept { return items.size(); }
-    inline bool ConstructLevel::empty() const noexcept { return items.empty(); }
-    inline void ConstructLevel::append(AstNode item) { items.push_back(std::move(item)); }
-    inline AstNode& ConstructLevel::operator[](std::size_t index) { return items[index]; }
-    inline const AstNode& ConstructLevel::operator[](std::size_t index) const { return items[index]; }
-    inline StableVector<AstNode>::iterator ConstructLevel::begin() noexcept { return items.begin(); }
-    inline StableVector<AstNode>::iterator ConstructLevel::end() noexcept { return items.end(); }
-    inline StableVector<AstNode>::const_iterator ConstructLevel::begin() const noexcept { return items.begin(); }
-    inline StableVector<AstNode>::const_iterator ConstructLevel::end() const noexcept { return items.end(); }
-    inline StableVector<AstNode>::const_iterator ConstructLevel::cbegin() const noexcept { return items.cbegin(); }
-    inline StableVector<AstNode>::const_iterator ConstructLevel::cend() const noexcept { return items.cend(); }
     inline bool ConstructLevel::operator==(const ConstructLevel&) const = default;
 
     /**
@@ -540,7 +562,7 @@ namespace lotm::ini {
     /**
      * @brief Represents a single localized string entry inside a SAGE .str file.
      */
-    struct StrEntry {
+    struct StrEntry : SequenceMixin<StrEntry, StrChildNode> {
         std::string category{};
         std::string identifier{};
         std::string comment{};
@@ -570,21 +592,6 @@ namespace lotm::ini {
             validate_sage_bounds(category, identifier);
         }
 
-        [[nodiscard]] std::size_t size() const noexcept { return items.size(); }
-        [[nodiscard]] bool empty() const noexcept { return items.empty(); }
-
-        void append(StrChildNode item) { items.push_back(std::move(item)); }
-
-        [[nodiscard]] StrChildNode& operator[](std::size_t index) { return items[index]; }
-        [[nodiscard]] const StrChildNode& operator[](std::size_t index) const { return items[index]; }
-
-        [[nodiscard]] auto begin() noexcept { return items.begin(); }
-        [[nodiscard]] auto end() noexcept { return items.end(); }
-        [[nodiscard]] auto begin() const noexcept { return items.begin(); }
-        [[nodiscard]] auto end() const noexcept { return items.end(); }
-        [[nodiscard]] auto cbegin() const noexcept { return items.cbegin(); }
-        [[nodiscard]] auto cend() const noexcept { return items.cend(); }
-
         [[nodiscard]] std::string print() const;
 
         [[nodiscard]] bool operator==(const StrEntry&) const = default;
@@ -598,7 +605,7 @@ namespace lotm::ini {
     /**
      * @brief Flat AST representation for SAGE .str localization files.
      */
-    struct StrDocument {
+    struct StrDocument : SequenceMixin<StrDocument, StrDocEntry> {
         std::string name{};
         StableVector<StrDocEntry> entries{};
         std::vector<std::string> errors{};
@@ -614,21 +621,6 @@ namespace lotm::ini {
             entries(std::move(doc_entries)),
             errors(std::move(doc_errors)) {
         }
-
-        [[nodiscard]] std::size_t size() const noexcept { return entries.size(); }
-        [[nodiscard]] bool empty() const noexcept { return entries.empty(); }
-
-        void append(StrDocEntry entry) { entries.push_back(std::move(entry)); }
-
-        [[nodiscard]] StrDocEntry& operator[](std::size_t index) { return entries[index]; }
-        [[nodiscard]] const StrDocEntry& operator[](std::size_t index) const { return entries[index]; }
-
-        [[nodiscard]] auto begin() noexcept { return entries.begin(); }
-        [[nodiscard]] auto end() noexcept { return entries.end(); }
-        [[nodiscard]] auto begin() const noexcept { return entries.begin(); }
-        [[nodiscard]] auto end() const noexcept { return entries.end(); }
-        [[nodiscard]] auto cbegin() const noexcept { return entries.cbegin(); }
-        [[nodiscard]] auto cend() const noexcept { return entries.cend(); }
 
         [[nodiscard]] std::string print() const;
 

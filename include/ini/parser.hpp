@@ -69,7 +69,7 @@ namespace lotm::ini {
     /**
      * @brief Root AST representation of a fully parsed SAGE .ini, .inc, or .str configuration document.
      */
-    class ConstructFile {
+    class ConstructFile : public SequenceMixin<ConstructFile, RootItem> {
     public:
         std::string name{};
         std::vector<std::string> defines{};
@@ -100,10 +100,7 @@ namespace lotm::ini {
         void construct();
         void construct_with_metadata();
 
-        [[nodiscard]] std::size_t size() const noexcept { return items.size(); }
-        [[nodiscard]] bool empty() const noexcept { return items.empty(); }
-
-        void append(RootItem item) { items.push_back(std::move(item)); }
+        using SequenceMixin<ConstructFile, RootItem>::append;
         void append(AstNode item) { items.emplace_back(std::move(item)); }
         void append(StrEntry item) { items.emplace_back(std::move(item)); }
 
@@ -145,16 +142,6 @@ namespace lotm::ini {
             std::optional<std::string_view> block_identifier = std::nullopt
         );
 
-        [[nodiscard]] RootItem& operator[](std::size_t index) { return items[index]; }
-        [[nodiscard]] const RootItem& operator[](std::size_t index) const { return items[index]; }
-
-        [[nodiscard]] auto begin() noexcept { return items.begin(); }
-        [[nodiscard]] auto end() noexcept { return items.end(); }
-        [[nodiscard]] auto begin() const noexcept { return items.begin(); }
-        [[nodiscard]] auto end() const noexcept { return items.end(); }
-        [[nodiscard]] auto cbegin() const noexcept { return items.cbegin(); }
-        [[nodiscard]] auto cend() const noexcept { return items.cend(); }
-
         [[nodiscard]] std::string print() const;
 
         [[nodiscard]] bool operator==(const ConstructFile& other) const noexcept {
@@ -173,9 +160,14 @@ namespace lotm::ini {
         std::vector<std::vector<DelimiterRule>> active_rules_{};
         std::vector<ContextPtr> context_stack_{};
 
+        void construct_impl(bool preserve_metadata);
         void construct_from_utf8_view(std::string_view content_view, bool preserve_metadata = false);
         [[nodiscard]] int get_lookup_level() const noexcept;
         void append_to_active_context(AstNode node);
+
+        template <typename NodeT>
+        NodeT* push_context_node(NodeT&& node);
+
         void parse_line(std::string_view raw_line, std::size_t line_num, LexedLine& lex_scratch);
         void handle_empty_line(std::string_view raw_line);
         [[nodiscard]] bool handle_block_start(

@@ -71,6 +71,96 @@ namespace lotm::python {
             return result;
         }
 
+        template <typename ContainerT, typename ItemT, auto StorageMember>
+        void bind_sequence_protocol(
+            nb::class_<ContainerT>& cls,
+            const char* prop_name,
+            const char* prop_doc,
+            const char* item_arg_name,
+            const char* append_doc
+        ) {
+            cls.def_prop_rw(prop_name,
+                [](nb::handle self) {
+                    auto& obj = nb::cast<ContainerT&>(self);
+                    return make_reference_list<lotm::ini::StableVector<ItemT>, ItemT>(self, obj.*StorageMember);
+                },
+                [](ContainerT& self, std::vector<ItemT> new_items) {
+                    (self.*StorageMember).assign_from(std::move(new_items));
+                },
+                prop_doc)
+                .def("append", [](ContainerT& self, ItemT item) {
+                self.append(std::move(item));
+                    }, nb::arg(item_arg_name), append_doc)
+                .def("__len__", [](const ContainerT& self) { return self.size(); })
+                .def("__getitem__", [](ContainerT& self, Py_ssize_t index) -> ItemT& {
+                return (self.*StorageMember)[normalize_py_index(index, self.size())];
+                    }, nb::arg("index"), nb::rv_policy::reference_internal)
+                .def("__setitem__", [](ContainerT& self, Py_ssize_t index, ItemT item) {
+                (self.*StorageMember).replace_at(normalize_py_index(index, self.size()), std::move(item));
+                    }, nb::arg("index"), nb::arg(item_arg_name))
+                .def("__iter__", [](ContainerT& self) {
+                return nb::make_iterator<nb::rv_policy::reference_internal>(
+                    nb::type<ContainerT>(), "iterator", self.begin(), self.end()
+                );
+                    }, nb::keep_alive<0, 1>());
+        }
+
+        template <typename ContainerT>
+        void bind_ast_query_methods(nb::class_<ContainerT>& cls) {
+            cls.def("find_block",
+                static_cast<lotm::ini::ConstructLevel * (ContainerT::*)(
+                    std::string_view,
+                    std::optional<std::string_view>,
+                    std::optional<std::string_view>,
+                    bool
+                    )>(&ContainerT::find_block),
+                nb::arg("block_class"),
+                nb::arg("name") = nb::none(),
+                nb::arg("identifier") = nb::none(),
+                nb::kw_only(),
+                nb::arg("recursive") = false,
+                nb::rv_policy::reference_internal,
+                "Finds the first ConstructLevel matching block_class, optional name, and optional identifier")
+                .def("find_all", [](nb::handle self,
+                    std::string_view block_class,
+                    std::optional<std::string_view> name,
+                    std::optional<std::string_view> identifier,
+                    bool recursive) {
+                        auto& obj = nb::cast<ContainerT&>(self);
+                        return make_block_reference_list(self, obj.find_all(block_class, name, identifier, recursive));
+                    },
+                    nb::arg("block_class"),
+                    nb::arg("name") = nb::none(),
+                    nb::arg("identifier") = nb::none(),
+                    nb::kw_only(),
+                    nb::arg("recursive") = false,
+                    "Finds all ConstructLevel blocks matching block_class, optional name, and optional identifier")
+                .def("get_value", [](const ContainerT& self, std::string_view key, std::optional<std::string> default_val) {
+                auto found = self.get_value(key);
+                return found.has_value() ? found : default_val;
+                    },
+                    nb::arg("key"),
+                    nb::arg("default") = nb::none(),
+                    "Returns the last matching property value (SAGE override precedence) or default")
+                .def("get_all_values", &ContainerT::get_all_values,
+                    nb::arg("key"),
+                    "Returns all matching property values in document order")
+                .def("set_value", &ContainerT::set_value,
+                    nb::arg("key"),
+                    nb::arg("value"),
+                    "Updates the last matching property in-place (preserving formatting and comments) or appends a new statement")
+                .def("remove_value", &ContainerT::remove_value,
+                    nb::arg("key"),
+                    nb::kw_only(),
+                    nb::arg("all_occurrences") = false,
+                    "Removes the last (or all) matching property statements")
+                .def("remove_block", &ContainerT::remove_block,
+                    nb::arg("block_class"),
+                    nb::arg("name") = nb::none(),
+                    nb::arg("identifier") = nb::none(),
+                    "Removes the first matching direct child ConstructLevel");
+        }
+
     } // namespace
 
     void register_ini_bindings(nb::module_& m) {
@@ -176,7 +266,10 @@ namespace lotm::python {
                 "' lines=" + std::to_string(self.content.size()) + ">";
                 });
 
-        nb::class_<lotm::ini::ConstructLevel>(sub, "ConstructLevel", "Represents an inner block or defined object within a SAGE configuration file")
+        auto cls_construct_level = nb::class_<lotm::ini::ConstructLevel>(
+            sub, "ConstructLevel", "Represents an inner block or defined object within a SAGE configuration file"
+        );
+        cls_construct_level
             .def(nb::init<std::string, std::string, std::string, std::string, std::string, std::string, std::string>(),
                 nb::arg("_class") = "",
                 nb::arg("name") = "",
@@ -209,81 +302,22 @@ namespace lotm::python {
             .def_rw("comment", &lotm::ini::ConstructLevel::comment, "Leading comment block")
             .def_rw("header_comment", &lotm::ini::ConstructLevel::header_comment, "Inline comment on the header line")
             .def_rw("end_token", &lotm::ini::ConstructLevel::end_token, "Closing keyword (End, END, end)")
-            .def_rw("end_comment", &lotm::ini::ConstructLevel::end_comment, "Inline comment on the closing line")
-            .def_prop_rw("items",
-                [](nb::handle self) {
-                    auto& obj = nb::cast<lotm::ini::ConstructLevel&>(self);
-                    return make_reference_list<lotm::ini::StableVector<lotm::ini::AstNode>, lotm::ini::AstNode>(self, obj.items);
-                },
-                [](lotm::ini::ConstructLevel& self, std::vector<lotm::ini::AstNode> new_items) {
-                    self.items.assign_from(std::move(new_items));
-                },
-                "Child AST nodes contained in this block")
-            .def("append", &lotm::ini::ConstructLevel::append, nb::arg("item"), "Appends a child AST node to this block")
-            .def("find_block",
-                static_cast<lotm::ini::ConstructLevel * (lotm::ini::ConstructLevel::*)(
-                    std::string_view,
-                    std::optional<std::string_view>,
-                    std::optional<std::string_view>,
-                    bool
-                    )>(&lotm::ini::ConstructLevel::find_block),
-                nb::arg("block_class"),
-                nb::arg("name") = nb::none(),
-                nb::arg("identifier") = nb::none(),
-                nb::kw_only(),
-                nb::arg("recursive") = false,
-                nb::rv_policy::reference_internal,
-                "Finds the first child ConstructLevel matching block_class, optional name, and optional identifier")
-            .def("find_all", [](nb::handle self,
-                std::string_view block_class,
-                std::optional<std::string_view> name,
-                std::optional<std::string_view> identifier,
-                bool recursive) {
-                    auto& obj = nb::cast<lotm::ini::ConstructLevel&>(self);
-                    return make_block_reference_list(self, obj.find_all(block_class, name, identifier, recursive));
-                },
-                nb::arg("block_class"),
-                nb::arg("name") = nb::none(),
-                nb::arg("identifier") = nb::none(),
-                nb::kw_only(),
-                nb::arg("recursive") = false,
-                "Finds all child ConstructLevel blocks matching block_class, optional name, and optional identifier")
-            .def("get_value", [](const lotm::ini::ConstructLevel& self, std::string_view key, std::optional<std::string> default_val) {
-            auto found = self.get_value(key);
-            return found.has_value() ? found : default_val;
-                },
-                nb::arg("key"),
-                nb::arg("default") = nb::none(),
-                "Returns the last matching property value in this block (SAGE override precedence) or default")
-            .def("get_all_values", &lotm::ini::ConstructLevel::get_all_values,
-                nb::arg("key"),
-                "Returns all matching property values in this block in document order")
-            .def("set_value", &lotm::ini::ConstructLevel::set_value,
-                nb::arg("key"),
-                nb::arg("value"),
-                "Updates the last matching property in-place (preserving formatting and comments) or appends a new statement")
-            .def("remove_value", &lotm::ini::ConstructLevel::remove_value,
-                nb::arg("key"),
-                nb::kw_only(),
-                nb::arg("all_occurrences") = false,
-                "Removes the last (or all) matching property statements from this block")
-            .def("remove_block", &lotm::ini::ConstructLevel::remove_block,
-                nb::arg("block_class"),
-                nb::arg("name") = nb::none(),
-                nb::arg("identifier") = nb::none(),
-                "Removes the first matching direct child ConstructLevel from this block")
-            .def("__len__", &lotm::ini::ConstructLevel::size)
-            .def("__getitem__", [](lotm::ini::ConstructLevel& self, Py_ssize_t index) -> lotm::ini::AstNode& {
-            return self.items[normalize_py_index(index, self.size())];
-                }, nb::arg("index"), nb::rv_policy::reference_internal)
-            .def("__setitem__", [](lotm::ini::ConstructLevel& self, Py_ssize_t index, lotm::ini::AstNode item) {
-            self.items.replace_at(normalize_py_index(index, self.size()), std::move(item));
-                }, nb::arg("index"), nb::arg("item"))
-            .def("__iter__", [](lotm::ini::ConstructLevel& self) {
-            return nb::make_iterator<nb::rv_policy::reference_internal>(
-                nb::type<lotm::ini::ConstructLevel>(), "iterator", self.begin(), self.end()
-            );
-                }, nb::keep_alive<0, 1>())
+            .def_rw("end_comment", &lotm::ini::ConstructLevel::end_comment, "Inline comment on the closing line");
+
+        bind_sequence_protocol<
+            lotm::ini::ConstructLevel,
+            lotm::ini::AstNode,
+            &lotm::ini::ConstructLevel::items
+        >(
+            cls_construct_level,
+            "items",
+            "Child AST nodes contained in this block",
+            "item",
+            "Appends a child AST node to this block"
+        );
+        bind_ast_query_methods(cls_construct_level);
+
+        cls_construct_level
             .def("print", &lotm::ini::ConstructLevel::print,
                 nb::arg("level") = 0,
                 nb::arg("file_type") = ".ini",
@@ -297,7 +331,10 @@ namespace lotm::python {
                 "' identifier='" + self.identifier + "' items=" + std::to_string(self.items.size()) + ">";
                 });
 
-        nb::class_<lotm::ini::StrEntry>(sub, "StrEntry", "Represents a single localized string entry inside a SAGE .str file")
+        auto cls_str_entry = nb::class_<lotm::ini::StrEntry>(
+            sub, "StrEntry", "Represents a single localized string entry inside a SAGE .str file"
+        );
+        cls_str_entry
             .def(nb::init<std::string, std::string, std::string, std::string, std::string, std::string, std::vector<lotm::ini::StrChildNode>>(),
                 nb::arg("category"),
                 nb::arg("identifier"),
@@ -323,29 +360,21 @@ namespace lotm::python {
             .def_rw("comment", &lotm::ini::StrEntry::comment, "Leading comment block")
             .def_rw("header_comment", &lotm::ini::StrEntry::header_comment, "Inline comment on the header line")
             .def_rw("end_token", &lotm::ini::StrEntry::end_token, "Closing keyword")
-            .def_rw("end_comment", &lotm::ini::StrEntry::end_comment, "Inline comment on the closing line")
-            .def_prop_rw("items",
-                [](nb::handle self) {
-                    auto& obj = nb::cast<lotm::ini::StrEntry&>(self);
-                    return make_reference_list<lotm::ini::StableVector<lotm::ini::StrChildNode>, lotm::ini::StrChildNode>(self, obj.items);
-                },
-                [](lotm::ini::StrEntry& self, std::vector<lotm::ini::StrChildNode> new_items) {
-                    self.items.assign_from(std::move(new_items));
-                },
-                "Child comment and statement nodes")
-            .def("append", &lotm::ini::StrEntry::append, nb::arg("item"), "Appends a child node to this localization entry")
-            .def("__len__", &lotm::ini::StrEntry::size)
-            .def("__getitem__", [](lotm::ini::StrEntry& self, Py_ssize_t index) -> lotm::ini::StrChildNode& {
-            return self.items[normalize_py_index(index, self.size())];
-                }, nb::arg("index"), nb::rv_policy::reference_internal)
-            .def("__setitem__", [](lotm::ini::StrEntry& self, Py_ssize_t index, lotm::ini::StrChildNode item) {
-            self.items.replace_at(normalize_py_index(index, self.size()), std::move(item));
-                }, nb::arg("index"), nb::arg("item"))
-            .def("__iter__", [](lotm::ini::StrEntry& self) {
-            return nb::make_iterator<nb::rv_policy::reference_internal>(
-                nb::type<lotm::ini::StrEntry>(), "iterator", self.begin(), self.end()
-            );
-                }, nb::keep_alive<0, 1>())
+            .def_rw("end_comment", &lotm::ini::StrEntry::end_comment, "Inline comment on the closing line");
+
+        bind_sequence_protocol<
+            lotm::ini::StrEntry,
+            lotm::ini::StrChildNode,
+            &lotm::ini::StrEntry::items
+        >(
+            cls_str_entry,
+            "items",
+            "Child comment and statement nodes",
+            "item",
+            "Appends a child node to this localization entry"
+        );
+
+        cls_str_entry
             .def("print", &lotm::ini::StrEntry::print,
                 nb::call_guard<nb::gil_scoped_release>(),
                 "Serializes the localization entry")
@@ -356,35 +385,30 @@ namespace lotm::python {
             return "<StrEntry category='" + self.category + "' identifier='" + self.identifier + "'>";
                 });
 
-        nb::class_<lotm::ini::StrDocument>(sub, "StrDocument", "Flat AST representation for SAGE .str localization files")
+        auto cls_str_doc = nb::class_<lotm::ini::StrDocument>(
+            sub, "StrDocument", "Flat AST representation for SAGE .str localization files"
+        );
+        cls_str_doc
             .def(nb::init<std::string, std::vector<lotm::ini::StrDocEntry>, std::vector<std::string>>(),
                 nb::arg("name") = "",
                 nb::arg("entries") = std::vector<lotm::ini::StrDocEntry>{},
                 nb::arg("errors") = std::vector<std::string>{})
             .def_rw("name", &lotm::ini::StrDocument::name, "Document file path or identifier")
-            .def_prop_rw("entries",
-                [](nb::handle self) {
-                    auto& obj = nb::cast<lotm::ini::StrDocument&>(self);
-                    return make_reference_list<lotm::ini::StableVector<lotm::ini::StrDocEntry>, lotm::ini::StrDocEntry>(self, obj.entries);
-                },
-                [](lotm::ini::StrDocument& self, std::vector<lotm::ini::StrDocEntry> new_entries) {
-                    self.entries.assign_from(std::move(new_entries));
-                },
-                "Top-level localization entries and comments")
-            .def_rw("errors", &lotm::ini::StrDocument::errors, "Non-strict parsing warnings and errors")
-            .def("append", &lotm::ini::StrDocument::append, nb::arg("entry"), "Appends a top-level entry to the document")
-            .def("__len__", &lotm::ini::StrDocument::size)
-            .def("__getitem__", [](lotm::ini::StrDocument& self, Py_ssize_t index) -> lotm::ini::StrDocEntry& {
-            return self.entries[normalize_py_index(index, self.size())];
-                }, nb::arg("index"), nb::rv_policy::reference_internal)
-            .def("__setitem__", [](lotm::ini::StrDocument& self, Py_ssize_t index, lotm::ini::StrDocEntry entry) {
-            self.entries.replace_at(normalize_py_index(index, self.size()), std::move(entry));
-                }, nb::arg("index"), nb::arg("entry"))
-            .def("__iter__", [](lotm::ini::StrDocument& self) {
-            return nb::make_iterator<nb::rv_policy::reference_internal>(
-                nb::type<lotm::ini::StrDocument>(), "iterator", self.begin(), self.end()
-            );
-                }, nb::keep_alive<0, 1>())
+            .def_rw("errors", &lotm::ini::StrDocument::errors, "Non-strict parsing warnings and errors");
+
+        bind_sequence_protocol<
+            lotm::ini::StrDocument,
+            lotm::ini::StrDocEntry,
+            &lotm::ini::StrDocument::entries
+        >(
+            cls_str_doc,
+            "entries",
+            "Top-level localization entries and comments",
+            "entry",
+            "Appends a top-level entry to the document"
+        );
+
+        cls_str_doc
             .def("print", &lotm::ini::StrDocument::print,
                 nb::call_guard<nb::gil_scoped_release>(),
                 "Serializes the entire .str document")
@@ -417,7 +441,10 @@ namespace lotm::python {
             nb::arg("file_path"), nb::arg("strict"), nb::arg("file_buffer"),
             "Parses a SAGE .str file directly from a Python memoryview or bytes buffer");
 
-        nb::class_<lotm::ini::ConstructFile>(sub, "ConstructFile", "Root AST representation of a parsed SAGE .ini, .inc, or .str document")
+        auto cls_construct_file = nb::class_<lotm::ini::ConstructFile>(
+            sub, "ConstructFile", "Root AST representation of a parsed SAGE .ini, .inc, or .str document"
+        );
+        cls_construct_file
             .def("__init__", [](lotm::ini::ConstructFile* t,
                 const std::filesystem::path& name,
                 bool strict,
@@ -475,88 +502,27 @@ namespace lotm::python {
             .def_rw("start_level", &lotm::ini::ConstructFile::start_level, "Recognized starting nesting depth")
             .def_rw("strict", &lotm::ini::ConstructFile::strict, "Whether to raise IniParseError on delimiter mismatches")
             .def_rw("file_content", &lotm::ini::ConstructFile::file_content, "Optional in-memory source buffer")
-            .def_prop_rw("items",
-                [](nb::handle self) {
-                    auto& obj = nb::cast<lotm::ini::ConstructFile&>(self);
-                    return make_reference_list<lotm::ini::StableVector<lotm::ini::RootItem>, lotm::ini::RootItem>(self, obj.items);
-                },
-                [](lotm::ini::ConstructFile& self, std::vector<lotm::ini::RootItem> new_items) {
-                    self.items.assign_from(std::move(new_items));
-                },
-                "Top-level AST nodes or StrEntry items")
             .def_rw("current_level", &lotm::ini::ConstructFile::current_level, "Current parser nesting level")
             .def_rw("last_comment", &lotm::ini::ConstructFile::last_comment, "Buffered comment awaiting attachment")
             .def_rw("errors", &lotm::ini::ConstructFile::errors, "Accumulated non-strict parsing warnings and errors")
             .def("construct", &lotm::ini::ConstructFile::construct,
                 nb::call_guard<nb::gil_scoped_release>(),
-                "Parses or re-parses the document into its AST representation")
-            .def("append", static_cast<void (lotm::ini::ConstructFile::*)(lotm::ini::RootItem)>(&lotm::ini::ConstructFile::append),
-                nb::arg("item"),
-                "Appends a top-level AST node or StrEntry to the document")
-            .def("find_block",
-                static_cast<lotm::ini::ConstructLevel * (lotm::ini::ConstructFile::*)(
-                    std::string_view,
-                    std::optional<std::string_view>,
-                    std::optional<std::string_view>,
-                    bool
-                    )>(&lotm::ini::ConstructFile::find_block),
-                nb::arg("block_class"),
-                nb::arg("name") = nb::none(),
-                nb::arg("identifier") = nb::none(),
-                nb::kw_only(),
-                nb::arg("recursive") = false,
-                nb::rv_policy::reference_internal,
-                "Finds the first top-level (or nested if recursive=True) ConstructLevel matching block_class, optional name, and optional identifier")
-            .def("find_all", [](nb::handle self,
-                std::string_view block_class,
-                std::optional<std::string_view> name,
-                std::optional<std::string_view> identifier,
-                bool recursive) {
-                    auto& obj = nb::cast<lotm::ini::ConstructFile&>(self);
-                    return make_block_reference_list(self, obj.find_all(block_class, name, identifier, recursive));
-                },
-                nb::arg("block_class"),
-                nb::arg("name") = nb::none(),
-                nb::arg("identifier") = nb::none(),
-                nb::kw_only(),
-                nb::arg("recursive") = false,
-                "Finds all top-level (or nested if recursive=True) ConstructLevel blocks matching block_class, optional name, and optional identifier")
-            .def("get_value", [](const lotm::ini::ConstructFile& self, std::string_view key, std::optional<std::string> default_val) {
-            auto found = self.get_value(key);
-            return found.has_value() ? found : default_val;
-                },
-                nb::arg("key"),
-                nb::arg("default") = nb::none(),
-                "Returns the last matching top-level property value (SAGE override precedence) or default")
-            .def("get_all_values", &lotm::ini::ConstructFile::get_all_values,
-                nb::arg("key"),
-                "Returns all matching top-level property values in document order")
-            .def("set_value", &lotm::ini::ConstructFile::set_value,
-                nb::arg("key"),
-                nb::arg("value"),
-                "Updates the last matching top-level property in-place (preserving formatting and comments) or appends a new statement")
-            .def("remove_value", &lotm::ini::ConstructFile::remove_value,
-                nb::arg("key"),
-                nb::kw_only(),
-                nb::arg("all_occurrences") = false,
-                "Removes the last (or all) matching top-level property statements")
-            .def("remove_block", &lotm::ini::ConstructFile::remove_block,
-                nb::arg("block_class"),
-                nb::arg("name") = nb::none(),
-                nb::arg("identifier") = nb::none(),
-                "Removes the first matching top-level ConstructLevel from this document")
-            .def("__len__", &lotm::ini::ConstructFile::size)
-            .def("__getitem__", [](lotm::ini::ConstructFile& self, Py_ssize_t index) -> lotm::ini::RootItem& {
-            return self.items[normalize_py_index(index, self.size())];
-                }, nb::arg("index"), nb::rv_policy::reference_internal)
-            .def("__setitem__", [](lotm::ini::ConstructFile& self, Py_ssize_t index, lotm::ini::RootItem item) {
-            self.items.replace_at(normalize_py_index(index, self.size()), std::move(item));
-                }, nb::arg("index"), nb::arg("item"))
-            .def("__iter__", [](lotm::ini::ConstructFile& self) {
-            return nb::make_iterator<nb::rv_policy::reference_internal>(
-                nb::type<lotm::ini::ConstructFile>(), "iterator", self.begin(), self.end()
-            );
-                }, nb::keep_alive<0, 1>())
+                "Parses or re-parses the document into its AST representation");
+
+        bind_sequence_protocol<
+            lotm::ini::ConstructFile,
+            lotm::ini::RootItem,
+            &lotm::ini::ConstructFile::items
+        >(
+            cls_construct_file,
+            "items",
+            "Top-level AST nodes or StrEntry items",
+            "item",
+            "Appends a top-level AST node or StrEntry to the document"
+        );
+        bind_ast_query_methods(cls_construct_file);
+
+        cls_construct_file
             .def("print", &lotm::ini::ConstructFile::print,
                 nb::call_guard<nb::gil_scoped_release>(),
                 "Iteratively serializes the document back into formatted configuration text")
