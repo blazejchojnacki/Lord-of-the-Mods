@@ -16,6 +16,22 @@ from lotm._core import big
 logger = logging.getLogger("lotm.big.packer")
 
 
+def _make_progress_callback(
+    log: logging.Logger,
+    debug_prefix: str,
+    user_callback: Callable[[big.ProgressReport], bool | None] | None,
+) -> Callable[[big.ProgressReport], bool]:
+    """Create a progress callback wrapper that logs completed entries and forwards telemetry."""
+    def on_progress(report: big.ProgressReport) -> bool:
+        if report.bytes_transferred == report.file_size:
+            log.debug("%s: %s", debug_prefix, report.entry_name)
+        if user_callback is not None:
+            return user_callback(report) is not False
+        return True
+
+    return on_progress
+
+
 def pack(
     source_dir: str | os.PathLike[str],
     output_file: str | os.PathLike[str],
@@ -59,15 +75,7 @@ def pack(
     if not output_path.parent.is_dir():
         raise FileNotFoundError(f"Target output directory '{output_path.parent}' does not exist.")
 
-    def on_progress(report: big.ProgressReport) -> bool:
-        if report.bytes_transferred == report.file_size:
-            logger.debug("Packed: %s", report.entry_name)
-        if progress_callback is not None:
-            res = progress_callback(report)
-            if res is False:
-                return False
-        return True
-
+    on_progress = _make_progress_callback(logger, "Packed", progress_callback)
     big.BigPacker.pack_from_directory(source_path, output_path, progress_callback=on_progress)
     logger.info("Finished packing into: %s", output_path.resolve())
 
@@ -109,14 +117,7 @@ def pack_to_memory(
     >>> data[:4]
     b'BIG4'
     """
-    def on_progress(report: big.ProgressReport) -> bool:
-        if report.bytes_transferred == report.file_size:
-            logger.debug("Packed to memory: %s", report.entry_name)
-        if progress_callback is not None:
-            res = progress_callback(report)
-            if res is False:
-                return False
-        return True
+    on_progress = _make_progress_callback(logger, "Packed to memory", progress_callback)
 
     if isinstance(source, (str, os.PathLike)):
         source_path = Path(source)

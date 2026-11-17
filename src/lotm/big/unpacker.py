@@ -12,6 +12,7 @@ import logging
 import os
 from pathlib import Path
 from lotm._core import big
+from .packer import _make_progress_callback
 
 logger = logging.getLogger("lotm.big.unpacker")
 
@@ -77,14 +78,7 @@ def unpack(
     entries = archive.get_entries(pattern)
     logger.info("Loaded %d entries from %s", len(entries), archive_path.name)
 
-    def on_progress(report: big.ProgressReport) -> bool:
-        if report.bytes_transferred == report.file_size:
-            logger.debug("Extracted: %s", report.entry_name)
-        if progress_callback is not None:
-            res = progress_callback(report)
-            if res is False:
-                return False
-        return True
+    on_progress = _make_progress_callback(logger, "Extracted", progress_callback)
 
     # Extract all indexed files to the destination folder
     archive.extract_all(dest_path, progress_callback=on_progress, filter_pattern=pattern, create_directories=create_directories)
