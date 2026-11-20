@@ -9,15 +9,18 @@
 
 #include "ini/parser.hpp"
 #include <core/path_utils.hpp>
+#include <core/string_utils.hpp>
 
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -25,9 +28,9 @@ namespace fs = std::filesystem;
 
 static bool is_config_file(const fs::path& path) {
     const std::string ext = lotm::core::to_utf8(path.extension());
-    return lotm::ini::detail::iequals_ascii(ext, ".ini") ||
-        lotm::ini::detail::iequals_ascii(ext, ".inc") ||
-        lotm::ini::detail::iequals_ascii(ext, ".str");
+    return lotm::core::iequals_ascii(ext, ".ini") ||
+        lotm::core::iequals_ascii(ext, ".inc") ||
+        lotm::core::iequals_ascii(ext, ".str");
 }
 
 int main(int argc, char* argv[]) {
@@ -36,7 +39,7 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    const fs::path target{ argv[1] };
+    const fs::path target = lotm::core::utf8_to_path(argv[1]);
     bool strict = false;
     bool check_roundtrip = false;
     fs::path output_path;
@@ -50,12 +53,12 @@ int main(int argc, char* argv[]) {
             check_roundtrip = true;
         }
         else if ((arg == "-o" || arg == "--output") && (i + 1 < argc)) {
-            output_path = argv[++i];
+            output_path = lotm::core::utf8_to_path(argv[++i]);
         }
     }
 
     if (!fs::exists(target)) {
-        std::cerr << "Error: Target path does not exist: " << target << '\n';
+        std::cerr << "Error: Target path does not exist: " << lotm::core::to_utf8(target) << '\n';
         return EXIT_FAILURE;
     }
 
@@ -109,7 +112,7 @@ int main(int argc, char* argv[]) {
             if (!output_path.empty() && files.size() == 1) {
                 std::ofstream out_file(output_path, std::ios::binary);
                 if (!out_file.is_open()) {
-                    std::cerr << "Error: Failed to open output file: " << output_path << '\n';
+                    std::cerr << "Error: Failed to open output file: " << lotm::core::to_utf8(output_path) << '\n';
                     return EXIT_FAILURE;
                 }
                 out_file << serialized;
