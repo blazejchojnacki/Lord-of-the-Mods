@@ -10,50 +10,14 @@ SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 import os
-import re
 from collections.abc import Buffer
 from pathlib import Path
 
 from lotm._core import ini as _ini
-from .parser import RootItem
 
 ConstructFile = _ini.ConstructFile
-ConstructLevel = _ini.ConstructLevel
+FormatOptions = _ini.FormatOptions
 IniParseError = _ini.IniParseError
-ScriptNode = _ini.ScriptNode
-StrEntry = _ini.StrEntry
-
-
-def _normalize_ast(
-    doc: ConstructFile,
-    *,
-    normalize_end_tokens: bool,
-    normalize_header_spacing: bool,
-) -> None:
-    """Apply in-place closure token and header spacing normalizations across a ConstructFile AST."""
-    stack: list[RootItem] = list(doc)
-    while stack:
-        node = stack.pop()
-        if isinstance(node, ConstructLevel):
-            if normalize_end_tokens and node.end_token.lower() == "end":
-                node.end_token = "End"
-            if normalize_header_spacing:
-                node._class = " ".join(node._class.split())
-                node.name = " ".join(node.name.split())
-                node.identifier = " ".join(node.identifier.split())
-            stack.extend(node)
-        elif isinstance(node, ScriptNode):
-            if normalize_end_tokens and node.end_token.lower() == "endscript":
-                node.end_token = "EndScript"
-            if normalize_header_spacing:
-                node.name = "BeginScript"
-                node.identifier = " ".join(node.identifier.split())
-        elif isinstance(node, StrEntry):
-            if normalize_end_tokens and node.end_token.lower() == "end":
-                node.end_token = "End"
-            if normalize_header_spacing:
-                node.category = " ".join(node.category.split())
-                node.identifier = " ".join(node.identifier.split())
 
 
 def format_ini(
@@ -62,12 +26,15 @@ def format_ini(
     *,
     strict: bool = False,
     file_content: str | Buffer | None = None,
+    options: FormatOptions | None = None,
     normalize_end_tokens: bool = False,
     normalize_header_spacing: bool = False,
+    normalize_statement_equals: bool = False,
+    normalize_comments: bool = False,
     coalesce_blank_lines: bool = False,
 ) -> str:
     """
-    Parse and format a SAGE .ini, .inc, or .str file with normalized 4-space indentation.
+    Parse and format a SAGE .ini, .inc, or .str file with configurable serialization rules.
 
     Parameters
     ----------
@@ -79,12 +46,19 @@ def format_ini(
         If True, raises IniParseError if structural errors are encountered.
     file_content : str | Buffer | None, default=None
         Optional in-memory string or binary buffer protocol object.
+    options : FormatOptions | None, default=None
+        Optional pre-configured FormatOptions instance. Individual boolean keyword toggles
+        are OR-merged onto `options` when supplied.
     normalize_end_tokens : bool, default=False
         If True, normalizes block and entry closing keywords (`END`, `end`, `ENd`) to
         canonical `"End"` and script closures to `"EndScript"`.
     normalize_header_spacing : bool, default=False
         If True, normalizes whitespace in block headers (`_class`, `name`, `identifier`,
         and `BeginScript` headers).
+    normalize_statement_equals : bool, default=False
+        If True, normalizes spacing around `=` in key-value statements to `Key = Value`.
+    normalize_comments : bool, default=False
+        If True, normalizes comment prefixes (`//` or `;`) to canonical `; `.
     coalesce_blank_lines : bool, default=False
         If True, collapses runs of multiple consecutive blank lines into a single blank line.
 
@@ -107,15 +81,15 @@ def format_ini(
     True
     """
     doc = ConstructFile(os.fspath(file_path), strict, file_content)
-    if normalize_end_tokens or normalize_header_spacing:
-        _normalize_ast(
-            doc,
-            normalize_end_tokens=normalize_end_tokens,
-            normalize_header_spacing=normalize_header_spacing,
-        )
-    formatted = doc.print()
-    if coalesce_blank_lines:
-        formatted = re.sub(r"\n{3,}", "\n\n", formatted)
+    effective_opts = FormatOptions(
+        indent=options.indent if options is not None else _ini.LEVEL_INDENT,
+        normalize_end_tokens=bool(options.normalize_end_tokens if options is not None else False) or normalize_end_tokens,
+        normalize_header_spacing=bool(options.normalize_header_spacing if options is not None else False) or normalize_header_spacing,
+        normalize_statement_equals=bool(options.normalize_statement_equals if options is not None else False) or normalize_statement_equals,
+        normalize_comments=bool(options.normalize_comments if options is not None else False) or normalize_comments,
+        coalesce_blank_lines=bool(options.coalesce_blank_lines if options is not None else False) or coalesce_blank_lines,
+    )
+    formatted = doc.print(effective_opts)
 
     if output_path is not None:
         dest = Path(output_path)

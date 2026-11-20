@@ -32,7 +32,8 @@ namespace lotm::ini {
     [[nodiscard]] std::string serialize_iterative(
         std::span<const SerializableNodeRef> items,
         int start_level = 0,
-        std::string_view file_type = ".ini"
+        std::string_view file_type = ".ini",
+        const FormatOptions& options = {}
     );
 
     /**
@@ -142,7 +143,7 @@ namespace lotm::ini {
             std::optional<std::string_view> block_identifier = std::nullopt
         );
 
-        [[nodiscard]] std::string print() const;
+        [[nodiscard]] std::string print(const FormatOptions& options = {}) const;
 
         [[nodiscard]] bool operator==(const ConstructFile& other) const noexcept {
             return name == other.name &&

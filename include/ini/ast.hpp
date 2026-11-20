@@ -1,6 +1,6 @@
 /**
  * @file include/ini/ast.hpp
- * @brief AST node definitions, variants, and iterative serialization frame structures for lotm::ini.
+ * @brief AST node definitions, variants, formatting options, and iterative serialization frame structures for lotm::ini.
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
  * Part of the Lord of the Mods (lotm) project.
@@ -306,6 +306,22 @@ namespace lotm::ini {
     inline constexpr std::size_t SAGE_MAX_IDENTIFIER_LEN = 512;
 
     /**
+     * @brief Configurable serialization rules for AST printing and formatting.
+     *
+     * Default values guarantee 100% lossless roundtrip output matching original tokens.
+     */
+    struct FormatOptions {
+        std::string indent{ LEVEL_INDENT };
+        bool normalize_end_tokens{ false };
+        bool normalize_header_spacing{ false };
+        bool normalize_statement_equals{ false };
+        bool normalize_comments{ false };
+        bool coalesce_blank_lines{ false };
+
+        [[nodiscard]] bool operator==(const FormatOptions&) const = default;
+    };
+
+    /**
      * @brief Validates string lengths against legacy SAGE engine buffer limits.
      * @throws IniParseError if bounds are exceeded.
      */
@@ -430,7 +446,11 @@ namespace lotm::ini {
             validate_sage_bounds(name, identifier);
         }
 
-        [[nodiscard]] std::string print(int level = 0, std::string_view file_type = ".ini") const;
+        [[nodiscard]] std::string print(
+            int level = 0,
+            std::string_view file_type = ".ini",
+            const FormatOptions& options = {}
+        ) const;
 
         [[nodiscard]] bool operator==(const ScriptNode&) const = default;
     };
@@ -517,7 +537,11 @@ namespace lotm::ini {
             std::optional<std::string_view> block_identifier = std::nullopt
         );
 
-        [[nodiscard]] std::string print(int level = 0, std::string_view file_type = ".ini") const;
+        [[nodiscard]] std::string print(
+            int level = 0,
+            std::string_view file_type = ".ini",
+            const FormatOptions& options = {}
+        ) const;
 
         [[nodiscard]] bool operator==(const ConstructLevel&) const;
     };
@@ -588,7 +612,7 @@ namespace lotm::ini {
             validate_sage_bounds(category, identifier);
         }
 
-        [[nodiscard]] std::string print() const;
+        [[nodiscard]] std::string print(const FormatOptions& options = {}) const;
 
         [[nodiscard]] bool operator==(const StrEntry&) const = default;
     };
@@ -618,7 +642,7 @@ namespace lotm::ini {
             errors(std::move(doc_errors)) {
         }
 
-        [[nodiscard]] std::string print() const;
+        [[nodiscard]] std::string print(const FormatOptions& options = {}) const;
 
         [[nodiscard]] bool operator==(const StrDocument&) const = default;
     };

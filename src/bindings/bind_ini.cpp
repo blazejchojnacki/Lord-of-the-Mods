@@ -180,6 +180,52 @@ namespace lotm::python {
         }
         sub.attr("INI_ENDS") = nb::tuple(ini_ends_list);
 
+        nb::class_<lotm::ini::FormatOptions>(sub, "FormatOptions", "Configurable serialization rules for AST printing and formatting")
+            .def("__init__", [](lotm::ini::FormatOptions* t,
+                std::string indent,
+                bool normalize_end_tokens,
+                bool normalize_header_spacing,
+                bool normalize_statement_equals,
+                bool normalize_comments,
+                bool coalesce_blank_lines) {
+                    new (t) lotm::ini::FormatOptions{
+                        std::move(indent),
+                        normalize_end_tokens,
+                        normalize_header_spacing,
+                        normalize_statement_equals,
+                        normalize_comments,
+                        coalesce_blank_lines
+                    };
+                },
+                nb::arg("indent") = std::string{ lotm::ini::LEVEL_INDENT },
+                nb::arg("normalize_end_tokens") = false,
+                nb::arg("normalize_header_spacing") = false,
+                nb::arg("normalize_statement_equals") = false,
+                nb::arg("normalize_comments") = false,
+                nb::arg("coalesce_blank_lines") = false)
+            .def_rw("indent", &lotm::ini::FormatOptions::indent, "Indentation string per nesting level")
+            .def_rw("normalize_end_tokens", &lotm::ini::FormatOptions::normalize_end_tokens,
+                "Normalize End/END/end to 'End' and endscript to 'EndScript'")
+            .def_rw("normalize_header_spacing", &lotm::ini::FormatOptions::normalize_header_spacing,
+                "Collapse redundant internal whitespace in block and script headers")
+            .def_rw("normalize_statement_equals", &lotm::ini::FormatOptions::normalize_statement_equals,
+                "Normalize spacing around '=' in key-value statements to 'Key = Value'")
+            .def_rw("normalize_comments", &lotm::ini::FormatOptions::normalize_comments,
+                "Normalize comment prefixes ('//' or ';') to canonical '; '")
+            .def_rw("coalesce_blank_lines", &lotm::ini::FormatOptions::coalesce_blank_lines,
+                "Collapse runs of multiple consecutive blank lines into a single blank line")
+            .def("__eq__", [](const lotm::ini::FormatOptions& self, const lotm::ini::FormatOptions& other) {
+            return self == other;
+                })
+            .def("__repr__", [](const lotm::ini::FormatOptions& self) {
+            auto b = [](bool v) { return v ? "True" : "False"; };
+            return "<FormatOptions normalize_end_tokens=" + std::string{ b(self.normalize_end_tokens) } +
+                " normalize_header_spacing=" + std::string{ b(self.normalize_header_spacing) } +
+                " normalize_statement_equals=" + std::string{ b(self.normalize_statement_equals) } +
+                " normalize_comments=" + std::string{ b(self.normalize_comments) } +
+                " coalesce_blank_lines=" + std::string{ b(self.coalesce_blank_lines) } + ">";
+                });
+
         nb::class_<lotm::ini::CommentNode>(sub, "CommentNode", "Represents a standalone or block-internal comment")
             .def(nb::init<std::string>(), nb::arg("text") = "")
             .def_rw("text", &lotm::ini::CommentNode::text, "Raw comment text")
@@ -253,10 +299,17 @@ namespace lotm::python {
             .def_rw("end_token", &lotm::ini::ScriptNode::end_token, "Closing script keyword")
             .def_rw("end_comment", &lotm::ini::ScriptNode::end_comment, "Inline comment on the closing line")
             .def_rw("content", &lotm::ini::ScriptNode::content, "Raw script body lines")
-            .def("print", &lotm::ini::ScriptNode::print,
+            .def("print", [](const lotm::ini::ScriptNode& self,
+                int level,
+                std::string_view file_type,
+                const std::optional<lotm::ini::FormatOptions>& options) {
+                    const lotm::ini::FormatOptions opts = options.value_or(lotm::ini::FormatOptions{});
+                    nb::gil_scoped_release release;
+                    return self.print(level, file_type, opts);
+                },
                 nb::arg("level") = 0,
                 nb::arg("file_type") = ".ini",
-                nb::call_guard<nb::gil_scoped_release>(),
+                nb::arg("options") = nb::none(),
                 "Serializes the script block with consistent indentation")
             .def("__eq__", [](const lotm::ini::ScriptNode& self, const lotm::ini::ScriptNode& other) {
             return self == other;
@@ -318,10 +371,17 @@ namespace lotm::python {
         bind_ast_query_methods(cls_construct_level);
 
         cls_construct_level
-            .def("print", &lotm::ini::ConstructLevel::print,
+            .def("print", [](const lotm::ini::ConstructLevel& self,
+                int level,
+                std::string_view file_type,
+                const std::optional<lotm::ini::FormatOptions>& options) {
+                    const lotm::ini::FormatOptions opts = options.value_or(lotm::ini::FormatOptions{});
+                    nb::gil_scoped_release release;
+                    return self.print(level, file_type, opts);
+                },
                 nb::arg("level") = 0,
                 nb::arg("file_type") = ".ini",
-                nb::call_guard<nb::gil_scoped_release>(),
+                nb::arg("options") = nb::none(),
                 "Iteratively serializes this block and all nested children")
             .def("__eq__", [](const lotm::ini::ConstructLevel& self, const lotm::ini::ConstructLevel& other) {
             return self == other;
@@ -375,8 +435,13 @@ namespace lotm::python {
         );
 
         cls_str_entry
-            .def("print", &lotm::ini::StrEntry::print,
-                nb::call_guard<nb::gil_scoped_release>(),
+            .def("print", [](const lotm::ini::StrEntry& self,
+                const std::optional<lotm::ini::FormatOptions>& options) {
+                    const lotm::ini::FormatOptions opts = options.value_or(lotm::ini::FormatOptions{});
+                    nb::gil_scoped_release release;
+                    return self.print(opts);
+                },
+                nb::arg("options") = nb::none(),
                 "Serializes the localization entry")
             .def("__eq__", [](const lotm::ini::StrEntry& self, const lotm::ini::StrEntry& other) {
             return self == other;
@@ -409,8 +474,13 @@ namespace lotm::python {
         );
 
         cls_str_doc
-            .def("print", &lotm::ini::StrDocument::print,
-                nb::call_guard<nb::gil_scoped_release>(),
+            .def("print", [](const lotm::ini::StrDocument& self,
+                const std::optional<lotm::ini::FormatOptions>& options) {
+                    const lotm::ini::FormatOptions opts = options.value_or(lotm::ini::FormatOptions{});
+                    nb::gil_scoped_release release;
+                    return self.print(opts);
+                },
+                nb::arg("options") = nb::none(),
                 "Serializes the entire .str document")
             .def("__eq__", [](const lotm::ini::StrDocument& self, const lotm::ini::StrDocument& other) {
             return self == other;
@@ -523,8 +593,13 @@ namespace lotm::python {
         bind_ast_query_methods(cls_construct_file);
 
         cls_construct_file
-            .def("print", &lotm::ini::ConstructFile::print,
-                nb::call_guard<nb::gil_scoped_release>(),
+            .def("print", [](const lotm::ini::ConstructFile& self,
+                const std::optional<lotm::ini::FormatOptions>& options) {
+                    const lotm::ini::FormatOptions opts = options.value_or(lotm::ini::FormatOptions{});
+                    nb::gil_scoped_release release;
+                    return self.print(opts);
+                },
+                nb::arg("options") = nb::none(),
                 "Iteratively serializes the document back into formatted configuration text")
             .def("__eq__", [](const lotm::ini::ConstructFile& self, const lotm::ini::ConstructFile& other) {
             return self == other;

@@ -16,6 +16,7 @@ MAX_INI_FILE_SIZE = ini.MAX_INI_FILE_SIZE
 SAGE_MAX_BLOCK_NAME_LEN = ini.SAGE_MAX_BLOCK_NAME_LEN
 SAGE_MAX_IDENTIFIER_LEN = ini.SAGE_MAX_IDENTIFIER_LEN
 IniParseError = ini.IniParseError
+FormatOptions = ini.FormatOptions
 CommentNode = ini.CommentNode
 StatementNode = ini.StatementNode
 IncludeNode = ini.IncludeNode
@@ -50,6 +51,7 @@ __all__ = [
     "SAGE_MAX_IDENTIFIER_LEN",
     "SUPPORTED_EXTENSIONS",
     "IniParseError",
+    "FormatOptions",
     "CommentNode",
     "StatementNode",
     "IncludeNode",
