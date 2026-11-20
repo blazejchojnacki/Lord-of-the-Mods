@@ -87,7 +87,7 @@ def test_format_options_object_and_ast_print_overloads() -> None:
 
     str_entry = str_doc[0]
     assert isinstance(str_entry, ini.StrEntry)
-    assert "    \"Soldier\" ; txt\n" in str_entry.print(custom_opts)
+    assert f'{custom_opts.indent}"Soldier" ; txt\n' in str_entry.print(custom_opts)
 
 
 def test_format_ini_normalization_toggles_and_options_merging() -> None:

@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <type_traits>
+#include <vector>
 
 namespace lotm::ini {
 
@@ -112,6 +113,19 @@ namespace lotm::ini {
             return result;
         }
 
+        [[nodiscard]] std::string format_define_line(std::string_view line, bool normalize_comments) {
+            if (!normalize_comments || line.empty()) {
+                return std::string{ line };
+            }
+            const std::size_t cmt_pos = detail::find_comment_start(line);
+            if (cmt_pos == std::string_view::npos) {
+                return std::string{ line };
+            }
+            const std::string_view code_part = detail::rstrip_view(line.substr(0, cmt_pos));
+            const std::string formatted_cmt = format_single_comment(line.substr(cmt_pos), true);
+            return detail::combine_text_and_comment(code_part, formatted_cmt);
+        }
+
         [[nodiscard]] std::string format_statement_text(std::string_view text, bool normalize_equals) {
             if (!normalize_equals || text.empty()) {
                 return std::string{ text };
@@ -178,6 +192,34 @@ namespace lotm::ini {
                 }
             }
             return out;
+        }
+
+        [[nodiscard]] bool contains_define_node(const StableVector<RootItem>& root_items) {
+            std::vector<const ConstructLevel*> stack;
+            for (const auto& item : root_items) {
+                if (const auto* ast_ptr = std::get_if<AstNode>(&item)) {
+                    if (std::holds_alternative<DefineNode>(*ast_ptr)) {
+                        return true;
+                    }
+                    if (const auto* lvl_ptr = std::get_if<ConstructLevel>(ast_ptr)) {
+                        stack.push_back(lvl_ptr);
+                    }
+                }
+            }
+
+            while (!stack.empty()) {
+                const ConstructLevel* current = stack.back();
+                stack.pop_back();
+                for (const auto& child : current->items) {
+                    if (std::holds_alternative<DefineNode>(child)) {
+                        return true;
+                    }
+                    if (const auto* child_lvl = std::get_if<ConstructLevel>(&child)) {
+                        stack.push_back(child_lvl);
+                    }
+                }
+            }
+            return false;
         }
 
     } // namespace
@@ -455,19 +497,9 @@ namespace lotm::ini {
     std::string ConstructFile::print(const FormatOptions& options) const {
         std::string output;
 
-        bool has_define_nodes = false;
-        for (const auto& item : items) {
-            if (const auto* ast_ptr = std::get_if<AstNode>(&item)) {
-                if (std::holds_alternative<DefineNode>(*ast_ptr)) {
-                    has_define_nodes = true;
-                    break;
-                }
-            }
-        }
-
-        if (!has_define_nodes) {
+        if (!contains_define_node(items)) {
             for (const auto& def_line : defines) {
-                output.append(def_line);
+                output.append(format_define_line(def_line, options.normalize_comments));
                 output.push_back('\n');
             }
         }
