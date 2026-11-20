@@ -27,6 +27,7 @@ def format_ini(
     strict: bool = False,
     file_content: str | Buffer | None = None,
     options: FormatOptions | None = None,
+    enforce_equals: bool = False,
     normalize_end_tokens: bool = False,
     normalize_header_spacing: bool = False,
     normalize_statement_equals: bool = False,
@@ -49,6 +50,8 @@ def format_ini(
     options : FormatOptions | None, default=None
         Optional pre-configured FormatOptions instance. Individual boolean keyword toggles
         are OR-merged onto `options` when supplied.
+    enforce_equals : bool, default=False
+        If True, emits canonical `=` for delimiters that canonically expect `=`.
     normalize_end_tokens : bool, default=False
         If True, normalizes block and entry closing keywords (`END`, `end`, `ENd`) to
         canonical `"End"` and script closures to `"EndScript"`.
@@ -83,6 +86,7 @@ def format_ini(
     doc = ConstructFile(os.fspath(file_path), strict, file_content)
     effective_opts = FormatOptions(
         indent=options.indent if options is not None else _ini.LEVEL_INDENT,
+        enforce_equals=bool(options.enforce_equals if options is not None else False) or enforce_equals,
         normalize_end_tokens=bool(options.normalize_end_tokens if options is not None else False) or normalize_end_tokens,
         normalize_header_spacing=bool(options.normalize_header_spacing if options is not None else False) or normalize_header_spacing,
         normalize_statement_equals=bool(options.normalize_statement_equals if options is not None else False) or normalize_statement_equals,

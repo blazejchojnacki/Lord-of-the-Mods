@@ -67,6 +67,7 @@ def _handle_format(args: argparse.Namespace) -> int:
         source_path,
         output_path=dest_path,
         strict=args.strict,
+        enforce_equals=canonical or args.enforce_equals,
         normalize_end_tokens=canonical or args.normalize_ends,
         normalize_header_spacing=canonical or args.normalize_headers,
         normalize_statement_equals=canonical or args.normalize_equals,
@@ -175,6 +176,11 @@ def register_subparser(
         "--strict",
         action="store_true",
         help="Abort formatting if any delimiter or level mismatch errors exist.",
+    )
+    format_parser.add_argument(
+        "--enforce-equals",
+        action="store_true",
+        help="Emit canonical '=' for delimiters that canonically expect '='.",
     )
     format_parser.add_argument(
         "--normalize-ends",

@@ -175,6 +175,19 @@ namespace lotm::ini {
             return detail::collapse_whitespace(part);
         }
 
+        [[nodiscard]] std::string select_effective_class(const ConstructLevel& node, const FormatOptions& options) {
+            if (!options.enforce_equals) {
+                return node._class;
+            }
+            if (!node.canonical_class.empty()) {
+                return node.canonical_class;
+            }
+            if (node.missing_equals && !node._class.empty() && !node._class.ends_with('=')) {
+                return node._class + " =";
+            }
+            return node._class;
+        }
+
         [[nodiscard]] std::string collapse_triple_newlines(std::string_view input) {
             std::string out;
             out.reserve(input.size());
@@ -290,7 +303,8 @@ namespace lotm::ini {
                         append_indented_text(output, lead_cmt, frame.level, indent_unit);
                     }
 
-                    const std::string cls_part = format_header_part(node_ptr->_class, options.normalize_header_spacing);
+                    const std::string raw_cls = select_effective_class(*node_ptr, options);
+                    const std::string cls_part = format_header_part(raw_cls, options.normalize_header_spacing);
                     const std::string name_part = format_header_part(node_ptr->name, options.normalize_header_spacing);
                     const std::string id_part = format_header_part(node_ptr->identifier, options.normalize_header_spacing);
 

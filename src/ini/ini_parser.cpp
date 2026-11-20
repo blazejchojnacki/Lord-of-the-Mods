@@ -38,6 +38,26 @@ namespace lotm::ini {
             return result;
         }
 
+        [[nodiscard]] bool has_equals_after_rule(
+            std::span<const std::string_view> line_tokens,
+            const DelimiterRule& rule
+        ) noexcept {
+            std::size_t matched_words = 0;
+            for (const auto tok : line_tokens) {
+                if (tok == "=") {
+                    if (matched_words == rule.word_count) {
+                        return true;
+                    }
+                    continue;
+                }
+                ++matched_words;
+                if (matched_words > rule.word_count) {
+                    return false;
+                }
+            }
+            return false;
+        }
+
         [[nodiscard]] std::pair<std::vector<std::vector<std::string>>, int> recognize_structure_from_utf8(
             std::string_view file_path,
             std::string_view content_view
@@ -188,6 +208,7 @@ namespace lotm::ini {
             defines.clear();
         }
         errors.clear();
+        warnings.clear();
         last_comment.clear();
         context_stack_.clear();
         context_stack_.emplace_back(this);
@@ -385,7 +406,7 @@ namespace lotm::ini {
             return;
         }
 
-        if (handle_block_start(lexed.words, lexed.line_tokens, lexed.comment)) {
+        if (handle_block_start(lexed.words, lexed.line_tokens, lexed.comment, line_num)) {
             return;
         }
 
@@ -402,7 +423,7 @@ namespace lotm::ini {
                     for (const auto& level : delimiters) {
                         active_rules_.push_back(compile_delimiter_rules(level));
                     }
-                    if (handle_block_start(lexed.words, lexed.line_tokens, lexed.comment)) {
+                    if (handle_block_start(lexed.words, lexed.line_tokens, lexed.comment, line_num)) {
                         return;
                     }
                 }
@@ -435,7 +456,8 @@ namespace lotm::ini {
     bool ConstructFile::handle_block_start(
         std::span<const std::string_view> words,
         std::span<const std::string_view> line_tokens,
-        std::string_view inline_comment
+        std::string_view inline_comment,
+        std::size_t line_num
     ) {
         const auto lookup_level = static_cast<std::size_t>(get_lookup_level());
         if (lookup_level >= active_rules_.size()) {
@@ -466,10 +488,45 @@ namespace lotm::ini {
             block_name = detail::join_views(remaining_words);
         }
 
-        std::string class_token{ matched_rule->raw };
-        const std::size_t next_idx = matched_rule->token_count;
-        if (next_idx < line_tokens.size() && line_tokens[next_idx] == "=" && !class_token.ends_with('=')) {
-            class_token.append(" =");
+        const bool saw_equals = has_equals_after_rule(line_tokens, *matched_rule);
+        const bool missing_eq = matched_rule->expects_equals && !saw_equals;
+
+        std::string class_token;
+        if (matched_rule->word_count == 1 && matched_rule->token_count == 1 && !words.empty()) {
+            class_token = std::string{ words[0] };
+        }
+        else {
+            class_token = std::string{ matched_rule->raw };
+            if (!missing_eq && !class_token.ends_with('=')) {
+                std::string cleaned{ matched_rule->raw };
+                while (!cleaned.empty() && (cleaned.back() == '=' || cleaned.back() == ' ')) {
+                    cleaned.pop_back();
+                }
+                if (saw_equals) {
+                    cleaned.append(" =");
+                }
+                class_token = std::move(cleaned);
+            }
+            else if (missing_eq) {
+                while (!class_token.empty() && (class_token.back() == '=' || class_token.back() == ' ')) {
+                    class_token.pop_back();
+                }
+            }
+        }
+
+        std::string canonical_cls;
+        if (matched_rule->expects_equals) {
+            canonical_cls = std::string{ matched_rule->raw };
+        }
+        else if (saw_equals && !class_token.ends_with('=')) {
+            canonical_cls = class_token + " =";
+        }
+
+        if (missing_eq) {
+            warnings.push_back(
+                "Style warning: missing '=' after delimiter '" + class_token + "' at " +
+                name + ":" + std::to_string(line_num)
+            );
         }
 
         validate_sage_bounds(block_name, block_identifier, class_token);
@@ -479,7 +536,11 @@ namespace lotm::ini {
             std::move(block_name),
             std::move(block_identifier),
             std::move(last_comment),
-            std::string{ inline_comment }
+            std::string{ inline_comment },
+            "",
+            "",
+            std::move(canonical_cls),
+            missing_eq
             });
         return true;
     }

@@ -203,6 +203,7 @@ class ini:
 
     class FormatOptions:
         indent: str
+        enforce_equals: bool
         normalize_end_tokens: bool
         normalize_header_spacing: bool
         normalize_statement_equals: bool
@@ -211,6 +212,7 @@ class ini:
         def __init__(
             self,
             indent: str = "    ",
+            enforce_equals: bool = False,
             normalize_end_tokens: bool = False,
             normalize_header_spacing: bool = False,
             normalize_statement_equals: bool = False,
@@ -289,6 +291,8 @@ class ini:
         header_comment: str
         end_token: str
         end_comment: str
+        canonical_class: str
+        missing_equals: bool
         items: list['ini.AstNode']
         def __init__(
             self,
@@ -299,6 +303,8 @@ class ini:
             header_comment: str = "",
             end_token: str = "",
             end_comment: str = "",
+            canonical_class: str = "",
+            missing_equals: bool = False,
         ) -> None: ...
         def append(self, item: 'ini.AstNode') -> None: ...
         def find_block(
@@ -408,6 +414,7 @@ class ini:
         current_level: int
         last_comment: str
         errors: list[str]
+        warnings: list[str]
         @overload
         def __init__(
             self,

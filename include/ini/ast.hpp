@@ -312,6 +312,7 @@ namespace lotm::ini {
      */
     struct FormatOptions {
         std::string indent{ LEVEL_INDENT };
+        bool enforce_equals{ false };
         bool normalize_end_tokens{ false };
         bool normalize_header_spacing{ false };
         bool normalize_statement_equals{ false };
@@ -480,6 +481,8 @@ namespace lotm::ini {
         std::string header_comment;
         std::string end_token;
         std::string end_comment;
+        std::string canonical_class{};
+        bool missing_equals{ false };
         StableVector<AstNode> items;
 
         ConstructLevel();
@@ -490,7 +493,9 @@ namespace lotm::ini {
             std::string cmt = {},
             std::string hdr_cmt = {},
             std::string end_tok = {},
-            std::string end_cmt = {}
+            std::string end_cmt = {},
+            std::string canon_cls = {},
+            bool no_eq = false
         );
         ~ConstructLevel();
 
@@ -543,7 +548,16 @@ namespace lotm::ini {
             const FormatOptions& options = {}
         ) const;
 
-        [[nodiscard]] bool operator==(const ConstructLevel&) const;
+        [[nodiscard]] bool operator==(const ConstructLevel& other) const {
+            return _class == other._class &&
+                name == other.name &&
+                identifier == other.identifier &&
+                comment == other.comment &&
+                header_comment == other.header_comment &&
+                end_token == other.end_token &&
+                end_comment == other.end_comment &&
+                items == other.items;
+        }
     };
 
     inline ConstructLevel::ConstructLevel() = default;
@@ -555,7 +569,9 @@ namespace lotm::ini {
         std::string cmt,
         std::string hdr_cmt,
         std::string end_tok,
-        std::string end_cmt
+        std::string end_cmt,
+        std::string canon_cls,
+        bool no_eq
     )
         : _class(std::move(cls)),
         name(std::move(blk_name)),
@@ -563,7 +579,9 @@ namespace lotm::ini {
         comment(std::move(cmt)),
         header_comment(std::move(hdr_cmt)),
         end_token(std::move(end_tok)),
-        end_comment(std::move(end_cmt)) {
+        end_comment(std::move(end_cmt)),
+        canonical_class(std::move(canon_cls)),
+        missing_equals(no_eq) {
         validate_sage_bounds(name, identifier, _class);
     }
 
@@ -572,7 +590,6 @@ namespace lotm::ini {
     inline ConstructLevel& ConstructLevel::operator=(const ConstructLevel&) = default;
     inline ConstructLevel::ConstructLevel(ConstructLevel&&) noexcept = default;
     inline ConstructLevel& ConstructLevel::operator=(ConstructLevel&&) noexcept = default;
-    inline bool ConstructLevel::operator==(const ConstructLevel&) const = default;
 
     /**
      * @brief Child node variant allowed inside a localized .str entry.

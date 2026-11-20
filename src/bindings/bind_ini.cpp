@@ -183,6 +183,7 @@ namespace lotm::python {
         nb::class_<lotm::ini::FormatOptions>(sub, "FormatOptions", "Configurable serialization rules for AST printing and formatting")
             .def("__init__", [](lotm::ini::FormatOptions* t,
                 std::string indent,
+                bool enforce_equals,
                 bool normalize_end_tokens,
                 bool normalize_header_spacing,
                 bool normalize_statement_equals,
@@ -190,6 +191,7 @@ namespace lotm::python {
                 bool coalesce_blank_lines) {
                     new (t) lotm::ini::FormatOptions{
                         std::move(indent),
+                        enforce_equals,
                         normalize_end_tokens,
                         normalize_header_spacing,
                         normalize_statement_equals,
@@ -198,12 +200,15 @@ namespace lotm::python {
                     };
                 },
                 nb::arg("indent") = std::string{ lotm::ini::LEVEL_INDENT },
+                nb::arg("enforce_equals") = false,
                 nb::arg("normalize_end_tokens") = false,
                 nb::arg("normalize_header_spacing") = false,
                 nb::arg("normalize_statement_equals") = false,
                 nb::arg("normalize_comments") = false,
                 nb::arg("coalesce_blank_lines") = false)
             .def_rw("indent", &lotm::ini::FormatOptions::indent, "Indentation string per nesting level")
+            .def_rw("enforce_equals", &lotm::ini::FormatOptions::enforce_equals,
+                "Emit canonical '=' for delimiters that canonically expect '='")
             .def_rw("normalize_end_tokens", &lotm::ini::FormatOptions::normalize_end_tokens,
                 "Normalize End/END/end to 'End' and endscript to 'EndScript'")
             .def_rw("normalize_header_spacing", &lotm::ini::FormatOptions::normalize_header_spacing,
@@ -219,7 +224,8 @@ namespace lotm::python {
                 })
             .def("__repr__", [](const lotm::ini::FormatOptions& self) {
             auto b = [](bool v) { return v ? "True" : "False"; };
-            return "<FormatOptions normalize_end_tokens=" + std::string{ b(self.normalize_end_tokens) } +
+            return "<FormatOptions enforce_equals=" + std::string{ b(self.enforce_equals) } +
+                " normalize_end_tokens=" + std::string{ b(self.normalize_end_tokens) } +
                 " normalize_header_spacing=" + std::string{ b(self.normalize_header_spacing) } +
                 " normalize_statement_equals=" + std::string{ b(self.normalize_statement_equals) } +
                 " normalize_comments=" + std::string{ b(self.normalize_comments) } +
@@ -323,14 +329,16 @@ namespace lotm::python {
             sub, "ConstructLevel", "Represents an inner block or defined object within a SAGE configuration file"
         );
         cls_construct_level
-            .def(nb::init<std::string, std::string, std::string, std::string, std::string, std::string, std::string>(),
+            .def(nb::init<std::string, std::string, std::string, std::string, std::string, std::string, std::string, std::string, bool>(),
                 nb::arg("_class") = "",
                 nb::arg("name") = "",
                 nb::arg("identifier") = "",
                 nb::arg("comment") = "",
                 nb::arg("header_comment") = "",
                 nb::arg("end_token") = "",
-                nb::arg("end_comment") = "")
+                nb::arg("end_comment") = "",
+                nb::arg("canonical_class") = "",
+                nb::arg("missing_equals") = false)
             .def_prop_rw("_class",
                 [](const lotm::ini::ConstructLevel& self) { return self._class; },
                 [](lotm::ini::ConstructLevel& self, std::string val) {
@@ -355,7 +363,9 @@ namespace lotm::python {
             .def_rw("comment", &lotm::ini::ConstructLevel::comment, "Leading comment block")
             .def_rw("header_comment", &lotm::ini::ConstructLevel::header_comment, "Inline comment on the header line")
             .def_rw("end_token", &lotm::ini::ConstructLevel::end_token, "Closing keyword (End, END, end)")
-            .def_rw("end_comment", &lotm::ini::ConstructLevel::end_comment, "Inline comment on the closing line");
+            .def_rw("end_comment", &lotm::ini::ConstructLevel::end_comment, "Inline comment on the closing line")
+            .def_rw("canonical_class", &lotm::ini::ConstructLevel::canonical_class, "Canonical delimiter header form")
+            .def_rw("missing_equals", &lotm::ini::ConstructLevel::missing_equals, "True if '=' was omitted when expected");
 
         bind_sequence_protocol<
             lotm::ini::ConstructLevel,
@@ -575,6 +585,7 @@ namespace lotm::python {
             .def_rw("current_level", &lotm::ini::ConstructFile::current_level, "Current parser nesting level")
             .def_rw("last_comment", &lotm::ini::ConstructFile::last_comment, "Buffered comment awaiting attachment")
             .def_rw("errors", &lotm::ini::ConstructFile::errors, "Accumulated non-strict parsing warnings and errors")
+            .def_rw("warnings", &lotm::ini::ConstructFile::warnings, "Accumulated style warnings")
             .def("construct", &lotm::ini::ConstructFile::construct,
                 nb::call_guard<nb::gil_scoped_release>(),
                 "Parses or re-parses the document into its AST representation");

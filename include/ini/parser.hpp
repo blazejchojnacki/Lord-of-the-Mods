@@ -83,6 +83,7 @@ namespace lotm::ini {
         int current_level{ 0 };
         std::string last_comment{};
         std::vector<std::string> errors{};
+        std::vector<std::string> warnings{};
 
         ConstructFile() = default;
 
@@ -152,7 +153,8 @@ namespace lotm::ini {
                 start_level == other.start_level &&
                 strict == other.strict &&
                 items == other.items &&
-                errors == other.errors;
+                errors == other.errors &&
+                warnings == other.warnings;
         }
 
     private:
@@ -174,7 +176,8 @@ namespace lotm::ini {
         [[nodiscard]] bool handle_block_start(
             std::span<const std::string_view> words,
             std::span<const std::string_view> line_tokens,
-            std::string_view inline_comment
+            std::string_view inline_comment,
+            std::size_t line_num
         );
         [[nodiscard]] bool handle_block_end(
             std::span<const std::string_view> words,
