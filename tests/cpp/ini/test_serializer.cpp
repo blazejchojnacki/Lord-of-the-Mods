@@ -1,6 +1,6 @@
 /**
  * @file tests/cpp/ini/test_serializer.cpp
- * @brief Unit tests for iterative serialization covering all AST and STR node variations in lotm::ini.
+ * @brief Unit tests for iterative serialization and FormatOptions rules in lotm::ini.
  *
  * Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
  * Part of the Lord of the Mods (lotm) project.
@@ -84,5 +84,90 @@ TEST_CASE("Iterative serialization covers all AST and STR node variations", "[in
 
         StrDocument doc{ "test.str",{ e1, CommentNode{ "; doc cmt" } },{} };
         CHECK(doc.print() == e1.print() + "\n; doc cmt\n\n");
+    }
+}
+
+TEST_CASE("FormatOptions rules normalize indentation, headers, equals, comments, ends, and blank lines", "[ini][serializer][format_options]") {
+    SECTION("Default FormatOptions equals lossless serialization") {
+        const FormatOptions defaults{};
+        const FormatOptions copy = defaults;
+        CHECK(defaults == copy);
+        CHECK(defaults.indent == LEVEL_INDENT);
+        CHECK_FALSE(defaults.normalize_end_tokens);
+        CHECK_FALSE(defaults.normalize_header_spacing);
+        CHECK_FALSE(defaults.normalize_statement_equals);
+        CHECK_FALSE(defaults.normalize_comments);
+        CHECK_FALSE(defaults.coalesce_blank_lines);
+    }
+
+    SECTION("Full canonical FormatOptions across ConstructFile, ConstructLevel, ScriptNode, and statements") {
+        const std::string raw_ini =
+            "//   leading line 1\n"
+            ";   leading line 2\n"
+            "Object   GondorHero    ModTag_01 // header comment\n"
+            "    //inner comment\n"
+            "    ;\n"
+            "    Damage=100 // inline slash\n"
+            "    EmptyRhs   =   \n"
+            "    QuotedEq = \"A=B\\\"=C\" ; keep inside quotes\n"
+            "    BareFlagStatement\n"
+            "    #include \"common.inc\" // inc comment\n"
+            "    #define MACRO_X 1 // def comment\n"
+            "    beginscript   InitTag // scr hdr\n"
+            "        x = 1\n"
+            "    endscript // scr end\n"
+            "ENd // root end\n";
+
+        ConstructFile doc{ "canonical.ini", true, raw_ini };
+
+        FormatOptions opts;
+        opts.indent = "\t";
+        opts.normalize_end_tokens = true;
+        opts.normalize_header_spacing = true;
+        opts.normalize_statement_equals = true;
+        opts.normalize_comments = true;
+        opts.coalesce_blank_lines = true;
+
+        const std::string formatted = doc.print(opts);
+        const std::string expected =
+            "; leading line 1\n"
+            "; leading line 2\n"
+            "Object GondorHero ModTag_01 ; header comment\n"
+            "\t; inner comment\n"
+            "\t;\n"
+            "\tDamage = 100 ; inline slash\n"
+            "\tEmptyRhs =\n"
+            "\tQuotedEq = \"A=B\\\"=C\" ; keep inside quotes\n"
+            "\tBareFlagStatement\n"
+            "\t#include \"common.inc\" ; inc comment\n"
+            "\t#define MACRO_X 1 ; def comment\n"
+            "\tBeginScript InitTag ; scr hdr\n"
+            "\t\tx = 1\n"
+            "\tEndScript ; scr end\n"
+            "End ; root end\n\n";
+        CHECK(formatted == expected);
+    }
+
+    SECTION("FormatOptions applies to StrEntry and StrDocument including blank line coalescing") {
+        StrEntry e1{ "OBJECT", "GondorSword", "// lead", "// hdr", "END", "// end",{
+            CommentNode{ "//   inner" },
+            StatementNode{ "\"Sword\"", "// text" }
+        } };
+        StrDocument doc{ "test.str",{ e1, CommentNode{ "// tail" } },{} };
+
+        FormatOptions opts;
+        opts.normalize_end_tokens = true;
+        opts.normalize_header_spacing = true;
+        opts.normalize_comments = true;
+        opts.coalesce_blank_lines = true;
+
+        const std::string expected =
+            "; lead\n"
+            "OBJECT:GondorSword ; hdr\n"
+            "    ; inner\n"
+            "    \"Sword\" ; text\n"
+            "End ; end\n\n"
+            "; tail\n\n";
+        CHECK(doc.print(opts) == expected);
     }
 }

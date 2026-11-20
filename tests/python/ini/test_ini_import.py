@@ -32,6 +32,7 @@ def test_public_ini_exports_all_symbols() -> None:
         "SAGE_MAX_IDENTIFIER_LEN",
         "SUPPORTED_EXTENSIONS",
         "IniParseError",
+        "FormatOptions",
         "CommentNode",
         "StatementNode",
         "IncludeNode",
