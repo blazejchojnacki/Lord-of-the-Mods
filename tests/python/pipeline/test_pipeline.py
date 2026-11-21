@@ -241,7 +241,7 @@ def test_archive_editor_delta_patch_and_raw_override_precedence(tmp_path: Path) 
 
 
 def test_archive_editor_format_entries_and_overlay_source(tmp_path: Path) -> None:
-    """Verify ArchiveEditor with BigOverlay source and batch format_entries()."""
+    """Verify ArchiveEditor with BigOverlay source, glob filtering, removed skips, and batch format_entries()."""
     arc1 = tmp_path / "01_base.big"
     arc2 = tmp_path / "02_mod.big"
 
@@ -261,12 +261,18 @@ def test_archive_editor_format_entries_and_overlay_source(tmp_path: Path) -> Non
 
     with big.load_overlay([arc1, arc2]) as overlay:
         with pipeline.ArchiveEditor(overlay) as editor:
-            formatted = editor.format_entries(options=fmt_opts)
-            assert formatted == [
-                "data\\ini\\armor.ini",
-                "data\\ini\\weapon.ini",
-                "lang\\mod.str",
-            ]
+            # Remove one entry and filter to *.ini so non-matching and removed entries are skipped
+            assert editor.remove("data/ini/armor.ini") is True
+            formatted = editor.format_entries("*.ini", options=fmt_opts)
+            assert formatted == ["data\\ini\\weapon.ini"]
+
+            # Applying a stage also skips removed entries
+            applied = editor.apply_stage(
+                pipeline.FormatConfigStage(options=fmt_opts),
+                filter_pattern="*",
+            )
+            assert "data\\ini\\armor.ini" not in applied
+            assert "data\\ini\\weapon.ini" in applied
             merged_bytes = editor.to_memory()
 
         assert not overlay.closed
@@ -275,7 +281,7 @@ def test_archive_editor_format_entries_and_overlay_source(tmp_path: Path) -> Non
         weapon_txt = out_arc.read_entry("data/ini/weapon.ini").decode("utf-8")
         assert "Damage = 50" in weapon_txt
         assert weapon_txt.endswith("End\n\n")
-        assert out_arc.read_entry("lang/mod.str").decode("utf-8").endswith("End\n\n")
+        assert not any(e.name.endswith("armor.ini") for e in out_arc.get_entries())
 
 
 def tempfile_archive(path: Path, data: bytes) -> big.BigArchive:
@@ -285,9 +291,11 @@ def tempfile_archive(path: Path, data: bytes) -> big.BigArchive:
 
 
 def test_transform_archive_one_shot_and_custom_stage(tmp_path: Path) -> None:
-    """Verify transform_archive() with transforms, custom EntryStage, format_options, and patch_only."""
+    """Verify transform_archive() with transforms, custom EntryStage, filter/format options, and save()."""
     src_big = _build_sample_archive(tmp_path / "base.big")
     out_patch = tmp_path / "one_shot_patch.big"
+    out_full = tmp_path / "full_transformed.big"
+    out_filtered = tmp_path / "filtered_formatted.big"
 
     class BinaryMarkerStage:
         """Custom EntryStage appending a version marker to .dds payloads."""
@@ -330,6 +338,33 @@ def test_transform_archive_one_shot_and_custom_stage(tmp_path: Path) -> None:
     with big.BigArchive(out_patch) as patch_arc:
         assert patch_arc.read_entry("art/textures/sword.dds") == b"DDS_RAW_BINARY_PAYLOAD_V2"
         assert patch_arc.read_entry("lang/lotr.str").decode("utf-8").endswith("End\n\n")
+
+    # Full archive save (patch_only=False) with format_options across all config entries
+    full_res = pipeline.transform_archive(
+        src_big,
+        output_file=out_full,
+        format_options=ini.FormatOptions(normalize_end_tokens=True),
+    )
+    assert full_res.output_path == out_full
+    assert full_res.output_bytes is None
+    assert full_res.modified_entries == [
+        "data\\ini\\includes\\armor.inc",
+        "data\\ini\\weapon.ini",
+        "lang\\lotr.str",
+    ]
+    with big.BigArchive(out_full) as full_arc:
+        assert len(full_arc.get_entries()) == 4
+        assert full_arc.read_entry("data/ini/weapon.ini").decode("utf-8").endswith("End\n\n")
+
+    # filter_pattern alone formats matching entries
+    filtered_res = pipeline.transform_archive(
+        src_big,
+        output_file=out_filtered,
+        filter_pattern="*.ini",
+        format_options=ini.FormatOptions(normalize_end_tokens=True),
+        patch_only=True,
+    )
+    assert filtered_res.modified_entries == ["data\\ini\\weapon.ini"]
 
 
 def test_pipeline_error_handling_and_atomic_cleanup(
