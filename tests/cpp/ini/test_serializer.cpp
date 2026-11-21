@@ -110,6 +110,7 @@ TEST_CASE("FormatOptions rules normalize indentation, equals, headers, comments,
             "    End\n"
             "    Behavior = AIUpdateInterface ModuleTag_AI\n"
             "        AddEmotion OVERRIDE\n"
+            "        End\n"
             "    End\n"
             "End\n";
 

@@ -492,8 +492,14 @@ namespace lotm::ini {
         const bool missing_eq = matched_rule->expects_equals && !saw_equals;
 
         std::string class_token;
-        if (matched_rule->word_count == 1 && matched_rule->token_count == 1 && !words.empty()) {
+        if (missing_eq && words.size() >= matched_rule->word_count) {
+            class_token = detail::join_views(words.subspan(0, matched_rule->word_count));
+        }
+        else if (matched_rule->word_count == 1 && matched_rule->token_count == 1 && !words.empty()) {
             class_token = std::string{ words[0] };
+            if (saw_equals) {
+                class_token.append(" =");
+            }
         }
         else {
             class_token = std::string{ matched_rule->raw };
@@ -506,11 +512,6 @@ namespace lotm::ini {
                     cleaned.append(" =");
                 }
                 class_token = std::move(cleaned);
-            }
-            else if (missing_eq) {
-                while (!class_token.empty() && (class_token.back() == '=' || class_token.back() == ' ')) {
-                    class_token.pop_back();
-                }
             }
         }
 
