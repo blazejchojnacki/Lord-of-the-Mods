@@ -99,7 +99,7 @@ namespace lotm::ini {
             std::span<const uint8_t> buffer
         );
 
-        void construct();
+        void construct(bool preserve_metadata = false);
         void construct_with_metadata();
 
         using SequenceMixin<ConstructFile, RootItem>::append;
@@ -163,7 +163,6 @@ namespace lotm::ini {
         std::vector<std::vector<DelimiterRule>> active_rules_{};
         std::vector<ContextPtr> context_stack_{};
 
-        void construct_impl(bool preserve_metadata);
         void construct_from_utf8_view(std::string_view content_view, bool preserve_metadata = false);
         [[nodiscard]] int get_lookup_level() const noexcept;
         void append_to_active_context(AstNode node);

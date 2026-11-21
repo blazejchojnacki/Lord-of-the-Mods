@@ -160,15 +160,7 @@ namespace lotm::ini {
         }
     }
 
-    void ConstructFile::construct() {
-        construct_impl(false);
-    }
-
-    void ConstructFile::construct_with_metadata() {
-        construct_impl(true);
-    }
-
-    void ConstructFile::construct_impl(bool preserve_metadata) {
+    void ConstructFile::construct(bool preserve_metadata) {
         const std::filesystem::path fs_path = lotm::core::utf8_to_path(name);
         if (!detail::is_supported_config_ext(name) ||
             (!file_content.has_value() && !std::filesystem::is_regular_file(fs_path))) {
@@ -192,6 +184,10 @@ namespace lotm::ini {
         std::string transcoded;
         const std::string_view utf8_view = detail::prepare_utf8_view(mmap.view(), transcoded);
         construct_from_utf8_view(utf8_view, preserve_metadata);
+    }
+
+    void ConstructFile::construct_with_metadata() {
+        construct(true);
     }
 
     void ConstructFile::construct_from_utf8_view(std::string_view content_view, bool preserve_metadata) {

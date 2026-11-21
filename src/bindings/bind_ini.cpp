@@ -586,8 +586,11 @@ namespace lotm::python {
             .def_rw("last_comment", &lotm::ini::ConstructFile::last_comment, "Buffered comment awaiting attachment")
             .def_rw("errors", &lotm::ini::ConstructFile::errors, "Accumulated non-strict parsing warnings and errors")
             .def_rw("warnings", &lotm::ini::ConstructFile::warnings, "Accumulated style warnings")
-            .def("construct", &lotm::ini::ConstructFile::construct,
-                nb::call_guard<nb::gil_scoped_release>(),
+            .def("construct", [](lotm::ini::ConstructFile& self, bool preserve_metadata) {
+            nb::gil_scoped_release release;
+            self.construct(preserve_metadata);
+                },
+                nb::arg("preserve_metadata") = false,
                 "Parses or re-parses the document into its AST representation");
 
         bind_sequence_protocol<
