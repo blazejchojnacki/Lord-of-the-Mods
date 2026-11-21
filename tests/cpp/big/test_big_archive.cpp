@@ -8,14 +8,16 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+
 #include <big/big_archive.hpp>
 #include <big/exceptions.hpp>
 #include <core/endian.hpp>
+
 #include <filesystem>
 #include <fstream>
 #include <vector>
 #include <string>
-#include <stdio.h>
+#include <cstdio>
 
 using namespace lotm::big;
 
@@ -794,10 +796,10 @@ TEST_CASE("BigArchive In-Memory Single-File Extraction and Lifecycle", "[big_unp
         const auto entry = archive.get_entries().front();
 
         // Exclusive lock (_SH_DENYRW = 0x10) allows file_size() metadata check but blocks ifstream::open()
-        FILE* locked_file = _fsopen(env.test_file.string().c_str(), "rb", 0x10);
+        std::FILE* locked_file = _fsopen(env.test_file.string().c_str(), "rb", 0x10);
         if (locked_file) {
             REQUIRE_THROWS_AS(archive.read_entry(entry), BigArchiveError);
-            fclose(locked_file);
+            std::fclose(locked_file);
         }
 
         // Removing the file triggers the file_size(ec) error branch

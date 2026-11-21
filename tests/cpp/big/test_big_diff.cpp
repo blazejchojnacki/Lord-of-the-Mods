@@ -8,16 +8,18 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+
 #include <big/big_archive.hpp>
 #include <big/big_diff.hpp>
 #include <big/big_packer.hpp>
 #include <big/exceptions.hpp>
 #include <core/endian.hpp>
+
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
-#include <stdio.h>
+#include <cstdio>
 #include <string>
 #include <utility>
 #include <vector>
@@ -188,7 +190,7 @@ TEST_CASE("BigDiff Comparison Scenarios", "[big_diff][compare]") {
             out.write(reinterpret_cast<const char*>(&be_offset), 4);
             out.write(reinterpret_cast<const char*>(&be_size), 4);
             char name[7];
-            snprintf(name, sizeof(name), "f%02u.in", i);
+            std::snprintf(name, sizeof(name), "f%02u.in", i);
             out.write(name, 7);
         }
         std::vector<char> payload(payload_size, 'Z');
@@ -206,10 +208,10 @@ TEST_CASE("BigDiff Comparison Scenarios", "[big_diff][compare]") {
         BigArchive base_arc(env.base_file);
         BigArchive target_arc(env.target_file);
 
-        FILE* locked_target = _fsopen(env.target_file.string().c_str(), "rb", 0x10);
+        std::FILE* locked_target = _fsopen(env.target_file.string().c_str(), "rb", 0x10);
         if (locked_target) {
             REQUIRE_THROWS_AS(BigDiff::compare(base_arc, target_arc), BigArchiveError);
-            fclose(locked_target);
+            std::fclose(locked_target);
         }
     }
 
@@ -342,13 +344,13 @@ TEST_CASE("BigDiff Delta Patch Generation", "[big_diff][patch]") {
             std::ofstream pre(env.patch_file, std::ios::binary);
             pre << "locked";
         }
-        FILE* locked_out = _fsopen(env.patch_file.string().c_str(), "rb", 0x10);
+        std::FILE* locked_out = _fsopen(env.patch_file.string().c_str(), "rb", 0x10);
         if (locked_out) {
             REQUIRE_THROWS_AS(
                 BigDiff::create_patch(base_arc, target_arc, env.patch_file),
                 BigArchiveError
             );
-            fclose(locked_out);
+            std::fclose(locked_out);
         }
         REQUIRE(std::filesystem::exists(env.patch_file));
 
