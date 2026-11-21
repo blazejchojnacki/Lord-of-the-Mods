@@ -399,7 +399,7 @@ class ini:
             file_content: str | None = None,
         ) -> ini.StrDocument: ...
 
-class ConstructFile:
+    class ConstructFile:
         name: str
         delimiters: list[list[str]]
         start_level: int
