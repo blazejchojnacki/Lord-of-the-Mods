@@ -104,6 +104,13 @@ jobs:
           python -m build --wheel
           twine check dist/*
 
+      - name: Upload Built Wheel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lotm-wheel
+          path: dist/*.whl
+          retention-days: 1
+
       - name: Test Built Wheel in Isolated Environment
         shell: pwsh
         run: |
@@ -159,3 +166,35 @@ jobs:
           python -m lotm --help
           python -m lotm.big --help
           python -c "import lotm.pipeline; assert hasattr(lotm.pipeline, 'ArchiveEditor')"
+
+  stable-abi-smoke-test:
+    name: Stable ABI Smoke Test (Windows, Python ${{ matrix.python-version }})
+    needs: build-and-test
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.13', '3.14']
+
+    steps:
+      - name: Download Built Wheel Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: lotm-wheel
+          path: dist
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Verify abi3 Wheel Forward Compatibility
+        shell: pwsh
+        run: |
+          $wheel = (Get-Item dist/*.whl).FullName
+          python -m pip install --upgrade pip
+          python -m pip install --only-binary=:all: $wheel
+          lotm --version
+          lotm --help | Out-Null
+          lotm-big --help | Out-Null
+          python -c "import lotm, lotm.big, lotm.ini, lotm.pipeline; assert lotm.__version__"
