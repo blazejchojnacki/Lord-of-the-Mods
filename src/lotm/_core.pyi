@@ -48,8 +48,8 @@ class big:
         def read_entry(self, entry: str | 'big.BigEntry') -> bytes: ...
         def stream_entry(self, entry: str | 'big.BigEntry', chunk_callback: Callable[[memoryview], bool | None]) -> None: ...
         def extract_all(
-            self, 
-            output_dir: str | os.PathLike[str], 
+            self,
+            output_dir: str | os.PathLike[str],
             progress_callback: Callable[['big.ProgressReport'], bool | None] | None = None,
             filter_pattern: str = "",
             create_directories: bool = True
@@ -71,8 +71,8 @@ class big:
     class BigPacker:
         @staticmethod
         def pack_from_directory(
-            source_dir: str | os.PathLike[str], 
-            output_file: str | os.PathLike[str], 
+            source_dir: str | os.PathLike[str],
+            output_file: str | os.PathLike[str],
             progress_callback: Callable[['big.ProgressReport'], bool | None] | None = None
         ) -> None: ...
         @staticmethod
@@ -439,7 +439,8 @@ class ini:
             strict: bool = False,
             file_content: str | None = None,
         ) -> None: ...
-        def construct(self) -> None: ...
+        def construct(self, preserve_metadata: bool = False) -> None: ...
+        def construct_with_metadata(self) -> None: ...
         def append(self, item: 'ini.RootItem') -> None: ...
         def find_block(
             self,

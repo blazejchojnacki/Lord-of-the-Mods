@@ -591,7 +591,12 @@ namespace lotm::python {
             self.construct(preserve_metadata);
                 },
                 nb::arg("preserve_metadata") = false,
-                "Parses or re-parses the document into its AST representation");
+                "Parses or re-parses the document into its AST representation")
+            .def("construct_with_metadata", [](lotm::ini::ConstructFile& self) {
+            nb::gil_scoped_release release;
+            self.construct_with_metadata();
+                },
+                "Parses or re-parses the document while preserving caller-supplied metadata");
 
         bind_sequence_protocol<
             lotm::ini::ConstructFile,
