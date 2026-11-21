@@ -171,7 +171,7 @@ def test_archive_editor_ast_caching_deduplication_and_full_repack(tmp_path: Path
         assert result.output_path == out_big
         assert result.output_bytes is None
         assert result.modified_entries == ["data\\ini\\weapon.ini", "lang\\lotr.str"]
-        assert result.added_entries == ["data/ini/new_spell.ini"]
+        assert result.added_entries == ["data\\ini\\new_spell.ini"]
         assert result.removed_entries == ["data\\ini\\includes\\armor.inc"]
 
     assert editor.closed
@@ -221,7 +221,7 @@ def test_archive_editor_delta_patch_and_raw_override_precedence(tmp_path: Path) 
 
             patch_res = editor.save_patch(patch_big)
             assert patch_res.modified_entries == ["art\\textures\\sword.dds", "data\\ini\\weapon.ini"]
-            assert patch_res.added_entries == ["data/ini/staged_unit.ini", "lang/extra.str"]
+            assert patch_res.added_entries == ["data\\ini\\staged_unit.ini", "lang\\extra.str"]
 
         # Borrowed BigArchive must remain open after ArchiveEditor exits
         assert not open_arc.closed
