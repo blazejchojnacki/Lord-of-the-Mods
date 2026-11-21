@@ -138,7 +138,7 @@ jobs:
           try {
             & $venvLotm --version
             & $venvLotm --help | Out-Null
-            & $venvLotm-big --help | Out-Null
+            & $venvLotmBig --help | Out-Null
             & $venvPython -m lotm --help | Out-Null
             & $venvPython -c "import lotm, lotm.big, lotm.ini, lotm.pipeline; assert lotm.__version__"
             & $venvPython -m mypy (Join-Path "${{ github.workspace }}" "src\lotm")
