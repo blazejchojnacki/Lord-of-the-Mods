@@ -10,7 +10,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 from lotm._core import ini
 
 LEVEL_INDENT = ini.LEVEL_INDENT
-INI_ENDS = ini.INI_ENDS
+DEFAULT_END = ini.DEFAULT_END
 MAX_INI_DEPTH = ini.MAX_INI_DEPTH
 MAX_INI_FILE_SIZE = ini.MAX_INI_FILE_SIZE
 SAGE_MAX_BLOCK_NAME_LEN = ini.SAGE_MAX_BLOCK_NAME_LEN
@@ -44,7 +44,7 @@ from .parser import (
 
 __all__ = [
     "LEVEL_INDENT",
-    "INI_ENDS",
+    "DEFAULT_END",
     "MAX_INI_DEPTH",
     "MAX_INI_FILE_SIZE",
     "SAGE_MAX_BLOCK_NAME_LEN",

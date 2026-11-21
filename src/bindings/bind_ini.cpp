@@ -173,12 +173,7 @@ namespace lotm::python {
         sub.attr("MAX_INI_FILE_SIZE") = lotm::ini::MAX_INI_FILE_SIZE;
         sub.attr("SAGE_MAX_BLOCK_NAME_LEN") = lotm::ini::SAGE_MAX_BLOCK_NAME_LEN;
         sub.attr("SAGE_MAX_IDENTIFIER_LEN") = lotm::ini::SAGE_MAX_IDENTIFIER_LEN;
-
-        nb::list ini_ends_list;
-        for (const auto kw : lotm::ini::INI_ENDS) {
-            ini_ends_list.append(kw);
-        }
-        sub.attr("INI_ENDS") = nb::tuple(ini_ends_list);
+        sub.attr("DEFAULT_END") = std::string{ lotm::ini::DEFAULT_END };
 
         nb::class_<lotm::ini::FormatOptions>(sub, "FormatOptions", "Configurable serialization rules for AST printing and formatting")
             .def("__init__", [](lotm::ini::FormatOptions* t,

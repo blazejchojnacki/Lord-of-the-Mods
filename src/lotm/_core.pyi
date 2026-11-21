@@ -193,7 +193,7 @@ class big:
 
 class ini:
     LEVEL_INDENT: str
-    INI_ENDS: tuple[str, ...]
+    DEFAULT_END: str
     MAX_INI_DEPTH: int
     MAX_INI_FILE_SIZE: int
     SAGE_MAX_BLOCK_NAME_LEN: int

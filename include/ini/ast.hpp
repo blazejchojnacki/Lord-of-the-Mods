@@ -297,7 +297,7 @@ namespace lotm::ini {
     };
 
     inline constexpr std::string_view LEVEL_INDENT = "    ";
-    inline constexpr std::array<std::string_view, 3> INI_ENDS = { "End", "END", "end" };
+    inline constexpr std::string_view DEFAULT_END = "End";
     inline constexpr std::size_t MAX_INI_DEPTH = 16;
     inline constexpr std::size_t MAX_INI_FILE_SIZE = 64ULL * 1024ULL * 1024ULL;
 

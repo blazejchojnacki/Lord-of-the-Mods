@@ -264,7 +264,7 @@ namespace lotm::ini {
                     if constexpr (std::is_same_v<NodeT, ConstructLevel>) {
                         if (!node_ptr->end_token.empty()) {
                             const std::string end_tok = (options.normalize_end_tokens && is_ini_end(node_ptr->end_token))
-                                ? std::string{ "End" }
+                                ? std::string{ DEFAULT_END }
                             : node_ptr->end_token;
                             const std::string end_cmt = format_single_comment(
                                 node_ptr->end_comment, options.normalize_comments
@@ -278,7 +278,7 @@ namespace lotm::ini {
                     else if constexpr (std::is_same_v<NodeT, StrEntry>) {
                         if (!node_ptr->end_token.empty()) {
                             const std::string end_tok = (options.normalize_end_tokens && is_ini_end(node_ptr->end_token))
-                                ? std::string{ "End" }
+                                ? std::string{ DEFAULT_END }
                             : node_ptr->end_token;
                             const std::string end_cmt = format_single_comment(
                                 node_ptr->end_comment, options.normalize_comments
