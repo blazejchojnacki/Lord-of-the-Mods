@@ -47,8 +47,13 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install nanobind ninja
+          pip install nanobind ninja ruff
           pip install -e ".[test]"
+
+      - name: Run Ruff Checks
+        run: |
+          ruff check src tests
+          ruff format --check src tests
 
       - name: Install OpenCppCoverage
         run: |
@@ -103,9 +108,45 @@ jobs:
           python -m build --wheel
           twine check dist/*
 
+      - name: Test Built Wheel in Isolated Environment
+        shell: pwsh
+        run: |
+          $wheel = (Get-Item dist/*.whl).FullName
+          $isolatedRoot = Join-Path $env:RUNNER_TEMP "wheel-verify"
+          $venvDir = Join-Path $isolatedRoot "venv"
+          $workDir = Join-Path $isolatedRoot "work"
+
+          if (Test-Path $isolatedRoot) {
+            Remove-Item -Recurse -Force $isolatedRoot
+          }
+          New-Item -ItemType Directory -Path $workDir | Out-Null
+
+          python -m venv $venvDir
+          $venvPython = Join-Path $venvDir "Scripts\python.exe"
+          $venvLotm = Join-Path $venvDir "Scripts\lotm.exe"
+          $venvLotmBig = Join-Path $venvDir "Scripts\lotm-big.exe"
+
+          & $venvPython -m pip install --upgrade pip
+          & $venvPython -m pip install $wheel
+
+          Push-Location $workDir
+          try {
+            & $venvLotm --version
+            & $venvLotm --help | Out-Null
+            & $venvLotm-big --help | Out-Null
+            & $venvPython -m lotm --help | Out-Null
+            & $venvPython -c "import lotm, lotm.big, lotm.ini, lotm.pipeline; assert lotm.__version__"
+            & $venvPython -m mypy (Join-Path "${{ github.workspace }}" "src\lotm")
+            & $venvPython -m pytest --doctest-modules --pyargs lotm
+          }
+          finally {
+            Pop-Location
+            Remove-Item -Recurse -Force $isolatedRoot -ErrorAction SilentlyContinue
+          }
+
       - name: Test Installed Wheel
         run: |
-          pip install (Get-Item dist/*.whl).FullName
+          pip install --force-reinstall --no-deps (Get-Item dist/*.whl).FullName
           lotm --version
           lotm --help
           lotm big --help
@@ -121,3 +162,4 @@ jobs:
           lotm-big overlay --help
           python -m lotm --help
           python -m lotm.big --help
+          python -c "import lotm.pipeline; assert hasattr(lotm.pipeline, 'ArchiveEditor')"
