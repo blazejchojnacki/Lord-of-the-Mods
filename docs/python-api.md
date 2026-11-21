@@ -94,7 +94,7 @@ except BigFormatError as err:
 
 ## `lotm.big.BigArchive`
 
-For advanced use cases, the native `BigArchive` class provides object-oriented access to the archive, including in-memory single-file extraction and context management.
+For advanced use cases, the native `BigArchive` class provides object-oriented access to the archive, including $O(1)$ metadata resolution, in-memory single-file extraction, and context management.
 
 ### Context Manager & Lifecycle
 `BigArchive` implements the Python context manager protocol, ensuring that memory structures and the parsed index are deterministically released when the block exits.
@@ -109,19 +109,27 @@ with BigArchive("my_mod.big") as arc:
 # arc is now closed, memory is freed, and further calls will raise BigArchiveError.
 ```
 
-### `read_entry(entry: str | os.PathLike[str] | BigEntry) -> bytes`
+### `resolve(entry_name: str) -> BigEntry`
+Resolves the `BigEntry` metadata record (`name`, `offset`, `size`) for a specific internal virtual path in $O(1)$ time (matched case-insensitively with slash normalization).
+
+* **`entry_name`**: Internal virtual path string inside the archive (e.g., `"data/ini/weapon.ini"`).
+* **Returns**: The matching `BigEntry` metadata record.
+* **Exceptions**:
+  * `lotm.big.BigArchiveError` (Native): Raised if the archive is closed or the requested entry does not exist.
+
+### `read_entry(entry: str | BigEntry) -> bytes`
 Reads a single archive entry directly into memory as a `bytes` object (fully supporting the Python Buffer Protocol) without unpacking the entire archive to disk. The GIL is safely released during physical I/O.
 
-* **`entry`**: A string/Path object (internal path matched case-insensitively using standard SAGE rules) or a `BigEntry` object obtained from `get_entries()`.
+* **`entry`**: A virtual path string (matched case-insensitively using standard SAGE rules) or a `BigEntry` object obtained from `resolve()` / `get_entries()`.
 * **Returns**: A `bytes` object containing the binary file payload.
 * **Exceptions**:
   * `lotm.big.BigArchiveError` (Native): Raised if the archive is closed, the file is unreadable, or the requested entry does not exist.
   * `lotm.big.BigFormatError` (Native): Raised if the physical bounds of the archive are breached during the read.
 
-### `stream_entry(entry: str | os.PathLike[str] | BigEntry, chunk_callback: Callable[[memoryview], bool | None]) -> None`
+### `stream_entry(entry: str | BigEntry, chunk_callback: Callable[[memoryview], bool | None]) -> None`
 Streams an entry payload strictly from the source archive through reusable buffers without materializing the entire file in RAM. Recommended for large assets (`.vp6`, `.map`, `.w3d`).
 
-* **`entry`**: A string/Path object or a `BigEntry` object.
+* **`entry`**: A virtual path string or a `BigEntry` object.
 * **`chunk_callback`**: Callable invoked sequentially with each memoryview chunk (up to 1MB). Return `False` to abort streaming.
 
 **Usage Example:**
@@ -160,7 +168,7 @@ Automatically packs only the added and modified entries into a minimal, standalo
 Simulates the SAGE engine's load-order to resolve the effective virtual file tree across multiple `.big` files.
 
 ### `load_overlay(source: Path | Iterable[Path]) -> BigOverlay`
-`BigOverlay` exposes `read_entry(name)` and `stream_entry(name, cb)` matching `BigArchive` semantics. It also supports context managers to release memory deterministically.
+`BigOverlay` exposes `resolve(entry_name: str)`, `read_entry(entry_name: str)`, and `stream_entry(entry_name: str, cb)` matching `BigArchive` semantics. It also supports context managers to release memory deterministically.
 
 ```python
 from lotm.big import load_overlay

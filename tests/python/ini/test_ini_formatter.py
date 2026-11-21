@@ -1,6 +1,6 @@
 """
 @file tests/python/ini/test_ini_formatter.py
-@brief Unit tests for lotm.ini.formatter (format_ini and atomic sibling writes).
+@brief Unit tests for lotm.ini.formatter (format_ini, FormatOptions, normalization toggles, and atomic sibling writes).
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
 Part of the Lord of the Mods (lotm) project.
@@ -30,6 +30,140 @@ def test_format_ini_in_memory_string_and_buffer() -> None:
         file_content=b"Armor A\nArmor = DEFAULT 10%\nEnd\n",
     )
     assert formatted_buf == formatted_str
+
+
+def test_format_options_object_and_ast_print_overloads() -> None:
+    """Verify FormatOptions construction, properties, equality, repr, and direct AST .print(options=...) calls."""
+    default_opts = ini.FormatOptions()
+    assert default_opts.indent == ini.LEVEL_INDENT
+    assert not default_opts.enforce_equals
+    assert not default_opts.normalize_end_tokens
+    assert not default_opts.normalize_header_spacing
+    assert not default_opts.normalize_statement_equals
+    assert not default_opts.normalize_comments
+    assert not default_opts.coalesce_blank_lines
+    assert default_opts == ini.FormatOptions()
+    assert "FormatOptions" in repr(default_opts)
+
+    custom_opts = ini.FormatOptions(
+        indent="  ",
+        enforce_equals=True,
+        normalize_end_tokens=True,
+        normalize_header_spacing=True,
+        normalize_statement_equals=True,
+        normalize_comments=True,
+        coalesce_blank_lines=True,
+    )
+    assert custom_opts != default_opts
+    assert custom_opts.indent == "  "
+    assert custom_opts.enforce_equals
+
+    doc = ini.parse_ini(
+        "direct.ini",
+        strict=True,
+        file_content="Object   GondorSoldier // hdr\n  Draw W3DScriptedModelDraw ModuleTag_01\n    Damage=50 // dmg\n  End\n  beginscript Init\n    x = 1\n  endscript\nEND\n",
+    )
+    assert len(doc.warnings) == 1
+    assert "missing '=' after delimiter 'Draw'" in doc.warnings[0]
+
+    lossless_rendered = doc.print()
+    assert "  Draw W3DScriptedModelDraw ModuleTag_01\n" in lossless_rendered
+
+    rendered = doc.print(custom_opts)
+    assert "Object GondorSoldier ; hdr\n" in rendered
+    assert "  Draw = W3DScriptedModelDraw ModuleTag_01\n" in rendered
+    assert "    Damage = 50 ; dmg\n" in rendered
+    assert "  BeginScript Init\n" in rendered
+    assert "    x = 1\n" in rendered
+    assert "  EndScript\n" in rendered
+    assert rendered.endswith("End\n\n")
+
+    block = doc[0]
+    assert isinstance(block, ini.ConstructLevel)
+    assert "  Draw = W3DScriptedModelDraw ModuleTag_01\n" in block.print(options=custom_opts)
+
+    script = block[1]
+    assert isinstance(script, ini.ScriptNode)
+    assert "  BeginScript Init\n" in script.print(level=1, options=custom_opts)
+
+    str_doc = ini.parse_str(
+        "direct.str",
+        strict=True,
+        file_content='OBJECT:GondorSoldier // hdr\n  "Soldier" // txt\nend\n',
+    )
+    str_rendered = str_doc.print(custom_opts)
+    assert "OBJECT:GondorSoldier ; hdr\n" in str_rendered
+    assert str_rendered.endswith("End\n\n")
+
+    str_entry = str_doc[0]
+    assert isinstance(str_entry, ini.StrEntry)
+    assert f'{custom_opts.indent}"Soldier" ; txt\n' in str_entry.print(custom_opts)
+
+
+def test_format_ini_normalization_toggles_and_options_merging() -> None:
+    """Verify enforce_equals, normalization toggles, and FormatOptions merging in format_ini."""
+    messy_ini = (
+        "Object   GondorFighter   ModTag_A // header\n"
+        "    Draw W3DScriptedModelDraw ModuleTag_01\n"
+        "        // comment 1\n"
+        "\n"
+        "        ; comment 2\n"
+        "        Damage=75 // slash inline\n"
+        "    End\n"
+        "    beginscript   InitTag\n"
+        "        x = 1\n"
+        "\n"
+        "\n"
+        "        y = 2\n"
+        "    endscript\n"
+        "ENd\n"
+    )
+    normalized_ini = ini.format_ini(
+        "messy.ini",
+        file_content=messy_ini,
+        strict=True,
+        enforce_equals=True,
+        normalize_end_tokens=True,
+        normalize_header_spacing=True,
+        normalize_statement_equals=True,
+        normalize_comments=True,
+        coalesce_blank_lines=True,
+    )
+    assert "Object GondorFighter ModTag_A ; header\n" in normalized_ini
+    assert "    Draw = W3DScriptedModelDraw ModuleTag_01\n" in normalized_ini
+    assert "        ; comment 1\n" in normalized_ini
+    assert "        Damage = 75 ; slash inline\n" in normalized_ini
+    assert "    BeginScript InitTag\n" in normalized_ini
+    assert "    EndScript\n" in normalized_ini
+    assert normalized_ini.endswith("End\n\n")
+    assert "\n\n\n" not in normalized_ini
+
+    # Verify OR-merging explicit FormatOptions with keyword overrides
+    base_opts = ini.FormatOptions(indent="  ", normalize_end_tokens=True)
+    merged = ini.format_ini(
+        "merge.ini",
+        file_content="Weapon Bow\nDamage=30\nEND\n",
+        options=base_opts,
+        enforce_equals=True,
+        normalize_statement_equals=True,
+    )
+    assert "  Damage = 30\n" in merged
+    assert merged.endswith("End\n\n")
+
+    messy_str = (
+        "OBJECT:GondorFighter\n"
+        '    "Gondor Fighter"\n'
+        "end\n"
+    )
+    normalized_str = ini.format_ini(
+        "messy.str",
+        file_content=messy_str,
+        strict=True,
+        normalize_end_tokens=True,
+        normalize_header_spacing=True,
+    )
+    assert "OBJECT:GondorFighter\n" in normalized_str
+    assert normalized_str.endswith("End\n\n")
 
 
 def test_format_ini_atomic_file_output_and_cleanup_on_failure(

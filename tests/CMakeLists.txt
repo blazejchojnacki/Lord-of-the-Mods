@@ -21,6 +21,7 @@ FetchContent_MakeAvailable(Catch2)
 add_executable(lotm_big_tests
     cpp/main.cpp
     cpp/core/test_endian.cpp
+    cpp/core/test_path_utils.cpp
     cpp/big/test_big_archive.cpp
     cpp/big/test_big_packer.cpp
     cpp/big/test_big_diff.cpp
@@ -43,7 +44,17 @@ target_compile_options(lotm_big_tests PRIVATE
 # INI
 add_executable(lotm_ini_tests
     cpp/main.cpp
-    cpp/ini/test_ini_parser.cpp
+    cpp/ini/test_ast.cpp
+    cpp/ini/test_lexer.cpp
+    cpp/ini/test_schema.cpp
+    cpp/ini/test_serializer.cpp
+    cpp/ini/test_recognize.cpp
+    cpp/ini/test_include.cpp
+    cpp/ini/test_str.cpp
+    cpp/ini/test_ini.cpp
+    cpp/ini/test_io.cpp
+    cpp/ini/test_encoding.cpp
+    cpp/ini/test_memory.cpp
 )
 
 target_link_libraries(lotm_ini_tests PRIVATE

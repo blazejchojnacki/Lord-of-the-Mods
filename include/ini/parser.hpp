@@ -32,7 +32,8 @@ namespace lotm::ini {
     [[nodiscard]] std::string serialize_iterative(
         std::span<const SerializableNodeRef> items,
         int start_level = 0,
-        std::string_view file_type = ".ini"
+        std::string_view file_type = ".ini",
+        const FormatOptions& options = {}
     );
 
     /**
@@ -69,20 +70,20 @@ namespace lotm::ini {
     /**
      * @brief Root AST representation of a fully parsed SAGE .ini, .inc, or .str configuration document.
      */
-    class ConstructFile {
+    class ConstructFile : public SequenceMixin<ConstructFile, RootItem> {
     public:
         std::string name{};
-        std::string comment{};
         std::vector<std::string> defines{};
         std::vector<std::vector<std::string>> delimiters{};
         int start_level{ 0 };
         bool strict{ false };
         std::optional<std::string> file_content{};
 
-        std::vector<RootItem> items{};
+        StableVector<RootItem> items{};
         int current_level{ 0 };
         std::string last_comment{};
         std::vector<std::string> errors{};
+        std::vector<std::string> warnings{};
 
         ConstructFile() = default;
 
@@ -98,36 +99,62 @@ namespace lotm::ini {
             std::span<const uint8_t> buffer
         );
 
-        void construct();
+        void construct(bool preserve_metadata = false);
+        void construct_with_metadata();
 
-        [[nodiscard]] std::size_t size() const noexcept { return items.size(); }
-        [[nodiscard]] bool empty() const noexcept { return items.empty(); }
-
-        void append(RootItem item) { items.push_back(std::move(item)); }
+        using SequenceMixin<ConstructFile, RootItem>::append;
         void append(AstNode item) { items.emplace_back(std::move(item)); }
         void append(StrEntry item) { items.emplace_back(std::move(item)); }
 
-        [[nodiscard]] RootItem& operator[](std::size_t index) { return items[index]; }
-        [[nodiscard]] const RootItem& operator[](std::size_t index) const { return items[index]; }
+        [[nodiscard]] ConstructLevel* find_block(
+            std::string_view block_class,
+            std::optional<std::string_view> block_name = std::nullopt,
+            std::optional<std::string_view> block_identifier = std::nullopt,
+            bool recursive = false
+        );
 
-        [[nodiscard]] auto begin() noexcept { return items.begin(); }
-        [[nodiscard]] auto end() noexcept { return items.end(); }
-        [[nodiscard]] auto begin() const noexcept { return items.begin(); }
-        [[nodiscard]] auto end() const noexcept { return items.end(); }
-        [[nodiscard]] auto cbegin() const noexcept { return items.cbegin(); }
-        [[nodiscard]] auto cend() const noexcept { return items.cend(); }
+        [[nodiscard]] const ConstructLevel* find_block(
+            std::string_view block_class,
+            std::optional<std::string_view> block_name = std::nullopt,
+            std::optional<std::string_view> block_identifier = std::nullopt,
+            bool recursive = false
+        ) const;
 
-        [[nodiscard]] std::string print() const;
+        [[nodiscard]] std::vector<ConstructLevel*> find_all(
+            std::string_view block_class,
+            std::optional<std::string_view> block_name = std::nullopt,
+            std::optional<std::string_view> block_identifier = std::nullopt,
+            bool recursive = false
+        );
+
+        [[nodiscard]] std::vector<const ConstructLevel*> find_all(
+            std::string_view block_class,
+            std::optional<std::string_view> block_name = std::nullopt,
+            std::optional<std::string_view> block_identifier = std::nullopt,
+            bool recursive = false
+        ) const;
+
+        [[nodiscard]] std::optional<std::string> get_value(std::string_view key) const;
+        [[nodiscard]] std::vector<std::string> get_all_values(std::string_view key) const;
+        void set_value(std::string_view key, std::string_view value);
+        bool remove_value(std::string_view key, bool all_occurrences = false);
+        bool remove_block(
+            std::string_view block_class,
+            std::optional<std::string_view> block_name = std::nullopt,
+            std::optional<std::string_view> block_identifier = std::nullopt
+        );
+
+        [[nodiscard]] std::string print(const FormatOptions& options = {}) const;
 
         [[nodiscard]] bool operator==(const ConstructFile& other) const noexcept {
             return name == other.name &&
-                comment == other.comment &&
                 defines == other.defines &&
                 delimiters == other.delimiters &&
                 start_level == other.start_level &&
                 strict == other.strict &&
                 items == other.items &&
-                errors == other.errors;
+                errors == other.errors &&
+                warnings == other.warnings;
         }
 
     private:
@@ -136,15 +163,20 @@ namespace lotm::ini {
         std::vector<std::vector<DelimiterRule>> active_rules_{};
         std::vector<ContextPtr> context_stack_{};
 
-        void construct_from_view(std::string_view raw_view);
+        void construct_from_utf8_view(std::string_view content_view, bool preserve_metadata = false);
         [[nodiscard]] int get_lookup_level() const noexcept;
         void append_to_active_context(AstNode node);
+
+        template <typename NodeT>
+        NodeT* push_context_node(NodeT&& node);
+
         void parse_line(std::string_view raw_line, std::size_t line_num, LexedLine& lex_scratch);
         void handle_empty_line(std::string_view raw_line);
         [[nodiscard]] bool handle_block_start(
             std::span<const std::string_view> words,
             std::span<const std::string_view> line_tokens,
-            std::string_view inline_comment
+            std::string_view inline_comment,
+            std::size_t line_num
         );
         [[nodiscard]] bool handle_block_end(
             std::span<const std::string_view> words,

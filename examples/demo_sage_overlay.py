@@ -1,4 +1,11 @@
-# demo_sage_overlay.py
+"""
+@file examples/demo_sage_overlay.py
+@brief Demonstration of SAGE engine load-order emulation and virtual file tree resolution.
+
+Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
+Part of the Lord of the Mods (lotm) project.
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
 import shutil
 from pathlib import Path
 import lotm.big as big

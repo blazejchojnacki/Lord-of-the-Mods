@@ -11,6 +11,7 @@
 #include <big/exceptions.hpp>
 #include <big/types.hpp>
 #include <core/endian.hpp>
+#include <core/path_utils.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -30,64 +31,19 @@ namespace lotm::big {
         constexpr std::size_t EXTRACT_CHUNK_SIZE = 1024 * 1024;
         constexpr uintmax_t MAX_AMPLIFICATION_RATIO = 20;
 
-        inline std::string to_utf8(const std::filesystem::path& p) {
-            auto u8 = p.u8string();
-            return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
-        }
+        using lotm::core::to_utf8;
+        using lotm::core::matches_glob;
+        using lotm::core::normalize_virtual_path;
+        using lotm::core::has_win32_namespace_prefix;
+        using lotm::core::is_drive_relative_path;
 
         inline std::filesystem::path from_utf8(std::string_view sv) {
             try {
-                return std::filesystem::path(std::u8string_view(
-                    reinterpret_cast<const char8_t*>(sv.data()), sv.size()));
+                return lotm::core::utf8_to_path(sv);
             }
             catch (const std::exception&) {
                 throw BigSecurityError("Invalid UTF-8 or unmappable characters in entry path: " + std::string(sv));
             }
-        }
-
-        // Case-insensitive glob matcher supporting '*' and '?' with normalized path separators
-        bool matches_glob(std::string_view text, std::string_view pattern) noexcept {
-            if (pattern.empty() || pattern == "*") {
-                return true;
-            }
-
-            auto norm = [](char c) noexcept -> char {
-                if (c == '\\' || c == '/') {
-                    return static_cast<char>(std::filesystem::path::preferred_separator);
-                }
-                return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                };
-
-            std::size_t t_idx = 0;
-            std::size_t p_idx = 0;
-            std::size_t star_idx = std::string_view::npos;
-            std::size_t match_idx = 0;
-
-            while (t_idx < text.size()) {
-                if (p_idx < pattern.size() && (pattern[p_idx] == '?' || norm(pattern[p_idx]) == norm(text[t_idx]))) {
-                    ++t_idx;
-                    ++p_idx;
-                }
-                else if (p_idx < pattern.size() && pattern[p_idx] == '*') {
-                    star_idx = p_idx;
-                    match_idx = t_idx;
-                    ++p_idx;
-                }
-                else if (star_idx != std::string_view::npos) {
-                    p_idx = star_idx + 1;
-                    ++match_idx;
-                    t_idx = match_idx;
-                }
-                else {
-                    return false;
-                }
-            }
-
-            while (p_idx < pattern.size() && pattern[p_idx] == '*') {
-                ++p_idx;
-            }
-
-            return p_idx == pattern.size();
         }
 
         // Internal helper for reading strings until null-terminator within a byte budget
@@ -105,74 +61,6 @@ namespace lotm::big {
             }
             stream.setstate(std::ios::failbit);
             return result;
-        }
-
-        // Checks for extended Win32 and NT namespace prefixes (\\?, \\., \?, \., \??)
-        bool has_win32_namespace_prefix(std::string_view path) {
-            constexpr char sep = static_cast<char>(std::filesystem::path::preferred_separator);
-            std::size_t pos = 0;
-            while (pos < path.size() && path[pos] == sep) {
-                ++pos;
-            }
-            return pos > 0 && pos < path.size() && (path[pos] == '?' || path[pos] == '.');
-        }
-
-        // Checks for Windows drive-relative paths (e.g., C:file.txt, D:..\escaped.txt)
-        bool is_drive_relative_path(std::string_view path) {
-            constexpr char sep = static_cast<char>(std::filesystem::path::preferred_separator);
-            return path.size() >= 2 &&
-                std::isalpha(static_cast<unsigned char>(path[0])) != 0 &&
-                path[1] == ':' &&
-                (path.size() == 2 || path[2] != sep);
-        }
-
-        // Checks for Windows reserved device names and Alternate Data Streams (ADS)
-        bool is_unsafe_filename(std::string_view name) {
-            if (name.empty() || name.back() == ' ' || name.back() == '.') {
-                return true;
-            }
-
-            std::string upper_name;
-            upper_name.reserve(name.size());
-            for (char c : name) {
-                const auto uc = static_cast<unsigned char>(c);
-                if (uc < 32 || c == ':' || c == '<' || c == '>' ||
-                    c == '"' || c == '|' || c == '?' || c == '*') {
-                    return true;
-                }
-                upper_name.push_back(static_cast<char>(std::toupper(uc)));
-            }
-
-            auto dot_pos = upper_name.find('.');
-            std::string_view base = (dot_pos != std::string_view::npos)
-                ? std::string_view(upper_name).substr(0, dot_pos)
-                : upper_name;
-
-            // Strip trailing spaces and dots (Win32 path normalization trims them before device check)
-            while (!base.empty() && (base.back() == ' ' || base.back() == '.')) {
-                base.remove_suffix(1);
-            }
-
-            if (base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" ||
-                base == "CONIN$" || base == "CONOUT$" || base == "CLOCK$") {
-                return true;
-            }
-            if (base.starts_with("COM") || base.starts_with("LPT")) {
-                if (base.size() == 4) {
-                    const auto digit = static_cast<unsigned char>(base[3]);
-                    if ((digit >= '0' && digit <= '9') ||
-                        digit == 0xB9 || digit == 0xB2 || digit == 0xB3) {
-                        return true;
-                    }
-                }
-                else if (base.size() == 5 && static_cast<unsigned char>(base[3]) == 0xC2) {
-                    const auto sup = static_cast<unsigned char>(base[4]);
-                    if (sup == 0xB9 || sup == 0xB2 || sup == 0xB3) {
-                        return true;
-                    }
-                }
-            }
-            return false;
         }
     } // namespace
 
@@ -264,10 +152,7 @@ namespace lotm::big {
                 }
             }
 
-            std::string lower_name = entry.name;
-            for (char& c : lower_name) {
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            }
+            std::string lower_name = normalize_virtual_path(entry.name);
 
             entries_.push_back(std::move(entry));
             index_map_.emplace(std::move(lower_name), entries_.size() - 1);
@@ -306,35 +191,27 @@ namespace lotm::big {
         return filtered;
     }
 
+    const BigEntry& BigArchive::resolve(std::string_view entry_name) const {
+        if (is_closed_) {
+            throw BigArchiveError("Cannot resolve on a closed archive.");
+        }
+
+        // Match normalized path case-insensitively to mirror SAGE engine lookup semantics
+        const std::string key = normalize_virtual_path(entry_name);
+        auto it = index_map_.find(key);
+        if (it == index_map_.end()) {
+            throw BigArchiveError("Entry not found in archive: " + std::string(entry_name));
+        }
+
+        return entries_[it->second];
+    }
+
     std::vector<uint8_t> BigArchive::read_entry(std::string_view entry_name) const {
         if (is_closed_) {
             throw BigArchiveError("Cannot read from a closed archive.");
         }
 
-        std::string normalized_name(entry_name);
-        for (char& c : normalized_name) {
-            if (c == '\\' || c == '/') {
-                c = static_cast<char>(std::filesystem::path::preferred_separator);
-            }
-        }
-
-        // Match normalized path case-insensitively to mirror SAGE engine lookup semantics
-        auto it = std::find_if(entries_.begin(), entries_.end(),
-            [&normalized_name](const BigEntry& entry) {
-                if (entry.name.size() != normalized_name.size()) {
-                    return false;
-                }
-                return std::equal(entry.name.begin(), entry.name.end(), normalized_name.begin(),
-                    [](unsigned char a, unsigned char b) {
-                        return std::tolower(a) == std::tolower(b);
-                    });
-            });
-
-        if (it == entries_.end()) {
-            throw BigArchiveError("Entry not found in archive: " + std::string(entry_name));
-        }
-
-        return read_entry(*it);
+        return read_entry(resolve(entry_name));
     }
 
     std::vector<uint8_t> BigArchive::read_entry(const BigEntry& entry) const {
@@ -380,18 +257,7 @@ namespace lotm::big {
         }
         if (!chunk_cb) return;
 
-        std::string normalized_name(entry_name);
-        for (char& c : normalized_name) {
-            if (c == '\\' || c == '/') c = static_cast<char>(std::filesystem::path::preferred_separator);
-            else c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        }
-
-        auto it = index_map_.find(normalized_name);
-        if (it == index_map_.end()) {
-            throw BigArchiveError("Entry not found in archive: " + std::string(entry_name));
-        }
-
-        stream_entry(entries_[it->second], std::move(chunk_cb));
+        stream_entry(resolve(entry_name), std::move(chunk_cb));
     }
 
     void BigArchive::stream_entry(const BigEntry& entry, ChunkCallback chunk_cb) const {
@@ -510,7 +376,7 @@ namespace lotm::big {
                 if (part == "..") {
                     throw BigSecurityError("Directory traversal (..) detected in entry: " + entry.name);
                 }
-                if (is_unsafe_filename(to_utf8(part))) {
+                if (lotm::core::is_unsafe_ntfs_component(to_utf8(part))) {
                     throw BigSecurityError("Unsafe Windows device name or ADS stream in path: " + entry.name);
                 }
 
@@ -532,10 +398,6 @@ namespace lotm::big {
             }
 
             total_archive_size += entry.size;
-        }
-
-        if (!std::filesystem::exists(output_dir)) {
-            std::filesystem::create_directories(output_dir);
         }
 
         std::ifstream file(file_path_, std::ios::binary);

@@ -16,6 +16,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import NoReturn
 
+from lotm import __version__
 from lotm.big.differ import create_patch, diff
 from lotm.big.overlay import load_overlay
 from lotm.big.packer import pack
@@ -28,6 +29,7 @@ logger = logging.getLogger("lotm.big")
 
 
 def _setup_logging(verbose: bool) -> None:
+    """Configure package logger verbosity and attach stdout stream handler."""
     level = logging.DEBUG if verbose else logging.WARNING
     pkg_logger = logging.getLogger("lotm")
     pkg_logger.setLevel(level)
@@ -88,7 +90,27 @@ def _configure_subparsers(
 def register_subparser(
     parent_subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> argparse.ArgumentParser:
-    """Register the 'big' domain subparser onto the top-level lotm ArgumentParser."""
+    """
+    Register the `big` domain subparser onto the top-level `lotm` ArgumentParser.
+
+    Parameters
+    ----------
+    parent_subparsers : argparse._SubParsersAction[argparse.ArgumentParser]
+        Top-level subparsers action from `lotm.cli`.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        Configured `big` domain subparser with `pack`, `unpack`, `diff`, and `overlay` commands.
+
+    Examples
+    --------
+    >>> parser = argparse.ArgumentParser(prog="lotm")
+    >>> subparsers = parser.add_subparsers(dest="domain", required=True)
+    >>> big_sub = register_subparser(subparsers)
+    >>> big_sub.prog
+    'lotm big'
+    """
     big_parser = parent_subparsers.add_parser(
         "big",
         help="EA BIG4 archive packing, extraction, diffing, and load-order overlay tools.",
@@ -100,10 +122,29 @@ def register_subparser(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Construct and return the ArgumentParser for lotm-big."""
+    """
+    Construct and return the standalone ArgumentParser for `lotm-big`.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        Configured standalone parser with `pack`, `unpack`, `diff`, and `overlay` subcommands.
+
+    Examples
+    --------
+    >>> parser = build_parser()
+    >>> parser.prog
+    'lotm-big'
+    """
     parser = argparse.ArgumentParser(
         prog="lotm-big",
         description="Command-line interface for EA BIG4 archive manipulation.",
+    )
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     _configure_subparsers(subparsers)
@@ -111,6 +152,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _handle_pack(args: argparse.Namespace) -> int:
+    """Execute `pack` subcommand."""
     _setup_logging(args.verbose)
     pack(args.source_dir, args.output)
     print(f"Packed archive: {args.output}")
@@ -118,6 +160,7 @@ def _handle_pack(args: argparse.Namespace) -> int:
 
 
 def _handle_unpack(args: argparse.Namespace) -> int:
+    """Execute `unpack` subcommand."""
     _setup_logging(args.verbose)
     entries = unpack(args.archive, args.output, filter_pattern=args.filter)
     print(f"Extracted {len(entries)} entries into: {args.output}")
@@ -125,6 +168,7 @@ def _handle_unpack(args: argparse.Namespace) -> int:
 
 
 def _handle_diff(args: argparse.Namespace) -> int:
+    """Execute `diff` subcommand and optional delta patch generation."""
     _setup_logging(args.verbose)
     result = diff(args.base_archive, args.target_archive, filter_pattern=args.filter)
     print(
@@ -147,6 +191,7 @@ def _handle_diff(args: argparse.Namespace) -> int:
 
 
 def _handle_overlay(args: argparse.Namespace) -> int:
+    """Execute `overlay` load-order resolution subcommand."""
     _setup_logging(args.verbose)
     target_source = args.sources[0] if len(args.sources) == 1 and args.sources[0].is_dir() else args.sources
     overlay = load_overlay(target_source)
@@ -160,17 +205,22 @@ def _handle_overlay(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """
-    Execute the lotm-big CLI with structured exception handling.
+    Execute the `lotm-big` CLI with structured exception handling.
 
     Parameters
     ----------
     argv : Sequence[str] | None, default=None
-        Command-line arguments (defaults to sys.argv[1:] when None).
+        Command-line arguments (defaults to `sys.argv[1:]` when `None`).
 
     Returns
     -------
     int
-        Process exit code (0 for success, 1 for runtime error).
+        Process exit code (`0` for success, `1` for runtime error).
+
+    Examples
+    --------
+    >>> main(["pack", "missing_directory"])
+    1
     """
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -184,7 +234,18 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def cli_entry() -> NoReturn:
-    """Console script entry point for pyproject.toml."""
+    """
+    Console script entry point for `pyproject.toml`.
+
+    Raises
+    ------
+    SystemExit
+        Always raised with the integer exit code returned by `main()`.
+
+    Examples
+    --------
+    >>> cli_entry()  # doctest: +SKIP
+    """
     sys.exit(main())
 
 

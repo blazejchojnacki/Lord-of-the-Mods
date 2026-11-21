@@ -8,15 +8,17 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+
 #include <big/big_packer.hpp>
 #include <big/exceptions.hpp>
 #include <core/endian.hpp>
+
 #include <filesystem>
 #include <fstream>
 #include <vector>
 #include <string>
 #include <string_view>
-#include <stdio.h>
+#include <cstdio>
 #include <cstring>
 
 using namespace lotm::big;
@@ -341,13 +343,13 @@ TEST_CASE("BigPacker File I/O Error Handling", "[big_pack][io]") {
 
         // Lock output file exclusively (_SH_DENYRW = 0x10)
         // Passes is_directory() but causes std::ofstream to fail opening with BigArchiveError
-        FILE* locked_out = _fsopen(env.out_file.string().c_str(), "rb", 0x10);
+        std::FILE* locked_out = _fsopen(env.out_file.string().c_str(), "rb", 0x10);
         if (locked_out) {
             REQUIRE_THROWS_AS(
                 BigPacker::pack_from_directory(env.src_dir, env.out_file),
                 BigArchiveError
             );
-            fclose(locked_out);
+            std::fclose(locked_out);
         }
         REQUIRE(std::filesystem::exists(env.out_file));
     }
@@ -358,14 +360,14 @@ TEST_CASE("BigPacker File I/O Error Handling", "[big_pack][io]") {
         // Lock the file exclusively using Windows _fsopen (_SH_DENYRW = 0x10).
         // This guarantees std::ifstream inside BigPacker will fail to open it.
         std::string path_str = (env.src_dir / "locked.txt").string();
-        FILE* locked_file = _fsopen(path_str.c_str(), "rb", 0x10);
+        std::FILE* locked_file = _fsopen(path_str.c_str(), "rb", 0x10);
 
         if (locked_file) {
             REQUIRE_THROWS_AS(
                 BigPacker::pack_from_directory(env.src_dir, env.out_file),
                 BigArchiveError
             );
-            fclose(locked_file);
+            std::fclose(locked_file);
         }
     }
 }
@@ -552,10 +554,10 @@ TEST_CASE("BigPacker In-Memory Serialization", "[big_pack][memory]") {
         // Locked file check
         env.create_dummy_file("locked.txt", "data");
         std::string locked_path = (env.src_dir / "locked.txt").string();
-        FILE* locked_file = _fsopen(locked_path.c_str(), "rb", 0x10);
+        std::FILE* locked_file = _fsopen(locked_path.c_str(), "rb", 0x10);
         if (locked_file) {
             REQUIRE_THROWS_AS(BigPacker::pack_to_memory(env.src_dir), BigArchiveError);
-            fclose(locked_file);
+            std::fclose(locked_file);
         }
         std::filesystem::remove(env.src_dir / "locked.txt");
 
@@ -563,7 +565,7 @@ TEST_CASE("BigPacker In-Memory Serialization", "[big_pack][memory]") {
         std::filesystem::path huge_file = env.src_dir / "huge.dat";
         std::ofstream(huge_file).put('X');
         std::filesystem::resize_file(huge_file, 4402341478ULL);
-        REQUIRE_THROWS_AS(BigPacker::pack_to_memory(env.src_dir), BigFormatError);
+        REQUIRE_THROWS_AS(BigPacker::pack_from_directory(env.src_dir, env.out_file), BigFormatError);
         std::filesystem::remove(huge_file);
 
         // Cumulative 4GB overflow check inside allocate_and_write_header
@@ -573,7 +575,7 @@ TEST_CASE("BigPacker In-Memory Serialization", "[big_pack][memory]") {
         std::filesystem::resize_file(huge1, 2200000000ULL);
         std::ofstream(huge2).put('X');
         std::filesystem::resize_file(huge2, 2200000000ULL);
-        REQUIRE_THROWS_AS(BigPacker::pack_to_memory(env.src_dir), BigFormatError);
+        REQUIRE_THROWS_AS(BigPacker::pack_from_directory(env.src_dir, env.out_file), BigFormatError);
     }
 
     SECTION("Negative scenario: BufferAllocator failure throws std::bad_alloc") {

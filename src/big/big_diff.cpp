@@ -12,16 +12,15 @@
 #include <big/exceptions.hpp>
 #include <big/types.hpp>
 #include <core/endian.hpp>
+#include <core/path_utils.hpp>
+#include <core/string_utils.hpp>
 
 #include <algorithm>
-#include <cctype>
 #include <cstddef>
 #include <cstring>
 #include <fstream>
-#include <limits>
 #include <stdexcept>
 #include <string>
-#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -30,10 +29,8 @@ namespace lotm::big {
     namespace {
         constexpr std::size_t DIFF_CHUNK_SIZE = 1024 * 1024;
 
-        inline std::string to_utf8(const std::filesystem::path& p) {
-            auto u8 = p.u8string();
-            return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
-        }
+        using lotm::core::to_utf8;
+        using lotm::core::to_lower_ascii;
 
         struct IndexedEntry {
             std::string lower_name;
@@ -45,10 +42,7 @@ namespace lotm::big {
             indexed.reserve(entries.size());
 
             for (const auto& e : entries) {
-                std::string lower = e.name;
-                std::transform(lower.begin(), lower.end(), lower.begin(),
-                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-                indexed.push_back(IndexedEntry{ std::move(lower), e });
+                indexed.push_back(IndexedEntry{ to_lower_ascii(e.name), e });
             }
 
             std::sort(indexed.begin(), indexed.end(),
@@ -63,9 +57,7 @@ namespace lotm::big {
             std::vector<detail::PackSourceRecord> file_list;
             std::vector<uint32_t> source_offsets;
             uintmax_t total_payload_size{ 0 };
-            uint32_t num_files{ 0 };
-            uint32_t header_size{ 0 };
-            uint32_t total_size{ 0 };
+            detail::ArchiveLayout layout{};
         };
 
         PatchPlan build_patch_plan(
@@ -95,29 +87,16 @@ namespace lotm::big {
                 plan.file_list.push_back(std::move(rec));
             }
 
-            detail::sort_and_validate_entries(plan.file_list);
-
-            plan.num_files = static_cast<uint32_t>(plan.file_list.size());
-            uintmax_t header_size_calc = HEADER_BASE_SIZE;
-            for (const auto& f : plan.file_list) {
-                header_size_calc += 4 + 4 + f.rel_path.length() + 1;
-            }
-            header_size_calc += EA_PADDING_SIZE;
-
-            if (header_size_calc + plan.total_payload_size > std::numeric_limits<uint32_t>::max()) {
-                throw BigFormatError("Total archive size exceeds the 32-bit (4GB) BIG4 format limit.");
-            }
+            std::vector<std::size_t> sorted_indices;
+            plan.layout = detail::finalize_archive_layout(
+                plan.file_list, plan.total_payload_size, &sorted_indices
+            );
 
             plan.source_offsets.reserve(plan.file_list.size());
-            plan.header_size = static_cast<uint32_t>(header_size_calc);
-            uint32_t current_offset = plan.header_size;
-            for (auto& f : plan.file_list) {
-                plan.source_offsets.push_back(source_entries[f.offset].offset);
-                f.offset = current_offset;
-                current_offset += f.size;
+            for (const std::size_t orig_idx : sorted_indices) {
+                plan.source_offsets.push_back(source_entries[orig_idx].offset);
             }
 
-            plan.total_size = current_offset;
             return plan;
         }
     } // namespace
@@ -259,39 +238,7 @@ namespace lotm::big {
         ProgressCallback progress_callback
     ) {
         const PatchPlan plan = build_patch_plan(base_archive, target_archive, filter_pattern);
-
-        uint8_t* buffer = allocator(plan.total_size);
-        if (!buffer) throw std::bad_alloc();
-
-        std::size_t write_pos = 0;
-
-        auto append_bytes = [buffer, &write_pos](const void* data, std::size_t len) {
-            std::memcpy(buffer + write_pos, data, len);
-            write_pos += len;
-            };
-
-        append_bytes(BIG4_MAGIC.data(), 4);
-
-        uint32_t le_total_size = lotm::core::to_little_endian(plan.total_size);
-        append_bytes(&le_total_size, sizeof(le_total_size));
-
-        uint32_t be_num_files = lotm::core::to_big_endian(plan.num_files);
-        append_bytes(&be_num_files, sizeof(be_num_files));
-
-        uint32_t be_header_size = lotm::core::to_big_endian(plan.header_size);
-        append_bytes(&be_header_size, sizeof(be_header_size));
-
-        for (const auto& f : plan.file_list) {
-            uint32_t be_offset = lotm::core::to_big_endian(f.offset);
-            append_bytes(&be_offset, sizeof(be_offset));
-
-            uint32_t be_size = lotm::core::to_big_endian(f.size);
-            append_bytes(&be_size, sizeof(be_size));
-
-            append_bytes(f.rel_path.c_str(), f.rel_path.length() + 1);
-        }
-
-        append_bytes(EA_PADDING_TAG.data(), EA_PADDING_SIZE);
+        uint8_t* buffer = detail::allocate_and_write_header(plan.file_list, plan.layout, allocator);
 
         if (!plan.file_list.empty()) {
             std::ifstream src(target_archive.file_path(), std::ios::binary);
@@ -387,13 +334,7 @@ namespace lotm::big {
         std::string_view filter_pattern,
         ProgressCallback progress_callback
     ) {
-        if (std::filesystem::is_directory(output_file)) {
-            throw std::invalid_argument("Target output path cannot be a directory: " + to_utf8(output_file));
-        }
-
-        if (auto parent = output_file.parent_path(); !parent.empty() && !std::filesystem::exists(parent)) {
-            throw std::invalid_argument("Target output directory does not exist: " + to_utf8(parent));
-        }
+        detail::validate_output_file_target(output_file);
 
         const auto canonical_out = std::filesystem::weakly_canonical(output_file);
         if (canonical_out == std::filesystem::weakly_canonical(base_archive.file_path()) ||
@@ -401,60 +342,12 @@ namespace lotm::big {
             throw std::invalid_argument("Target output path cannot overwrite an input archive: " + to_utf8(output_file));
         }
 
-        if (std::filesystem::exists(output_file)) {
-            std::fstream probe(output_file, std::ios::in | std::ios::out | std::ios::binary);
-            if (!probe.is_open()) {
-                throw BigArchiveError("Cannot create output file: " + to_utf8(output_file));
-            }
-        }
+        detail::probe_output_file_writable(output_file);
 
         const PatchPlan plan = build_patch_plan(base_archive, target_archive, filter_pattern);
 
-        std::filesystem::path temp_file = output_file;
-        temp_file += ".lotm_tmp";
-
-        std::ofstream out(temp_file, std::ios::binary);
-        if (!out.is_open()) {
-            throw BigArchiveError("Cannot create output file: " + to_utf8(output_file));
-        }
-
-        bool write_successful = false;
-        struct CleanupGuard {
-            std::ofstream& stream;
-            std::filesystem::path path;
-            bool& success;
-            ~CleanupGuard() {
-                if (!success) {
-                    stream.close();
-                    std::error_code ec;
-                    std::filesystem::remove(path, ec);
-                }
-            }
-        } guard{ out, temp_file, write_successful };
-
-        out.write(BIG4_MAGIC.data(), 4);
-
-        uint32_t le_total_size = lotm::core::to_little_endian(plan.total_size);
-        out.write(reinterpret_cast<const char*>(&le_total_size), sizeof(le_total_size));
-
-        uint32_t be_num_files = lotm::core::to_big_endian(plan.num_files);
-        out.write(reinterpret_cast<const char*>(&be_num_files), sizeof(be_num_files));
-
-        uint32_t be_header_size = lotm::core::to_big_endian(plan.header_size);
-        out.write(reinterpret_cast<const char*>(&be_header_size), sizeof(be_header_size));
-
-        for (const auto& f : plan.file_list) {
-            uint32_t be_offset = lotm::core::to_big_endian(f.offset);
-            out.write(reinterpret_cast<const char*>(&be_offset), sizeof(be_offset));
-
-            uint32_t be_size = lotm::core::to_big_endian(f.size);
-            out.write(reinterpret_cast<const char*>(&be_size), sizeof(be_size));
-
-            out.write(f.rel_path.c_str(), static_cast<std::streamsize>(f.rel_path.length()));
-            out.write("\0", 1);
-        }
-
-        out.write(EA_PADDING_TAG.data(), EA_PADDING_SIZE);
+        detail::AtomicArchiveWriter writer(output_file);
+        writer.write_header(plan.file_list, plan.layout);
 
         if (!plan.file_list.empty()) {
             std::ifstream src(target_archive.file_path(), std::ios::binary);
@@ -483,10 +376,7 @@ namespace lotm::big {
                             throw BigArchiveError("Failed to read payload for file: " + f.rel_path);
                         }
 
-                        out.write(chunk.data(), chunk_size);
-                        if (!out) {
-                            throw BigArchiveError("Failed writing patch data to archive: " + to_utf8(output_file));
-                        }
+                        writer.write_chunk(chunk.data(), chunk_size, "Failed writing patch data to archive: ");
 
                         remaining -= static_cast<uint32_t>(chunk_size);
                         file_bytes_transferred += static_cast<uint64_t>(chunk_size);
@@ -521,19 +411,7 @@ namespace lotm::big {
             }
         }
 
-        out.flush();
-        if (!out.good()) {
-            throw BigArchiveError("Failed writing patch data to archive: " + to_utf8(output_file));
-        }
-        out.close();
-
-        std::error_code rename_ec;
-        std::filesystem::rename(temp_file, output_file, rename_ec);
-        if (rename_ec) {
-            throw BigArchiveError("Cannot commit output file: " + to_utf8(output_file));
-        }
-
-        write_successful = true;
+        writer.commit("Failed writing patch data to archive: ");
     }
 
     void BigDiff::create_patch(

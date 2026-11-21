@@ -74,6 +74,11 @@ namespace lotm::big {
             uint32_t override_count{ 0 };
         };
 
+        [[nodiscard]] const OverlayRecord& find_record(
+            std::string_view entry_name,
+            const char* closed_error_msg
+        ) const;
+
         std::vector<std::pair<std::filesystem::path, BigArchive>> archives_;
         std::unordered_map<std::string, OverlayRecord> index_map_;
     };

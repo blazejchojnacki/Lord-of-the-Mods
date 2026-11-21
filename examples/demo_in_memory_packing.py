@@ -1,4 +1,11 @@
-# demo_in_memory_packing.py
+"""
+@file examples/demo_in_memory_packing.py
+@brief Demonstration of zero-copy in-memory BIG4 archive packing via the Buffer Protocol.
+
+Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
+Part of the Lord of the Mods (lotm) project.
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
 from pathlib import Path
 import lotm.big as big
 

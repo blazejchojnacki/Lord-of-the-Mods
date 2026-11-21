@@ -1,6 +1,6 @@
 """
 @file tests/python/ini/test_ini_parser.py
-@brief Unit tests for lotm.ini.parser (parse_ini, parse_str, Buffer protocol, and legacy encodings).
+@brief Unit tests for lotm.ini.parser (parse_ini, parse_str, recognize_structure, Buffer protocol, and legacy encodings).
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
 Part of the Lord of the Mods (lotm) project.
@@ -50,8 +50,15 @@ def test_parse_ini_and_parse_str_from_disk_and_strings(
 
 
 def test_buffer_protocol_ingestion() -> None:
-    """Verify parse_ini and parse_str correctly process zero-copy Buffer objects."""
+    """Verify recognize_structure, parse_ini, and parse_str correctly process zero-copy Buffer objects."""
     ini_content = b"Object GondorFighter\n  Side = Men\nEnd\n"
+
+    # Test recognize_structure with str, bytes, and memoryview
+    delims_str, lvl_str = ini.recognize_structure("dummy.ini", "Object GondorFighter\nEnd\n")
+    delims_bytes, lvl_bytes = ini.recognize_structure("dummy.ini", ini_content)
+    delims_mv, lvl_mv = ini.recognize_structure("dummy.ini", memoryview(ini_content))
+    assert lvl_str == lvl_bytes == lvl_mv == 0
+    assert delims_str == delims_bytes == delims_mv
 
     # Test bytes, bytearray, memoryview, and empty b"" ingestion for parse_ini (ConstructFile)
     doc_bytes = ini.parse_ini("dummy.ini", file_content=ini_content)

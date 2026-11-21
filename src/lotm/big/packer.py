@@ -16,23 +16,56 @@ from lotm._core import big
 logger = logging.getLogger("lotm.big.packer")
 
 
+def _make_progress_callback(
+    log: logging.Logger,
+    debug_prefix: str,
+    user_callback: Callable[[big.ProgressReport], bool | None] | None,
+) -> Callable[[big.ProgressReport], bool]:
+    """Create a progress callback wrapper that logs completed entries and forwards telemetry."""
+    def on_progress(report: big.ProgressReport) -> bool:
+        if report.bytes_transferred == report.file_size:
+            log.debug("%s: %s", debug_prefix, report.entry_name)
+        if user_callback is not None:
+            return user_callback(report) is not False
+        return True
+
+    return on_progress
+
+
 def pack(
     source_dir: str | os.PathLike[str],
     output_file: str | os.PathLike[str],
     progress_callback: Callable[[big.ProgressReport], bool | None] | None = None,
 ) -> None:
     """
-    Packs a directory into an EA BIG4 archive.
+    Pack a directory into an EA BIG4 archive.
 
-    Args:
-        source_dir: Path to the directory containing files to pack.
-        output_file: Destination .big file path.
-        progress_callback: Optional callback invoked with ProgressReport; returning False cancels packing.
+    Parameters
+    ----------
+    source_dir : str | os.PathLike[str]
+        Path to the directory containing files to pack.
+    output_file : str | os.PathLike[str]
+        Destination .big file path.
+    progress_callback : Callable[[big.ProgressReport], bool | None] | None, default=None
+        Optional callback invoked with `ProgressReport`; returning `False` cancels packing.
 
-    Raises:
-        NotADirectoryError: If the source directory is missing or invalid.
-        FileNotFoundError: If the target output directory does not exist.
-        RuntimeError/ValueError: Native C++ exceptions if packing fails or is cancelled.
+    Raises
+    ------
+    NotADirectoryError
+        If the source directory is missing or invalid.
+    FileNotFoundError
+        If the target output directory does not exist.
+    ValueError
+        If the output archive path resides inside the source directory or contains
+        duplicate case-insensitive entry paths.
+    lotm.big.BigFormatError
+        If an individual file or total archive size exceeds the 4 GiB (32-bit) format limit.
+    lotm.big.BigArchiveError
+        If an I/O error occurs or the operation is cancelled by `progress_callback`.
+
+    Examples
+    --------
+    >>> pack("mod_workspace/data", "build/my_mod.big")  # doctest: +SKIP
     """
     source_path = Path(source_dir)
     output_path = Path(output_file)
@@ -42,15 +75,7 @@ def pack(
     if not output_path.parent.is_dir():
         raise FileNotFoundError(f"Target output directory '{output_path.parent}' does not exist.")
 
-    def on_progress(report: big.ProgressReport) -> bool:
-        if report.bytes_transferred == report.file_size:
-            logger.debug("Packed: %s", report.entry_name)
-        if progress_callback is not None:
-            res = progress_callback(report)
-            if res is False:
-                return False
-        return True
-
+    on_progress = _make_progress_callback(logger, "Packed", progress_callback)
     big.BigPacker.pack_from_directory(source_path, output_path, progress_callback=on_progress)
     logger.info("Finished packing into: %s", output_path.resolve())
 
@@ -60,27 +85,39 @@ def pack_to_memory(
     progress_callback: Callable[[big.ProgressReport], bool | None] | None = None,
 ) -> bytes:
     """
-    Packs a directory or an in-memory collection of (path, bytes) records into an EA BIG4 archive buffer.
+    Pack a directory or an in-memory collection of `(path, buffer)` records into an EA BIG4 byte buffer.
 
-    Args:
-        source: Directory path, mapping of {archive_path: payload_bytes}, or iterable of (archive_path, payload_bytes).
-        progress_callback: Optional callback invoked with ProgressReport; returning False cancels packing.
+    Parameters
+    ----------
+    source : str | os.PathLike[str] | Mapping[str, Buffer] | Iterable[tuple[str, Buffer]]
+        Directory path, mapping of `{archive_path: payload_buffer}`, or iterable of
+        `(archive_path, payload_buffer)` pairs.
+    progress_callback : Callable[[big.ProgressReport], bool | None] | None, default=None
+        Optional callback invoked with `ProgressReport`; returning `False` cancels packing.
 
-    Returns:
-        A bytes object containing the serialized BIG4 archive.
+    Returns
+    -------
+    bytes
+        Serialized BIG4 archive payload.
 
-    Raises:
-        NotADirectoryError: If a path is provided and the source directory is missing or invalid.
-        RuntimeError/ValueError: Native C++ exceptions if validation or packing fails or is cancelled.
+    Raises
+    ------
+    NotADirectoryError
+        If a filesystem path is provided and the source directory is missing or invalid.
+    ValueError
+        If an entry path is empty, unsafe, or duplicates another entry case-insensitively.
+    lotm.big.BigFormatError
+        If an individual file or total archive size exceeds the 4 GiB (32-bit) format limit.
+    lotm.big.BigArchiveError
+        If an I/O error occurs or the operation is cancelled by `progress_callback`.
+
+    Examples
+    --------
+    >>> data = pack_to_memory({"data/weapon.ini": b"Damage=50"})
+    >>> data[:4]
+    b'BIG4'
     """
-    def on_progress(report: big.ProgressReport) -> bool:
-        if report.bytes_transferred == report.file_size:
-            logger.debug("Packed to memory: %s", report.entry_name)
-        if progress_callback is not None:
-            res = progress_callback(report)
-            if res is False:
-                return False
-        return True
+    on_progress = _make_progress_callback(logger, "Packed to memory", progress_callback)
 
     if isinstance(source, (str, os.PathLike)):
         source_path = Path(source)

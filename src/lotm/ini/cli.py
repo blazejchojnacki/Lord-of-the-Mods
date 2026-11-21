@@ -12,7 +12,6 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Any
 
 from lotm.ini.diagnostics import inspect_ini, scan_ini
 from lotm.ini.formatter import format_ini
@@ -63,7 +62,18 @@ def _handle_format(args: argparse.Namespace) -> int:
     source_path = Path(args.file)
     dest_path = Path(args.output) if args.output else source_path
 
-    format_ini(source_path, output_path=dest_path, strict=args.strict)
+    canonical = bool(args.canonical)
+    format_ini(
+        source_path,
+        output_path=dest_path,
+        strict=args.strict,
+        enforce_equals=canonical or args.enforce_equals,
+        normalize_end_tokens=canonical or args.normalize_ends,
+        normalize_header_spacing=canonical or args.normalize_headers,
+        normalize_statement_equals=canonical or args.normalize_equals,
+        normalize_comments=canonical or args.normalize_comments,
+        coalesce_blank_lines=canonical or args.coalesce_blank_lines,
+    )
 
     if args.output:
         print(f"Formatted '{source_path}' -> '{dest_path}'.")
@@ -96,20 +106,29 @@ def _handle_inspect(args: argparse.Namespace) -> int:
     return EXIT_SUCCESS
 
 
-def register_subparser(parent_subparsers: Any) -> None:
+def register_subparser(
+    parent_subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> argparse.ArgumentParser:
     """
     Register the `ini` domain subtree (`scan`, `format`, `inspect`) on the umbrella CLI parser.
 
     Parameters
     ----------
-    parent_subparsers : argparse._SubParsersAction
+    parent_subparsers : argparse._SubParsersAction[argparse.ArgumentParser]
         Top-level subparsers action from `lotm.cli`.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        Configured `ini` domain subparser with `scan`, `format`, and `inspect` commands.
 
     Examples
     --------
     >>> parser = argparse.ArgumentParser(prog="lotm")
     >>> subparsers = parser.add_subparsers(dest="domain", required=True)
-    >>> register_subparser(subparsers)
+    >>> ini_sub = register_subparser(subparsers)
+    >>> ini_sub.prog
+    'lotm ini'
     """
     ini_parser = parent_subparsers.add_parser(
         "ini",
@@ -158,6 +177,41 @@ def register_subparser(parent_subparsers: Any) -> None:
         action="store_true",
         help="Abort formatting if any delimiter or level mismatch errors exist.",
     )
+    format_parser.add_argument(
+        "--enforce-equals",
+        action="store_true",
+        help="Emit canonical '=' for delimiters that canonically expect '='.",
+    )
+    format_parser.add_argument(
+        "--normalize-ends",
+        action="store_true",
+        help="Normalize closing keywords (END, end) to 'End' and script closures to 'EndScript'.",
+    )
+    format_parser.add_argument(
+        "--normalize-headers",
+        action="store_true",
+        help="Collapse extra whitespace in block and script headers.",
+    )
+    format_parser.add_argument(
+        "--normalize-equals",
+        action="store_true",
+        help="Normalize spacing around '=' in key-value statements to 'Key = Value'.",
+    )
+    format_parser.add_argument(
+        "--normalize-comments",
+        action="store_true",
+        help="Normalize comment prefixes ('//' or ';') to canonical '; '.",
+    )
+    format_parser.add_argument(
+        "--coalesce-blank-lines",
+        action="store_true",
+        help="Collapse multiple consecutive blank lines into a single blank line.",
+    )
+    format_parser.add_argument(
+        "--canonical",
+        action="store_true",
+        help="Enable all style normalization rules at once.",
+    )
     format_parser.set_defaults(handler=_handle_format)
 
     inspect_parser = subparsers.add_parser(
@@ -174,3 +228,5 @@ def register_subparser(parent_subparsers: Any) -> None:
         help="Fail with an error if the inspected file contains structural issues.",
     )
     inspect_parser.set_defaults(handler=_handle_inspect)
+
+    return ini_parser

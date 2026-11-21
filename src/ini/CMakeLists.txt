@@ -6,7 +6,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 add_library(lotm_ini STATIC
-    parser.cpp
+    ast.cpp
+    serializer.cpp
+    file_io.cpp
+    str_parser.cpp
+    ini_parser.cpp
+    include_resolver.cpp
 )
 
 set_target_properties(lotm_ini PROPERTIES
@@ -22,4 +27,5 @@ target_compile_options(lotm_ini PRIVATE
 target_include_directories(lotm_ini PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
 )
+target_link_libraries(lotm_ini PUBLIC lotm_core)
 target_compile_features(lotm_ini PUBLIC cxx_std_20)

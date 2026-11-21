@@ -17,7 +17,7 @@ import lotm.ini as ini
 
 
 def test_ast_leaf_nodes_properties_equality_and_repr() -> None:
-    """Verify CommentNode, StatementNode, IncludeNode, and ScriptNode bindings."""
+    """Verify CommentNode, StatementNode, IncludeNode, DefineNode, and ScriptNode bindings."""
     c1 = ini.CommentNode("; comment 1")
     c2 = ini.CommentNode()
     c2.text = "; comment 1"
@@ -38,6 +38,13 @@ def test_ast_leaf_nodes_properties_equality_and_repr() -> None:
     assert inc1 == inc2
     assert inc1.clean_path == "../shared/macros.inc"
     assert "IncludeNode" in repr(inc1)
+
+    def1 = _core.ini.DefineNode("#define DAMAGE 50", "; macro cmt")
+    def2 = _core.ini.DefineNode()
+    def2.text = "#define DAMAGE 50"
+    def2.comment = "; macro cmt"
+    assert def1 == def2
+    assert "DefineNode" in repr(def1)
 
     scr = ini.ScriptNode(
         name="BeginScript",
@@ -214,45 +221,44 @@ def test_construct_file_overloads_and_sequence_protocol(sample_ini_file: Path) -
     assert len(empty_cf) == 0
     assert empty_cf.name == ""
 
-    # 7-argument metadata constructor with empty name (does not auto-construct)
+    # 6-argument metadata constructor with empty name (does not auto-construct)
     meta_empty = ini.ConstructFile(
         name="",
-        comment="; doc cmt",
         defines=["#define A 1"],
         delimiters=[["Weapon"], []],
         start_level=0,
         strict=False,
         file_content=None,
     )
-    assert meta_empty.comment == "; doc cmt"
     assert meta_empty.defines == ["#define A 1"]
     assert len(meta_empty) == 0
 
-    # 7-argument metadata constructor with non-empty name and content (auto-constructs)
+    # 6-argument metadata constructor with non-empty name and content (preserves metadata and auto-constructs)
     meta_parsed = ini.ConstructFile(
-        name="inline.ini",
-        comment="; doc",
-        defines=[],
-        delimiters=[],
-        start_level=0,
+        name="inline.inc",
+        defines=["#define PRE_MACRO 1"],
+        delimiters=[["CustomRoot"], ["CustomWeapon"], []],
+        start_level=1,
         strict=True,
-        file_content="Weapon GondorBow\n    AttackRange = 300\nEnd\n",
+        file_content="CustomWeapon GondorBow\n    AttackRange = 300\nEnd\n",
     )
     assert len(meta_parsed) == 1
+    assert meta_parsed.start_level == 1
+    assert meta_parsed.defines == ["#define PRE_MACRO 1"]
     assert "ConstructFile" in repr(meta_parsed)
 
     # Verify in-place reference semantics on ConstructFile indexing and iteration
     assert isinstance(meta_parsed[0], ini.ConstructLevel)
     meta_parsed[0].name = "MirkwoodBow"
-    assert "Weapon MirkwoodBow" in meta_parsed.print()
+    assert "CustomWeapon MirkwoodBow" in meta_parsed.print()
 
     for root_node in meta_parsed:
         if isinstance(root_node, ini.ConstructLevel):
             root_node.name = "LorienBow"
-    assert "Weapon LorienBow" in meta_parsed.print()
+    assert "CustomWeapon LorienBow" in meta_parsed.print()
 
     # Property read/write accessors
-    meta_parsed.comment = "; updated"
+    meta_parsed.name = "inline.ini"
     meta_parsed.defines = ["#define RANGE 300"]
     meta_parsed.delimiters = [["Weapon"], []]
     meta_parsed.start_level = 0
@@ -310,13 +316,17 @@ def test_module_level_functions_and_security_guards(
     assert buf_start == 0
     assert len(buf_delims) > 0
 
-    # validate_include inside virtual root vs path traversal escape
+    # validate_include inside virtual root vs missing relative file vs path traversal escape
     vroot = ini_mod_directory / "data" / "ini"
     hero_ini = vroot / "object" / "hero.ini"
     valid_inc = ini.IncludeNode('"includes\\armor.inc"')
     resolved = ini.validate_include(valid_inc, hero_ini, vroot)
     assert resolved.is_file()
     assert resolved.name == "armor.inc"
+
+    missing_in_root_inc = ini.IncludeNode('"..\\includes\\nonexistent.inc"')
+    with pytest.raises(ini.IniParseError, match="Include file not found"):
+        ini.validate_include(missing_in_root_inc, hero_ini, vroot)
 
     escape_inc = ini.IncludeNode('"..\\..\\notes.txt"')
     with pytest.raises(ini.IniParseError, match="Security violation"):
@@ -336,3 +346,89 @@ def test_module_level_functions_and_security_guards(
     assert ini.scan_file_for_errors(sample_ini_file) == []
     errs = ini.scan_file_for_errors(malformed_ini_file)
     assert len(errs) == 2
+
+
+def test_ast_reallocation_and_replacement_memory_safety() -> None:
+    """Verify Python AST node references remain valid across .append() reallocations, __setitem__, and .items assignment."""
+    doc = ini.parse_ini(
+        "memory_safety.ini",
+        strict=True,
+        file_content="Object GondorArcher\n    Health = 100\nEnd\n",
+    )
+
+    hero_block = doc[0]
+    assert isinstance(hero_block, ini.ConstructLevel)
+    health_stmt = hero_block[0]
+    assert isinstance(health_stmt, ini.StatementNode)
+
+    # Force multiple C++ pointer-vector reallocations on both doc and hero_block
+    for i in range(256):
+        hero_block.append(ini.StatementNode(f"Stat_{i} = {i}"))
+        doc.append(ini.CommentNode(f"; comment {i}"))
+
+    # Mutating retained references after reallocations must succeed and reflect in parent AST
+    health_stmt.text = "Health = 250"
+    hero_block.name = "GondorEliteArcher"
+    printed = doc.print()
+    assert "Object GondorEliteArcher\n" in printed
+    assert "    Health = 250\n" in printed
+
+    # Mutating through .items list property mutates the C++ AST in-place
+    first_from_items = hero_block.items[0]
+    assert isinstance(first_from_items, ini.StatementNode)
+    first_from_items.text = "Health = 500"
+    assert "    Health = 500\n" in doc.print()
+
+    # Overwriting index 0 with a different variant type or reassigning .items must not invalidate health_stmt
+    hero_block[0] = ini.CommentNode("; replaced slot 0")
+    assert health_stmt.text == "Health = 500"
+
+    hero_block.items = [ini.StatementNode("Fresh = 1")]
+    assert health_stmt.text == "Health = 500"
+
+    # Re-parsing doc via construct() must not invalidate hero_block or health_stmt
+    doc.file_content = "Weapon GondorSword\n    Damage = 40\nEnd\n"
+    doc.construct()
+    assert hero_block.name == "GondorEliteArcher"
+    assert health_stmt.text == "Health = 500"
+
+
+def test_ast_query_mutation_and_set_value_validation(sample_ini_file: Path) -> None:
+    """Verify find_block, find_all, get_value, set_value, remove_value, remove_block, and set_value validation."""
+    doc = ini.parse_ini(sample_ini_file, strict=True)
+
+    obj = doc.find_block("Object", "GondorAragorn")
+    assert obj is not None
+    assert obj.get_value("Side") == "Men"
+    assert obj.get_value("MissingKey", default="Fallback") == "Fallback"
+
+    obj.set_value("Side", "Dunedain")
+    assert obj.get_value("Side") == "Dunedain"
+    assert obj.get_all_values("Side") == ["Dunedain"]
+
+    draw_blocks = obj.find_all("Draw")
+    assert len(draw_blocks) == 1
+    nested_state = doc.find_block("DefaultModelConditionState", recursive=True)
+    assert nested_state is not None
+    assert nested_state.get_value("Model") == "GUAragorn_SKN"
+
+    # Validation checks on set_value
+    with pytest.raises(ValueError, match="cannot be empty"):
+        obj.set_value("   ", "10")
+    with pytest.raises(ValueError, match="invalid whitespace or separator"):
+        obj.set_value("Bad Key", "10")
+    with pytest.raises(ValueError, match="invalid whitespace or separator"):
+        obj.set_value("Bad=Key", "10")
+    with pytest.raises(ValueError, match="newline"):
+        obj.set_value("ValidKey", "Line1\nLine2")
+    with pytest.raises(ini.IniParseError, match="exceeds SAGE engine limit"):
+        obj.set_value("K" * (ini.SAGE_MAX_BLOCK_NAME_LEN + 1), "10")
+    with pytest.raises(ini.IniParseError, match="exceeds SAGE engine limit"):
+        obj.set_value("ValidKey", "V" * (ini.SAGE_MAX_IDENTIFIER_LEN + 1))
+
+    assert obj.remove_value("Side")
+    assert obj.get_value("Side") is None
+    assert obj.remove_block("Draw", "W3DScriptedModelDraw", "ModuleTag_Draw")
+    assert obj.find_block("Draw") is None
+    assert doc.remove_block("Object", "GondorAragorn")
+    assert doc.find_block("Object") is None
