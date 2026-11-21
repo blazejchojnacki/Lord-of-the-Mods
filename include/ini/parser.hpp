@@ -73,7 +73,6 @@ namespace lotm::ini {
     class ConstructFile : public SequenceMixin<ConstructFile, RootItem> {
     public:
         std::string name{};
-        std::vector<std::string> defines{};
         std::vector<std::vector<std::string>> delimiters{};
         int start_level{ 0 };
         bool strict{ false };
@@ -81,7 +80,6 @@ namespace lotm::ini {
 
         StableVector<RootItem> items{};
         int current_level{ 0 };
-        std::string last_comment{};
         std::vector<std::string> errors{};
         std::vector<std::string> warnings{};
 
@@ -148,7 +146,6 @@ namespace lotm::ini {
 
         [[nodiscard]] bool operator==(const ConstructFile& other) const noexcept {
             return name == other.name &&
-                defines == other.defines &&
                 delimiters == other.delimiters &&
                 start_level == other.start_level &&
                 strict == other.strict &&
@@ -168,15 +165,16 @@ namespace lotm::ini {
         void append_to_active_context(AstNode node);
 
         template <typename NodeT>
-        NodeT* push_context_node(NodeT&& node);
+        NodeT* push_context_node(NodeT&& node, std::string& last_comment);
 
-        void parse_line(std::string_view raw_line, std::size_t line_num, LexedLine& lex_scratch);
-        void handle_empty_line(std::string_view raw_line);
+        void parse_line(std::string_view raw_line, std::size_t line_num, LexedLine& lex_scratch, std::string& last_comment);
+        void handle_empty_line(std::string_view raw_line, std::string& last_comment);
         [[nodiscard]] bool handle_block_start(
             std::span<const std::string_view> words,
             std::span<const std::string_view> line_tokens,
             std::string_view inline_comment,
-            std::size_t line_num
+            std::size_t line_num,
+            std::string& last_comment
         );
         [[nodiscard]] bool handle_block_end(
             std::span<const std::string_view> words,

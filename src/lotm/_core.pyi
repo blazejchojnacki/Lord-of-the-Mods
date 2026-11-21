@@ -399,16 +399,14 @@ class ini:
             file_content: str | None = None,
         ) -> ini.StrDocument: ...
 
-    class ConstructFile:
+class ConstructFile:
         name: str
-        defines: list[str]
         delimiters: list[list[str]]
         start_level: int
         strict: bool
         file_content: str | None
         items: list[ini.RootItem]
         current_level: int
-        last_comment: str
         errors: list[str]
         warnings: list[str]
         @overload
@@ -429,7 +427,6 @@ class ini:
         def __init__(
             self,
             name: str | os.PathLike[str],
-            defines: Sequence[str] = (),
             delimiters: Sequence[Sequence[str]] = (),
             start_level: int = 0,
             strict: bool = False,

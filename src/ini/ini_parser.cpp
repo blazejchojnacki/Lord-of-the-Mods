@@ -200,12 +200,8 @@ namespace lotm::ini {
         } state_guard{ *this };
 
         items.clear();
-        if (!preserve_metadata) {
-            defines.clear();
-        }
         errors.clear();
         warnings.clear();
-        last_comment.clear();
         context_stack_.clear();
         context_stack_.emplace_back(this);
 
@@ -253,9 +249,10 @@ namespace lotm::ini {
         }
         current_level = start_level;
 
+        std::string last_comment;
         LexedLine lex_scratch;
         for_each_line_view(content_view, [&](std::string_view raw_line, std::size_t line_num) {
-            parse_line(raw_line, line_num, lex_scratch);
+            parse_line(raw_line, line_num, lex_scratch, last_comment);
             });
 
         if (!last_comment.empty()) {
@@ -299,7 +296,7 @@ namespace lotm::ini {
     }
 
     template <typename NodeT>
-    NodeT* ConstructFile::push_context_node(NodeT&& node) {
+    NodeT* ConstructFile::push_context_node(NodeT&& node, std::string& last_comment) {
         using CleanNodeT = std::decay_t<NodeT>;
         CleanNodeT* pushed_ptr = nullptr;
         std::visit([&](auto* ptr) {
@@ -319,7 +316,12 @@ namespace lotm::ini {
         return pushed_ptr;
     }
 
-    void ConstructFile::parse_line(std::string_view raw_line, std::size_t line_num, LexedLine& lexed) {
+    void ConstructFile::parse_line(
+        std::string_view raw_line,
+        std::size_t line_num,
+        LexedLine& lexed,
+        std::string& last_comment
+    ) {
         lex_line_into(raw_line, lexed);
 
         if (auto* script_ptr = std::get_if<ScriptNode*>(&context_stack_.back())) {
@@ -343,7 +345,7 @@ namespace lotm::ini {
                 }
                 last_comment.append(lexed.comment);
             }
-            handle_empty_line(raw_line);
+            handle_empty_line(raw_line, last_comment);
             return;
         }
 
@@ -369,7 +371,7 @@ namespace lotm::ini {
                 "EndScript",
                 "",
                 {}
-                });
+                }, last_comment);
             return;
         }
 
@@ -399,11 +401,11 @@ namespace lotm::ini {
                 std::move(ident),
                 std::move(last_comment),
                 lexed.comment
-                });
+                }, last_comment);
             return;
         }
 
-        if (handle_block_start(lexed.words, lexed.line_tokens, lexed.comment, line_num)) {
+        if (handle_block_start(lexed.words, lexed.line_tokens, lexed.comment, line_num, last_comment)) {
             return;
         }
 
@@ -420,7 +422,7 @@ namespace lotm::ini {
                     for (const auto& level : delimiters) {
                         active_rules_.push_back(compile_delimiter_rules(level));
                     }
-                    if (handle_block_start(lexed.words, lexed.line_tokens, lexed.comment, line_num)) {
+                    if (handle_block_start(lexed.words, lexed.line_tokens, lexed.comment, line_num, last_comment)) {
                         return;
                     }
                 }
@@ -443,7 +445,7 @@ namespace lotm::ini {
         handle_statement(lexed.words_signs, lexed.comment);
     }
 
-    void ConstructFile::handle_empty_line(std::string_view raw_line) {
+    void ConstructFile::handle_empty_line(std::string_view raw_line, std::string& last_comment) {
         if (!last_comment.empty() && detail::trim_view(raw_line).empty()) {
             append_to_active_context(CommentNode{ std::move(last_comment) });
             last_comment.clear();
@@ -454,7 +456,8 @@ namespace lotm::ini {
         std::span<const std::string_view> words,
         std::span<const std::string_view> line_tokens,
         std::string_view inline_comment,
-        std::size_t line_num
+        std::size_t line_num,
+        std::string& last_comment
     ) {
         const auto lookup_level = static_cast<std::size_t>(get_lookup_level());
         if (lookup_level >= active_rules_.size()) {
@@ -539,7 +542,7 @@ namespace lotm::ini {
             "",
             std::move(canonical_cls),
             missing_eq
-            });
+            }, last_comment);
         return true;
     }
 
@@ -587,7 +590,6 @@ namespace lotm::ini {
     ) {
         if (words[0] == "#define") {
             std::string def_text = detail::join_views(words_signs);
-            defines.push_back(detail::combine_text_and_comment(def_text, inline_comment));
             append_to_active_context(DefineNode{ std::move(def_text), std::string{ inline_comment } });
             return true;
         }
