@@ -354,16 +354,16 @@ class ArchiveEditor:
         modified: list[str] = []
         added: list[str] = []
 
-        for key, (canon_name, doc, opts) in self._ini_asts.items():
-            rendered = doc.print() if opts is None else doc.print(opts)
+        for key, (canon_name, ini_doc, opts) in self._ini_asts.items():
+            rendered = ini_doc.print() if opts is None else ini_doc.print(opts)
             staged_by_key[key] = (canon_name, rendered.encode("utf-8"))
             if key in self._base_entries_by_key:
                 modified.append(canon_name)
             else:
                 added.append(canon_name)
 
-        for key, (canon_name, doc, opts) in self._str_asts.items():
-            rendered = doc.print() if opts is None else doc.print(opts)
+        for key, (canon_name, str_doc, opts) in self._str_asts.items():
+            rendered = str_doc.print() if opts is None else str_doc.print(opts)
             staged_by_key[key] = (canon_name, rendered.encode("utf-8"))
             if key in self._base_entries_by_key:
                 modified.append(canon_name)
