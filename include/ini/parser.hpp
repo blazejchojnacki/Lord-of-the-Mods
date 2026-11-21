@@ -146,12 +146,7 @@ namespace lotm::ini {
 
         [[nodiscard]] bool operator==(const ConstructFile& other) const noexcept {
             return name == other.name &&
-                delimiters == other.delimiters &&
-                start_level == other.start_level &&
-                strict == other.strict &&
-                items == other.items &&
-                errors == other.errors &&
-                warnings == other.warnings;
+                items == other.items;
         }
 
     private:
