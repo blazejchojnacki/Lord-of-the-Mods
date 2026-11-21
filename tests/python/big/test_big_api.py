@@ -415,9 +415,11 @@ def test_read_entry_missing_file_raises_big_archive_error(
     archive_path = tmp_path / "missing_entry.big"
     big.pack(standard_mod_directory, archive_path)
 
-    with big.BigArchive(archive_path) as arc:
-        with pytest.raises(big.BigArchiveError, match="Entry not found"):
-            arc.read_entry("data/missing_unit.ini")
+    with (
+        big.BigArchive(archive_path) as arc,
+        pytest.raises(big.BigArchiveError, match="Entry not found")
+    ):
+        arc.read_entry("data/missing_unit.ini")
 
 
 def test_closed_archive_rejects_operations_and_context_reentry(
@@ -457,7 +459,7 @@ def test_pack_to_memory_from_directory_and_records(
     big.pack(standard_mod_directory, disk_archive)
     expected_bytes = disk_archive.read_bytes()
 
-    # 1. Pack from directory path
+    # Pack from directory path
     dir_reports: list[str] = []
     mem_from_dir = big.pack_to_memory(
         standard_mod_directory,
@@ -467,7 +469,7 @@ def test_pack_to_memory_from_directory_and_records(
     assert mem_from_dir == expected_bytes
     assert len(dir_reports) == 3
 
-    # 2. Pack from Mapping[str, bytes]
+    # Pack from Mapping[str, bytes]
     mapping_input = {
         "data/weapon.ini": b"Damage=50",
         "art/texture.dds": b"DDS_HEADER_DATA",
@@ -481,12 +483,12 @@ def test_pack_to_memory_from_directory_and_records(
     assert mem_from_dict == expected_bytes
     assert len(dict_reports) == 3
 
-    # 3. Pack from sequence of (path, bytes) tuples
+    # Pack from sequence of (path, bytes) tuples
     sequence_input = list(mapping_input.items())
     mem_from_seq = big.pack_to_memory(sequence_input)
     assert mem_from_seq == expected_bytes
 
-    # 4. Pack zero-copy from bytearray and memoryview slices
+    # Pack zero-copy from bytearray and memoryview slices
     raw_padded = bytearray(b"__Damage=50__")
     with memoryview(raw_padded)[2:11] as ini_slice:
         buffer_input = [

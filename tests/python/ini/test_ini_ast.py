@@ -149,7 +149,17 @@ def test_construct_level_container_operations_and_indexing() -> None:
 
     block.items = [ini.StatementNode("Side = Men")]
     assert len(block) == 1
-    assert block == block
+    expected_block = ini.ConstructLevel(
+        _class="ChildObject",
+        name="GondorRanger",
+        identifier="GondorArcher",
+        comment="; updated lead",
+        header_comment="; updated hdr",
+        end_token="END",
+        end_comment="; updated tail",
+    )
+    expected_block.items = [ini.StatementNode("Side = Men")]
+    assert block == expected_block
 
 
 def test_str_entry_and_str_document_bindings(sample_str_file: Path) -> None:
@@ -185,7 +195,20 @@ def test_str_entry_and_str_document_bindings(sample_str_file: Path) -> None:
     with pytest.raises(IndexError):
         _ = entry[10]
 
-    assert entry == entry
+    expected_entry = ini.StrEntry(
+        category="OBJECT",
+        identifier="GondorSoldier",
+        comment="; lead",
+        header_comment="; hdr",
+        end_token="End",
+        end_comment="; end",
+        items=[
+            ini.CommentNode("; c"),
+            ini.StatementNode('"Soldier"'),
+            ini.CommentNode("; replaced child"),
+        ],
+    )
+    assert entry == expected_entry
     assert "StrEntry" in repr(entry)
     assert "OBJECT:GondorSoldier" in entry.print()
 
@@ -201,7 +224,12 @@ def test_str_entry_and_str_document_bindings(sample_str_file: Path) -> None:
     assert doc[0].identifier == "GondorElite"
     doc[-1] = ini.CommentNode("; doc tail 2")
     assert len(list(doc)) == 2
-    assert doc == doc
+    expected_doc = ini.StrDocument(
+        "custom2.str",
+        [entry, ini.CommentNode("; doc tail 2")],
+        [],
+    )
+    assert doc == expected_doc
 
     with pytest.raises(IndexError):
         _ = doc[10]
@@ -271,7 +299,15 @@ def test_construct_file_overloads_and_sequence_protocol(sample_ini_file: Path) -
 
     meta_parsed.construct()
     assert meta_parsed.errors == []
-    assert meta_parsed == meta_parsed
+    expected_cf = ini.ConstructFile(
+        name="inline.ini",
+        defines=["#define RANGE 300"],
+        delimiters=[["Weapon"], []],
+        start_level=0,
+        strict=False,
+        file_content="Weapon GondorBow\nEnd\n",
+    )
+    assert meta_parsed == expected_cf
 
     # Indexing and iteration on ConstructFile
     meta_parsed.append(ini.CommentNode("; appended"))

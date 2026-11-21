@@ -79,3 +79,7 @@ strict = true
 [tool.pytest.ini_options]
 addopts = "--doctest-modules"
 testpaths = ["tests/python"]
+
+[tool.ruff.lint]
+# Keep explicit TypeAlias annotations for consistent typing across runtime modules and _core.pyi stubs.
+ignore = ["UP040"]

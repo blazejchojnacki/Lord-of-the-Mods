@@ -17,7 +17,7 @@ from collections.abc import Buffer, Callable, Mapping, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TypeAlias
+from typing import Self, TypeAlias
 
 from lotm._core import big as _big
 from lotm.big import pack_to_memory
@@ -154,7 +154,7 @@ class ArchiveEditor:
             self._closed = True
             self._stack.close()
 
-    def __enter__(self) -> ArchiveEditor:
+    def __enter__(self) -> Self:
         """Enter the context manager and return `self`."""
         if self._closed:
             raise _big.BigArchiveError(

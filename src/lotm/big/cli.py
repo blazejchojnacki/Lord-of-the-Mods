@@ -308,7 +308,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         handler: Callable[[argparse.Namespace], int] = args.handler
         return handler(args)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — top-level CLI entry point converts runtime/native errors into EXIT_ERROR on stderr
         print(f"Command '{args.command}' failed: {exc}", file=sys.stderr)
         return EXIT_ERROR
 
