@@ -12,7 +12,7 @@
 | `lotm big diff <base.big> <target.big> [-o <patch.big>]` | Compare two archives and generate a delta patch |
 | `lotm big overlay <archive1> <archive2> ...` | Emulate SAGE load-order and preview virtual file tree |
 | `lotm ini scan <target> [-o <report>] [--strict]` | Scan `.ini`, `.inc`, and `.str` files for structural errors |
-| `lotm ini format <file> [-o <out>] [--strict]` | Format a configuration file with normalized 4-space indentation |
+| `lotm ini format <file> [-o <out>] [--strict] [flags]` | Format a configuration file with normalized indentation and optional style rules |
 | `lotm ini inspect <file> [--strict]` | Display AST block breakdown, macro counts, and diagnostics |
 | `python -m lotm ...` | Fallback umbrella module execution |
 | `lotm-big ...` | Domain alias shortcut for BIG operations |
@@ -99,16 +99,23 @@ lotm ini scan "mod_workspace/data/ini" -o "scan_report.txt" --strict
 
 ## 7. Formatting Configuration Files (`lotm ini format`)
 
-Parses a SAGE `.ini`, `.inc`, or `.str` file into its AST representation and serializes it back with normalized 4-space block indentation while preserving all inline comments, standalone comments, `#define` macros, and `#include` directives.
+Parses a SAGE `.ini`, `.inc`, or `.str` file into its AST representation and serializes it back with normalized 4-space block indentation while preserving all inline comments, standalone comments, `#define` macros, and `#include` directives. Optional style flags allow normalizing delimiters, closing tokens, headers, statement spacing, comments, and blank lines.
 
 ```cmd
-lotm ini format "mod_workspace/data/ini/weapon.ini" -o "weapon_formatted.ini" --strict
+lotm ini format "mod_workspace/data/ini/weapon.ini" -o "weapon_formatted.ini" --strict --canonical
 ```
 
 **Options:**
 * `file`: Path to the source `.ini`, `.inc`, or `.str` file (Positional, Required).
 * `-o`, `--output`: Destination file path (Default: overwrites `file` in-place).
 * `--strict`: Abort formatting and exit with a non-zero status code if any structural errors exist in the input file.
+* `--enforce-equals`: Emit canonical `=` for delimiters that canonically expect `=`.
+* `--normalize-ends`: Normalize closing keywords (`END`, `end`) to `"End"` and script closures to `"EndScript"`.
+* `--normalize-headers`: Collapse extra whitespace in block and script headers.
+* `--normalize-equals`: Normalize spacing around `=` in key-value statements to `Key = Value`.
+* `--normalize-comments`: Normalize comment prefixes (`//` or `;`) to canonical `; `.
+* `--coalesce-blank-lines`: Collapse runs of multiple consecutive blank lines into a single blank line.
+* `--canonical`: Enable all style normalization rules at once.
 
 ---
 

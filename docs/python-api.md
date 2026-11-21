@@ -11,20 +11,24 @@ Install the pre-compiled library via pip:
 pip install lord-of-the-mods
 ```
 
+## Virtual Path & PathLike Conventions
+
+* **Filesystem paths (`str | os.PathLike[str]`)**: Used for on-disk archives, source/output directories, and configuration files.
+* **Virtual archive entry paths (`str`)**: Internal `.big` entry paths use `str` (case-insensitive lookup in `BigArchive` / `BigOverlay` / `ArchiveEditor`; EA BIG4 serializes `\` separators via `_to_big_path`).
+
 ## `lotm.big.pack`
 
 ### `pack(source_dir: str | os.PathLike[str], output_file: str | os.PathLike[str], progress_callback: Callable[[ProgressReport], bool | None] | None = None) -> None`
-Packs a directory structure into an EA BIG4 standard archive atomically via a temporary sibling file. Raises FileNotFoundError if the target output directory does not exist.
+Packs a directory structure into an EA BIG4 standard archive atomically via a temporary sibling file. Raises `FileNotFoundError` if the target output directory does not exist.
 
 * **`source_dir`**: `str | os.PathLike[str]` pointing to the directory to compress.
 * **`output_file`**: `str | os.PathLike[str]` indicating the target `.big` destination file.
 * **`progress_callback`**: Optional callable receiving a `ProgressReport` instance. Returning `False` cancels the operation and triggers cleanup.
 * **Exceptions**:
   * `NotADirectoryError`: Raised if the source directory does not exist or is not a directory.
-  * `ValueError`: Raised if the output file path resolves inside the source directory (self-inclusion).
+  * `ValueError`: Raised if the output file path resolves inside the source directory (self-inclusion) or contains duplicate case-insensitive entry paths.
   * `lotm.big.BigFormatError` (Native): Raised if an individual file or cumulative archive size exceeds the 4GB (32-bit) format boundary.
-  * `lotm.big.BigArchiveError` (Native): Raised if an I/O read/write error occurs during packing.
-  * `FileNotFoundError`: Raised if the target output directory does not exist.
+  * `lotm.big.BigArchiveError` (Native): Raised if an I/O read/write error occurs during packing or the operation is cancelled.
 
 **Usage Example:**
 ```python
@@ -142,9 +146,9 @@ try:
         def _process_video(chunk: memoryview) -> bool:
             # Send chunk bytes to decoder or disk sink
             return True
-            
+
         arc.stream_entry("data/movies/intro.vp6", _process_video)
-            
+
 except BigArchiveError as err:
     print(f"Failed to stream entry: {err}")
 ```
@@ -178,7 +182,7 @@ with load_overlay(["base.big", "patch.big", "mod.big"]) as overlay:
     # Resolve the winning payload after all overrides are calculated
     resolved = overlay.resolve("data/weapon.ini")
     print(f"Weapon stats sourced from: {resolved.source_archive.name}")
-    
+
     weapon_bytes = overlay.read_entry("data/weapon.ini")
 ```
 
@@ -188,8 +192,20 @@ with load_overlay(["base.big", "patch.big", "mod.big"]) as overlay:
 
 The `lotm.ini` package provides a native C++20 AST parser, iterative serializer, and validator for SAGE `.ini`, `.inc`, and `.str` files. It is organized across `lotm.ini.parser`, `lotm.ini.formatter`, and `lotm.ini.diagnostics`, with all public symbols re-exported directly under `lotm.ini`.
 
+### Constants & Limits (`lotm.ini`)
+* **`LEVEL_INDENT`**: Default 4-space block indentation (`"    "`).
+* **`DEFAULT_END`**: Canonical block and entry closing keyword (`"End"`).
+* **`MAX_INI_DEPTH`**: Maximum allowed nesting depth (`16`).
+* **`MAX_INI_FILE_SIZE`**: Maximum allowed input file/buffer size (`64 * 1024 * 1024`, i.e., 64 MiB).
+* **`SAGE_MAX_BLOCK_NAME_LEN`**: Legacy 32-bit SAGE block class/name byte limit (`256`).
+* **`SAGE_MAX_IDENTIFIER_LEN`**: Legacy 32-bit SAGE identifier byte limit (`512`).
+* **`SUPPORTED_EXTENSIONS`**: Tuple of supported configuration extensions (`(".ini", ".inc", ".str")`).
+
+### `FormatOptions`
+Dataclass/binding object controlling serialization and formatting behavior (`indent`, `enforce_equals`, `normalize_end_tokens`, `normalize_header_spacing`, `normalize_statement_equals`, `normalize_comments`, `coalesce_blank_lines`).
+
 ### `parse_ini(file_path: str | os.PathLike[str], *, strict: bool = False, file_content: str | Buffer | None = None) -> ConstructFile`
-Parses a `.ini`, `.inc`, or `.str` file into a root `ConstructFile` AST object. When `file_content` is `None`, the file is memory-mapped directly from disk via Win32 `CreateFileMappingW`. When a `bytes` or `memoryview` buffer is supplied (such as from `BigArchive.read_entry`), it is ingested zero-copy without intermediate Python string decoding.
+Parses a `.ini`, `.inc`, or `.str` file into a root `ConstructFile` AST object. When `file_content` is `None`, the file is memory-mapped directly from disk via Win32 `CreateFileMappingW`. When a `bytes`, `bytearray`, or `memoryview` buffer is supplied (such as from `BigArchive.read_entry`), it is ingested zero-copy without intermediate Python string decoding.
 
 * **`file_path`**: Path to the configuration file (used for extension recognition and error reporting, or disk reading when `file_content` is `None`).
 * **`strict`**: If `True`, raises `IniParseError` immediately on negative nesting levels or unclosed blocks at EOF. If `False`, records diagnostics in `ConstructFile.errors`.
@@ -197,10 +213,10 @@ Parses a `.ini`, `.inc`, or `.str` file into a root `ConstructFile` AST object. 
 * **Exceptions**:
   * `lotm.ini.IniParseError`: Raised on invalid file paths/extensions, strict delimiter mismatches, exceeding `MAX_INI_DEPTH` (16), exceeding `MAX_INI_FILE_SIZE` (64 MiB), or exceeding legacy 32-bit SAGE buffer limits (256-byte block classes/names or 512-byte identifiers).
 
-**Zero-Copy BIG-to-INI Pipeline & In-Place AST Mutation Example:**
+**Zero-Copy BIG-to-INI Pipeline & Fluent AST Query/Mutation Example:**
 ```python
 from lotm.big import BigArchive
-from lotm.ini import parse_ini, ConstructLevel
+from lotm.ini import ConstructLevel, parse_ini
 
 with BigArchive("ini.big") as archive:
     raw_bytes = archive.read_entry("data/ini/weapon.ini")
@@ -209,13 +225,14 @@ with BigArchive("ini.big") as archive:
 for item in doc:
     if isinstance(item, ConstructLevel):
         print(f"{item._class} -> {item.name}")
+        item.set_value("Damage", "120")
 ```
 
 ### `parse_str(file_path: str | os.PathLike[str], *, strict: bool = False, file_content: str | Buffer | None = None) -> StrDocument`
 Parses a SAGE `.str` localization dictionary into a `StrDocument` containing `StrEntry` blocks, standalone comments, and diagnostic errors.
 
-### `format_ini(file_path: str | os.PathLike[str], output_path: str | os.PathLike[str] | None = None, *, strict: bool = False, file_content: str | Buffer | None = None) -> str`
-Parses and iteratively serializes a `.ini`, `.inc`, or `.str` file with consistent 4-space indentation. When `output_path` is provided, the formatted output is written atomically via a temporary sibling file (`.lotm_tmp`) and `os.replace`.
+### `format_ini(file_path: str | os.PathLike[str], output_path: str | os.PathLike[str] | None = None, *, strict: bool = False, file_content: str | Buffer | None = None, options: FormatOptions | None = None, enforce_equals: bool = False, normalize_end_tokens: bool = False, normalize_header_spacing: bool = False, normalize_statement_equals: bool = False, normalize_comments: bool = False, coalesce_blank_lines: bool = False) -> str`
+Parses and iteratively serializes a `.ini`, `.inc`, or `.str` file with consistent 4-space indentation and optional normalization toggles (which can be passed individually or via `FormatOptions`). When `output_path` is provided, the formatted output is written atomically via a temporary sibling file (`.lotm_tmp`) and `os.replace`.
 
 ### `scan_ini(target_path: str | os.PathLike[str], *, strict: bool = False) -> dict[Path, list[str]]`
 Scans a single file or recursively scans a directory tree for `.ini`, `.inc`, and `.str` structural errors, returning a dictionary mapping each `Path` to its list of diagnostic messages.
@@ -242,16 +259,48 @@ except IniParseError as err:
 ```
 
 ### Low-Level Helper Functions (`lotm.ini`)
-* **`recognize_structure(file_path: str | os.PathLike[str], file_content: str | None = None) -> tuple[list[list[str]], int]`**: Detects the active SAGE schema delimiter hierarchy and starting nesting depth (`0` for `.ini`/`.str`, `>= 0` for `.inc`).
+* **`recognize_structure(file_path: str | os.PathLike[str], file_content: str | Buffer | None = None) -> tuple[list[list[str]], int]`**: Detects the active SAGE schema delimiter hierarchy and starting nesting depth (`0` for `.ini`/`.str`, `>= 0` for `.inc`), accepting both `str` and binary `Buffer` inputs.
 * **`load_file(full_path: str | os.PathLike[str]) -> tuple[str, list[list[str]]]`**: Loads and normalizes a `.ini`, `.inc`, or `.str` file via `ConstructFile` (falling back to raw UTF-8/Windows-1252 text on empty or unparseable files) or reads a `.txt` file directly.
 * **`scan_file_for_errors(file_path: str | os.PathLike[str]) -> list[str]`**: Parses a single file in non-strict mode and returns any delimiter or nesting level mismatch messages without raising exceptions.
 
-### AST Node Hierarchy (`lotm.ini`)
-All container nodes (`ConstructFile`, `ConstructLevel`, `StrDocument`, `StrEntry`) implement `len()`, indexing (`node[i]`), item assignment (`node[i] = ...`), iteration (`for child in node:`), `.append(child)`, and `==`. Indexing and iteration return internal references (`nb::rv_policy::reference_internal`), so in-place attribute changes on retrieved child nodes mutate the AST directly.
+### AST Node Hierarchy & Query/Mutation API (`lotm.ini`)
+All container nodes (`ConstructFile`, `ConstructLevel`, `StrDocument`, `StrEntry`) implement `len()`, indexing (`node[i]`), item assignment (`node[i] = ...`), iteration (`for child in node:`), `.append(child)`, and `==`. Indexing and iteration return internal references (`nb::rv_policy::reference_internal`), backed by `StableVector` storage so references remain valid across mutations and re-parses.
 
-* **`ConstructFile`**: Root document container exposing `.name`, `.defines`, `.delimiters`, `.start_level`, `.strict`, `.items`, `.errors`, `.construct()`, and `.print()`.
-* **`ConstructLevel`**: Nested block node (`_class`, `name`, `identifier`, `comment`, `header_comment`, `end_token`, `end_comment`, `items`) exposing `.print(level=0, file_type=".ini")`.
+`ConstructFile` and `ConstructLevel` also provide fluent block search and property query/mutation methods:
+* **`find_block(block_class, name=None, identifier=None, *, recursive=False) -> ConstructLevel | None`**: Returns the first matching child or descendant block.
+* **`find_all(block_class, name=None, identifier=None, *, recursive=False) -> list[ConstructLevel]`**: Returns all matching blocks.
+* **`get_value(key, default=None) -> str | None`** and **`get_all_values(key) -> list[str]`**: Queries statement values (with `get_value` returning the last matching value per SAGE override precedence).
+* **`set_value(key, value) -> None`**: Updates the last matching statement in-place (preserving formatting and comments) or appends a new statement, validating keys, values, and 32-bit SAGE bounds.
+* **`remove_value(key, *, all_occurrences=False) -> bool`** and **`remove_block(block_class, name=None, identifier=None) -> bool`**: Removes matching statements or direct child blocks.
+
+Node types:
+* **`ConstructFile`**: Root document container exposing `.name`, `.defines`, `.delimiters`, `.start_level`, `.strict`, `.items`, `.errors`, `.warnings`, `.construct(preserve_metadata=False)`, `.construct_with_metadata()`, and `.print(options=None)`.
+* **`ConstructLevel`**: Nested block node (`_class`, `name`, `identifier`, `comment`, `header_comment`, `end_token`, `end_comment`, `canonical_class`, `missing_equals`, `items`) exposing `.print(level=0, file_type=".ini", options=None)`.
 * **`ScriptNode`**: Opaque `BeginScript ... EndScript` container preserving raw Lua lines (`content`) so inner Lua `end` tokens never collide with INI block closures.
 * **`IncludeNode`**: Lossless `#include` node exposing `raw_path`, `comment`, and the normalized `.clean_path` property.
+* **`DefineNode`**: Preprocessor `#define` macro node exposing `text` and `comment`.
 * **`StatementNode` & `CommentNode`**: Leaf AST nodes representing key-value assignments and standalone/inline comments.
 * **`StrEntry` & `StrDocument`**: Localization container structures for `.str` files.
+
+---
+
+## `lotm.pipeline` — Zero-Copy Archive-to-AST Pipeline
+
+The `lotm.pipeline` package bridges `lotm.big` and `lotm.ini` so `.ini`, `.inc`, and `.str` entries can be parsed zero-copy from a `BigArchive` or `BigOverlay`, mutated or formatted in AST form, and serialized to memory, disk, or a standalone delta patch `.big`.
+
+Note that `ArchiveEditor.to_memory()`, `ArchiveEditor.save()`, and `transform_archive()` materialize the merged archive payload in memory before packing.
+
+### `ArchiveEditor`
+Session class supporting `with ArchiveEditor(source) as editor:` or explicit `.close()` / `.closed`:
+* **`open_ini(entry_name, *, strict=False) -> ConstructFile`** and **`open_str(entry_name, *, strict=False) -> StrDocument`**: Zero-copy parse and cache ASTs per case-insensitive entry path.
+* **`edit_ini(entry_name, mutator, *, strict=False, format_options=None) -> ConstructFile`** and **`edit_str(entry_name, mutator, *, strict=False, format_options=None) -> StrDocument`**: Run an in-place mutator callback on a cached AST and record optional `FormatOptions`.
+* **`format_entries(filter_pattern="*", *, strict=False, options=None) -> list[str]`**: Load and apply `FormatOptions` to matching `.ini`, `.inc`, and `.str` entries.
+* **`apply_stage(stage, *, filter_pattern="*", strict=False) -> list[str]`**: Apply an `EntryStage` implementation to matching entries.
+* **`put_bytes(entry_name, data) -> None`** and **`remove(entry_name) -> bool`**: Stage raw binary/text overrides/additions or mark entries for removal.
+* **`to_memory(progress_callback=None) -> bytes`**, **`save(output_file, progress_callback=None) -> TransformResult`**, **`to_patch_memory(progress_callback=None) -> bytes`**, and **`save_patch(output_file, progress_callback=None) -> TransformResult`**: Serialize the merged archive or standalone delta patch to memory or atomically to disk.
+
+### Stages & `transform_archive`
+* **`EntryStage`**: Runtime-checkable protocol (`matches(entry_name) -> bool`, `apply(entry_name, payload, *, strict=False) -> bytes`).
+* **`IniAstStage`**, **`StrAstStage`**, and **`FormatConfigStage`**: Built-in frozen dataclasses implementing `EntryStage` for `.ini`/`.inc` mutations, `.str` mutations, and `FormatOptions` formatting.
+* **`TransformResult`**: Dataclass holding `modified_entries`, `added_entries`, `removed_entries`, `output_bytes`, and `output_path`.
+* **`transform_archive(source, output_file=None, *, transforms=None, stages=None, filter_pattern=None, format_options=None, strict=False, patch_only=False, progress_callback=None) -> TransformResult`**: One-shot pipeline runner over a file path, `BigArchive`, or `BigOverlay`.

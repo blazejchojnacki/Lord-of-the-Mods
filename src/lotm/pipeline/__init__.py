@@ -7,7 +7,13 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
-from .editor import ArchiveEditor, ArchiveHandle, ArchiveInput, TransformResult, transform_archive
+from .editor import (
+    ArchiveEditor,
+    ArchiveHandle,
+    ArchiveInput,
+    TransformResult,
+    transform_archive,
+)
 from .stages import EntryStage, FormatConfigStage, IniAstStage, StrAstStage
 
 __all__ = [

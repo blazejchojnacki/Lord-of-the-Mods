@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [build-system]
-requires = ["scikit-build-core>=0.9.0", "nanobind>=2.0.0"]
+requires = ["scikit-build-core>=0.11.0", "nanobind>=2.0.0"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -14,7 +14,8 @@ name = "lord-of-the-mods"
 version = "0.6.0"
 description = "Modular Python library and modding toolkit for The Battle for Middle-earth game"
 readme = "README.md"
-license = { file = "LICENSE.md" }
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE.md"]
 requires-python = ">=3.12"
 authors = [
     { name = "Błażej Chojnacki", email = "blazej.chojnacki@outlook.com" }
@@ -30,13 +31,16 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Win32 (MS Windows)",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: Microsoft :: Windows :: Windows 11",
     "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
     "Topic :: Games/Entertainment",
-    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed"
 ]
 
@@ -71,3 +75,11 @@ sdist.exclude = [".github", "_prototype", "tools"]
 python_version = "3.12"
 mypy_path = "src"
 strict = true
+
+[tool.pytest.ini_options]
+addopts = "--doctest-modules"
+testpaths = ["tests/python"]
+
+[tool.ruff.lint]
+# Keep explicit TypeAlias annotations for consistent typing across runtime modules and _core.pyi stubs.
+ignore = ["UP040"]

@@ -48,9 +48,22 @@ def _configure_subparsers(
         "pack",
         help="Pack a directory into an EA BIG4 archive using lotm.",
     )
-    pack_parser.add_argument("source_dir", type=Path, help="Path to the directory containing files to pack")
-    pack_parser.add_argument("-o", "--output", type=Path, default=Path("packed_archive.big"), help="Destination .big file path")
-    pack_parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output logging individual files")
+    pack_parser.add_argument(
+        "source_dir", type=Path, help="Path to the directory containing files to pack"
+    )
+    pack_parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=Path("packed_archive.big"),
+        help="Destination .big file path",
+    )
+    pack_parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output logging individual files",
+    )
     pack_parser.set_defaults(handler=_handle_pack)
 
     # Subcommand: unpack
@@ -59,9 +72,26 @@ def _configure_subparsers(
         help="Extract EA BIG4 archives using lotm.",
     )
     unpack_parser.add_argument("archive", type=Path, help="Path to the .big file")
-    unpack_parser.add_argument("-o", "--output", type=Path, default=Path("extracted_files"), help="Destination directory")
-    unpack_parser.add_argument("-f", "--filter", type=str, default=None, help="Optional glob pattern to filter extracted files")
-    unpack_parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output logging individual files")
+    unpack_parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=Path("extracted_files"),
+        help="Destination directory",
+    )
+    unpack_parser.add_argument(
+        "-f",
+        "--filter",
+        type=str,
+        default=None,
+        help="Optional glob pattern to filter extracted files",
+    )
+    unpack_parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output logging individual files",
+    )
     unpack_parser.set_defaults(handler=_handle_unpack)
 
     # Subcommand: diff
@@ -69,11 +99,32 @@ def _configure_subparsers(
         "diff",
         help="Compare two EA BIG4 archives or generate a delta patch using lotm.",
     )
-    diff_parser.add_argument("base_archive", type=Path, help="Path to the base .big file")
-    diff_parser.add_argument("target_archive", type=Path, help="Path to the target .big file")
-    diff_parser.add_argument("-o", "--output", type=Path, default=None, help="Optional destination .big file path to write a delta patch archive")
-    diff_parser.add_argument("-f", "--filter", type=str, default=None, help="Optional glob pattern to filter compared files")
-    diff_parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output logging individual changes")
+    diff_parser.add_argument(
+        "base_archive", type=Path, help="Path to the base .big file"
+    )
+    diff_parser.add_argument(
+        "target_archive", type=Path, help="Path to the target .big file"
+    )
+    diff_parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional destination .big file path to write a delta patch archive",
+    )
+    diff_parser.add_argument(
+        "-f",
+        "--filter",
+        type=str,
+        default=None,
+        help="Optional glob pattern to filter compared files",
+    )
+    diff_parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output logging individual changes",
+    )
     diff_parser.set_defaults(handler=_handle_diff)
 
     # Subcommand: overlay
@@ -81,9 +132,25 @@ def _configure_subparsers(
         "overlay",
         help="Inspect SAGE load-order resolution across .big archives using lotm.",
     )
-    overlay_parser.add_argument("sources", type=Path, nargs="+", help="Directory containing .big files, or explicit .big archive paths in load order")
-    overlay_parser.add_argument("-f", "--filter", type=str, default=None, help="Optional glob pattern to filter resolved entries")
-    overlay_parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output logging winning archives and override counts")
+    overlay_parser.add_argument(
+        "sources",
+        type=Path,
+        nargs="+",
+        help="Directory containing .big files, or explicit .big archive paths in load order",
+    )
+    overlay_parser.add_argument(
+        "-f",
+        "--filter",
+        type=str,
+        default=None,
+        help="Optional glob pattern to filter resolved entries",
+    )
+    overlay_parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output logging winning archives and override counts",
+    )
     overlay_parser.set_defaults(handler=_handle_overlay)
 
 
@@ -185,7 +252,12 @@ def _handle_diff(args: argparse.Namespace) -> int:
             print(f"~ {entry.name} ({entry.size} B)")
 
     if args.output is not None:
-        create_patch(args.base_archive, args.target_archive, args.output, filter_pattern=args.filter)
+        create_patch(
+            args.base_archive,
+            args.target_archive,
+            args.output,
+            filter_pattern=args.filter,
+        )
         print(f"Generated delta patch: {args.output}")
     return EXIT_SUCCESS
 
@@ -193,13 +265,21 @@ def _handle_diff(args: argparse.Namespace) -> int:
 def _handle_overlay(args: argparse.Namespace) -> int:
     """Execute `overlay` load-order resolution subcommand."""
     _setup_logging(args.verbose)
-    target_source = args.sources[0] if len(args.sources) == 1 and args.sources[0].is_dir() else args.sources
+    target_source = (
+        args.sources[0]
+        if len(args.sources) == 1 and args.sources[0].is_dir()
+        else args.sources
+    )
     overlay = load_overlay(target_source)
     entries = overlay.get_entries(args.filter or "")
-    print(f"Resolved {len(entries)} effective entries across {len(overlay.mounted_archives)} archives")
+    print(
+        f"Resolved {len(entries)} effective entries across {len(overlay.mounted_archives)} archives"
+    )
     if args.verbose:
         for item in entries:
-            print(f"{item.name} -> {item.source_archive.name} (overrides={item.override_count})")
+            print(
+                f"{item.name} -> {item.source_archive.name} (overrides={item.override_count})"
+            )
     return EXIT_SUCCESS
 
 
@@ -228,7 +308,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         handler: Callable[[argparse.Namespace], int] = args.handler
         return handler(args)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — top-level CLI entry point converts runtime/native errors into EXIT_ERROR on stderr
         print(f"Command '{args.command}' failed: {exc}", file=sys.stderr)
         return EXIT_ERROR
 

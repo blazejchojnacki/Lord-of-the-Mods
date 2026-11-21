@@ -15,10 +15,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from lotm._core import ini as _ini
+
 from .parser import SUPPORTED_EXTENSIONS, RootItem
 
 ConstructFile = _ini.ConstructFile
 ConstructLevel = _ini.ConstructLevel
+DefineNode = _ini.DefineNode
 IncludeNode = _ini.IncludeNode
 IniParseError = _ini.IniParseError
 ScriptNode = _ini.ScriptNode
@@ -122,6 +124,11 @@ def scan_ini(
     return report
 
 
+def _count_defines(items: list[RootItem]) -> int:
+    """Count top-level DefineNode instances in a root AST item list."""
+    return sum(1 for node in items if isinstance(node, DefineNode))
+
+
 def _count_includes_iterative(items: list[RootItem]) -> int:
     """Count IncludeNode instances iteratively across an AST item list."""
     count = 0
@@ -188,7 +195,7 @@ def inspect_ini(
         file_path=path_obj,
         file_type=path_obj.suffix.lower() or ".ini",
         start_level=doc.start_level,
-        define_count=len(doc.defines),
+        define_count=_count_defines(top_items),
         include_count=_count_includes_iterative(top_items),
         total_top_level_items=len(top_items),
         block_counts=block_counts,

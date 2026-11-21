@@ -7,10 +7,11 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
-from collections.abc import Iterable
 import logging
 import os
+from collections.abc import Iterable
 from pathlib import Path
+
 from lotm._core import big
 
 logger = logging.getLogger("lotm.big.overlay")
@@ -51,7 +52,9 @@ def load_overlay(
     if isinstance(source, (str, os.PathLike)):
         dir_path = Path(source)
         if not dir_path.is_dir():
-            raise NotADirectoryError(f"Overlay directory '{dir_path}' does not exist or is not a directory.")
+            raise NotADirectoryError(
+                f"Overlay directory '{dir_path}' does not exist or is not a directory."
+            )
 
         overlay = big.BigOverlay.from_directory(dir_path)
         logger.info(
@@ -69,5 +72,7 @@ def load_overlay(
         archive_paths.append(p)
 
     overlay = big.BigOverlay.from_archives(archive_paths)
-    logger.info("Mounted %d archives in explicit load order", len(overlay.mounted_archives))
+    logger.info(
+        "Mounted %d archives in explicit load order", len(overlay.mounted_archives)
+    )
     return overlay

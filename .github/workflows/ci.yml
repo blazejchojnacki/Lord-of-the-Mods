@@ -12,14 +12,10 @@ on:
   push:
     branches: [main, 'release/**']
     paths-ignore:
-      - 'docs/**'
-      - '**.md'
       - '.gitignore'
   pull_request:
     branches: [main, 'release/**']
     paths-ignore:
-      - 'docs/**'
-      - '**.md'
       - '.gitignore'
 
 concurrency:
@@ -47,8 +43,13 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install nanobind ninja
+          pip install nanobind ninja ruff
           pip install -e ".[test]"
+
+      - name: Run Ruff Checks
+        run: |
+          ruff check src tests
+          ruff format --check src tests
 
       - name: Install OpenCppCoverage
         run: |
@@ -97,15 +98,61 @@ jobs:
       - name: Run Python Integration Tests (Pytest)
         run: python -m pytest --cov=lotm --cov-report=xml tests/python -v
 
-      - name: Build and Validate Wheel
+      - name: Build and Validate Distributions (sdist & wheel)
+        shell: pwsh
         run: |
           pip install build twine
-          python -m build --wheel
-          twine check dist/*
+          python -m build --sdist --wheel
+          twine check --strict dist/*
+          python -c "import glob, tarfile; tf = tarfile.open(glob.glob('dist/*.tar.gz')[0]); names = tf.getnames(); assert any(n.endswith('/LICENSE.md') for n in names); assert any('/docs/' in n for n in names); assert any('/examples/' in n for n in names); assert any('/tests/' in n for n in names); assert not any('/.github/' in n or '/tools/' in n for n in names)"
+
+      - name: Upload Built Wheel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lotm-wheel
+          path: dist/*.whl
+          retention-days: 1
+
+      - name: Test Built Wheel in Isolated Environment
+        shell: pwsh
+        run: |
+          $wheel = (Get-Item dist/*.whl).FullName
+          $isolatedRoot = Join-Path $env:RUNNER_TEMP "wheel-verify"
+          $venvDir = Join-Path $isolatedRoot "venv"
+          $workDir = Join-Path $isolatedRoot "work"
+
+          if (Test-Path $isolatedRoot) {
+            Remove-Item -Recurse -Force $isolatedRoot
+          }
+          New-Item -ItemType Directory -Path $workDir | Out-Null
+
+          python -m venv $venvDir
+          $venvPython = Join-Path $venvDir "Scripts\python.exe"
+          $venvLotm = Join-Path $venvDir "Scripts\lotm.exe"
+          $venvLotmBig = Join-Path $venvDir "Scripts\lotm-big.exe"
+
+          & $venvPython -m pip install --upgrade pip
+          & $venvPython -m pip install $wheel
+
+          Push-Location $workDir
+          try {
+            & $venvLotm --version
+            & $venvLotm --help | Out-Null
+            & $venvLotmBig --help | Out-Null
+            & $venvPython -m lotm --help | Out-Null
+            & $venvPython -c "import lotm, lotm.big, lotm.ini, lotm.pipeline; assert lotm.__version__"
+            & $venvPython -m pip install mypy pytest
+            & $venvPython -m mypy (Join-Path "${{ github.workspace }}" "src\lotm")
+            & $venvPython -m pytest --doctest-modules --pyargs lotm
+          }
+          finally {
+            Pop-Location
+            Remove-Item -Recurse -Force $isolatedRoot -ErrorAction SilentlyContinue
+          }
 
       - name: Test Installed Wheel
         run: |
-          pip install (Get-Item dist/*.whl).FullName
+          pip install --force-reinstall --no-deps (Get-Item dist/*.whl).FullName
           lotm --version
           lotm --help
           lotm big --help
@@ -121,3 +168,36 @@ jobs:
           lotm-big overlay --help
           python -m lotm --help
           python -m lotm.big --help
+          python -c "import lotm.pipeline; assert hasattr(lotm.pipeline, 'ArchiveEditor')"
+
+  stable-abi-smoke-test:
+    name: Stable ABI Smoke Test (Windows, Python ${{ matrix.python-version }})
+    needs: build-and-test
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.13', '3.14']
+
+    steps:
+      - name: Download Built Wheel Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: lotm-wheel
+          path: dist
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Verify abi3 Wheel Forward Compatibility
+        shell: pwsh
+        run: |
+          $wheel = (Get-Item dist/*.whl).FullName
+          python -m pip install --upgrade pip
+          python -m pip install --only-binary=:all: $wheel
+          lotm --version
+          lotm --help | Out-Null
+          lotm-big --help | Out-Null
+          python -c "import lotm, lotm.big, lotm.ini, lotm.pipeline; assert lotm.__version__"

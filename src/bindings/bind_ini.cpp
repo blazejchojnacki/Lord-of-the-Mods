@@ -173,12 +173,7 @@ namespace lotm::python {
         sub.attr("MAX_INI_FILE_SIZE") = lotm::ini::MAX_INI_FILE_SIZE;
         sub.attr("SAGE_MAX_BLOCK_NAME_LEN") = lotm::ini::SAGE_MAX_BLOCK_NAME_LEN;
         sub.attr("SAGE_MAX_IDENTIFIER_LEN") = lotm::ini::SAGE_MAX_IDENTIFIER_LEN;
-
-        nb::list ini_ends_list;
-        for (const auto kw : lotm::ini::INI_ENDS) {
-            ini_ends_list.append(kw);
-        }
-        sub.attr("INI_ENDS") = nb::tuple(ini_ends_list);
+        sub.attr("DEFAULT_END") = std::string{ lotm::ini::DEFAULT_END };
 
         nb::class_<lotm::ini::FormatOptions>(sub, "FormatOptions", "Configurable serialization rules for AST printing and formatting")
             .def("__init__", [](lotm::ini::FormatOptions* t,
@@ -539,7 +534,6 @@ namespace lotm::python {
                 "Initializes and parses a SAGE .ini, .inc, or .str configuration document")
             .def("__init__", [](lotm::ini::ConstructFile* t,
                 const std::filesystem::path& name,
-                std::vector<std::string> defines,
                 std::vector<std::vector<std::string>> delimiters,
                 int start_level,
                 bool strict,
@@ -548,7 +542,6 @@ namespace lotm::python {
                     nb::gil_scoped_release release;
                     new (t) lotm::ini::ConstructFile();
                     t->name = std::move(name_str);
-                    t->defines = std::move(defines);
                     t->delimiters = std::move(delimiters);
                     t->start_level = start_level;
                     t->strict = strict;
@@ -559,7 +552,6 @@ namespace lotm::python {
                     }
                 },
                 nb::arg("name"),
-                nb::arg("defines") = std::vector<std::string>{},
                 nb::arg("delimiters") = std::vector<std::vector<std::string>>{},
                 nb::arg("start_level") = 0,
                 nb::arg("strict") = false,
@@ -577,13 +569,11 @@ namespace lotm::python {
                 nb::arg("name"), nb::arg("strict"), nb::arg("file_buffer"),
                 "Initializes and parses a configuration document from a Python memoryview or bytes buffer")
             .def_rw("name", &lotm::ini::ConstructFile::name, "File path or document name")
-            .def_rw("defines", &lotm::ini::ConstructFile::defines, "Collected #define macro lines")
             .def_rw("delimiters", &lotm::ini::ConstructFile::delimiters, "Active schema delimiter hierarchy")
             .def_rw("start_level", &lotm::ini::ConstructFile::start_level, "Recognized starting nesting depth")
             .def_rw("strict", &lotm::ini::ConstructFile::strict, "Whether to raise IniParseError on delimiter mismatches")
             .def_rw("file_content", &lotm::ini::ConstructFile::file_content, "Optional in-memory source buffer")
             .def_rw("current_level", &lotm::ini::ConstructFile::current_level, "Current parser nesting level")
-            .def_rw("last_comment", &lotm::ini::ConstructFile::last_comment, "Buffered comment awaiting attachment")
             .def_rw("errors", &lotm::ini::ConstructFile::errors, "Accumulated non-strict parsing warnings and errors")
             .def_rw("warnings", &lotm::ini::ConstructFile::warnings, "Accumulated style warnings")
             .def("construct", [](lotm::ini::ConstructFile& self, bool preserve_metadata) {
@@ -591,7 +581,12 @@ namespace lotm::python {
             self.construct(preserve_metadata);
                 },
                 nb::arg("preserve_metadata") = false,
-                "Parses or re-parses the document into its AST representation");
+                "Parses or re-parses the document into its AST representation")
+            .def("construct_with_metadata", [](lotm::ini::ConstructFile& self) {
+            nb::gil_scoped_release release;
+            self.construct_with_metadata();
+                },
+                "Parses or re-parses the document while preserving caller-supplied metadata");
 
         bind_sequence_protocol<
             lotm::ini::ConstructFile,

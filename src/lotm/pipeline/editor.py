@@ -9,15 +9,15 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 from __future__ import annotations
 
-from collections.abc import Buffer, Callable, Mapping, Sequence
-from contextlib import ExitStack
-from dataclasses import dataclass, field
 import fnmatch
 import logging
 import os
-from pathlib import Path
 import tempfile
-from typing import TypeAlias
+from collections.abc import Buffer, Callable, Mapping, Sequence
+from contextlib import ExitStack
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Self, TypeAlias
 
 from lotm._core import big as _big
 from lotm.big import pack_to_memory
@@ -76,9 +76,13 @@ def _write_atomic_bytes(output_file: str | os.PathLike[str], data: bytes) -> Pat
     if dest.exists() and dest.is_dir():
         raise ValueError(f"Target output path cannot be a directory: {dest}")
     if not dest.parent.is_dir():
-        raise FileNotFoundError(f"Target output directory '{dest.parent}' does not exist.")
+        raise FileNotFoundError(
+            f"Target output directory '{dest.parent}' does not exist."
+        )
 
-    fd, tmp_name = tempfile.mkstemp(prefix=f".{dest.name}.", suffix=".lotm_tmp", dir=str(dest.parent))
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{dest.name}.", suffix=".lotm_tmp", dir=str(dest.parent)
+    )
     tmp_path = Path(tmp_name)
     try:
         with os.fdopen(fd, "wb") as handle:
@@ -124,7 +128,9 @@ class ArchiveEditor:
 
         if isinstance(source, (_big.BigArchive, _big.BigOverlay)):
             if source.closed:
-                raise _big.BigArchiveError("Cannot open ArchiveEditor on a closed archive or overlay.")
+                raise _big.BigArchiveError(
+                    "Cannot open ArchiveEditor on a closed archive or overlay."
+                )
             self._source_handle = source
         else:
             arc_path = Path(source)
@@ -148,13 +154,17 @@ class ArchiveEditor:
             self._closed = True
             self._stack.close()
 
-    def __enter__(self) -> ArchiveEditor:
+    def __enter__(self) -> Self:
         """Enter the context manager and return `self`."""
         if self._closed:
-            raise _big.BigArchiveError("Cannot enter context with a closed ArchiveEditor.")
+            raise _big.BigArchiveError(
+                "Cannot enter context with a closed ArchiveEditor."
+            )
         return self
 
-    def __exit__(self, exc_type: object = None, exc_val: object = None, exc_tb: object = None) -> None:
+    def __exit__(
+        self, exc_type: object = None, exc_val: object = None, exc_tb: object = None
+    ) -> None:
         """Exit the context manager and close owned resources."""
         self.close()
 
@@ -266,22 +276,26 @@ class ArchiveEditor:
 
         for entry in self._source_handle.get_entries():
             key = _normalize_key(entry.name)
-            if key in self._removed_keys or not _matches_glob(entry.name, filter_pattern):
+            if key in self._removed_keys or not _matches_glob(
+                entry.name, filter_pattern
+            ):
                 continue
 
             lower = key
             if lower.endswith(".str"):
-                doc = self.open_str(entry.name, strict=strict)
-                self._str_asts[key] = (self._str_asts[key][0], doc, opts)
+                str_doc = self.open_str(entry.name, strict=strict)
+                self._str_asts[key] = (self._str_asts[key][0], str_doc, opts)
                 formatted_names.append(self._str_asts[key][0])
             elif lower.endswith((".ini", ".inc")):
-                doc = self.open_ini(entry.name, strict=strict)
-                self._ini_asts[key] = (self._ini_asts[key][0], doc, opts)
+                ini_doc = self.open_ini(entry.name, strict=strict)
+                self._ini_asts[key] = (self._ini_asts[key][0], ini_doc, opts)
                 formatted_names.append(self._ini_asts[key][0])
 
         return formatted_names
 
-    def apply_stage(self, stage: EntryStage, *, filter_pattern: str = "*", strict: bool = False) -> list[str]:
+    def apply_stage(
+        self, stage: EntryStage, *, filter_pattern: str = "*", strict: bool = False
+    ) -> list[str]:
         """Apply a pluggable `EntryStage` to matching entries in the archive or overlay."""
         self._ensure_open()
         applied: list[str] = []
@@ -290,7 +304,9 @@ class ArchiveEditor:
             key = _normalize_key(entry.name)
             if key in self._removed_keys:
                 continue
-            if not _matches_glob(entry.name, filter_pattern) or not stage.matches(entry.name):
+            if not _matches_glob(entry.name, filter_pattern) or not stage.matches(
+                entry.name
+            ):
                 continue
 
             canon_name, raw_buf = self._read_source_bytes(entry.name)
@@ -329,23 +345,25 @@ class ArchiveEditor:
             self._removed_keys.add(key)
         return existed
 
-    def _collect_staged_payloads(self) -> tuple[list[tuple[str, bytes]], list[str], list[str], list[str]]:
+    def _collect_staged_payloads(
+        self,
+    ) -> tuple[list[tuple[str, bytes]], list[str], list[str], list[str]]:
         """Build `(entry_name, utf8_or_raw_bytes)` pairs and classify modified, added, and removed entries."""
         self._ensure_open()
         staged_by_key: dict[str, tuple[str, bytes]] = {}
         modified: list[str] = []
         added: list[str] = []
 
-        for key, (canon_name, doc, opts) in self._ini_asts.items():
-            rendered = doc.print() if opts is None else doc.print(opts)
+        for key, (canon_name, ini_doc, opts) in self._ini_asts.items():
+            rendered = ini_doc.print() if opts is None else ini_doc.print(opts)
             staged_by_key[key] = (canon_name, rendered.encode("utf-8"))
             if key in self._base_entries_by_key:
                 modified.append(canon_name)
             else:
                 added.append(canon_name)
 
-        for key, (canon_name, doc, opts) in self._str_asts.items():
-            rendered = doc.print() if opts is None else doc.print(opts)
+        for key, (canon_name, str_doc, opts) in self._str_asts.items():
+            rendered = str_doc.print() if opts is None else str_doc.print(opts)
             staged_by_key[key] = (canon_name, rendered.encode("utf-8"))
             if key in self._base_entries_by_key:
                 modified.append(canon_name)
@@ -383,7 +401,11 @@ class ArchiveEditor:
         _, modified, added, removed = self._collect_staged_payloads()
         patch_bytes = self.to_patch_memory(progress_callback=progress_callback)
         dest = _write_atomic_bytes(output_file, patch_bytes)
-        logger.info("Wrote pipeline delta patch to %s (%d bytes)", dest.resolve(), len(patch_bytes))
+        logger.info(
+            "Wrote pipeline delta patch to %s (%d bytes)",
+            dest.resolve(),
+            len(patch_bytes),
+        )
         return TransformResult(
             modified_entries=modified,
             added_entries=added,
@@ -408,7 +430,12 @@ class ArchiveEditor:
             if key in staged_map:
                 merged.append(staged_map.pop(key))
             else:
-                merged.append((_to_big_path(entry.name), self._source_handle.read_entry(entry.name)))
+                merged.append(
+                    (
+                        _to_big_path(entry.name),
+                        self._source_handle.read_entry(entry.name),
+                    )
+                )
 
         merged.extend(staged_map.values())
         return pack_to_memory(merged, progress_callback=progress_callback)
@@ -422,7 +449,11 @@ class ArchiveEditor:
         _, modified, added, removed = self._collect_staged_payloads()
         archive_bytes = self.to_memory(progress_callback=progress_callback)
         dest = _write_atomic_bytes(output_file, archive_bytes)
-        logger.info("Wrote transformed archive to %s (%d bytes)", dest.resolve(), len(archive_bytes))
+        logger.info(
+            "Wrote transformed archive to %s (%d bytes)",
+            dest.resolve(),
+            len(archive_bytes),
+        )
         return TransformResult(
             modified_entries=modified,
             added_entries=added,
@@ -477,11 +508,15 @@ def transform_archive(
     with ArchiveEditor(source) as editor:
         if transforms:
             for entry_name, mutator in transforms.items():
-                editor.edit_ini(entry_name, mutator, strict=strict, format_options=format_options)
+                editor.edit_ini(
+                    entry_name, mutator, strict=strict, format_options=format_options
+                )
 
         if stages:
             for stage in stages:
-                editor.apply_stage(stage, filter_pattern=filter_pattern or "*", strict=strict)
+                editor.apply_stage(
+                    stage, filter_pattern=filter_pattern or "*", strict=strict
+                )
         elif filter_pattern is not None:
             editor.format_entries(filter_pattern, strict=strict, options=format_options)
         elif format_options is not None and not transforms:
@@ -491,7 +526,9 @@ def transform_archive(
 
         if output_file is not None:
             if patch_only:
-                return editor.save_patch(output_file, progress_callback=progress_callback)
+                return editor.save_patch(
+                    output_file, progress_callback=progress_callback
+                )
             return editor.save(output_file, progress_callback=progress_callback)
 
         payload = (

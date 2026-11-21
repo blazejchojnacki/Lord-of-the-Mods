@@ -7,10 +7,11 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
-from collections.abc import Buffer, Callable, Iterable, Mapping
 import logging
 import os
+from collections.abc import Buffer, Callable, Iterable, Mapping
 from pathlib import Path
+
 from lotm._core import big
 
 logger = logging.getLogger("lotm.big.packer")
@@ -22,6 +23,7 @@ def _make_progress_callback(
     user_callback: Callable[[big.ProgressReport], bool | None] | None,
 ) -> Callable[[big.ProgressReport], bool]:
     """Create a progress callback wrapper that logs completed entries and forwards telemetry."""
+
     def on_progress(report: big.ProgressReport) -> bool:
         if report.bytes_transferred == report.file_size:
             log.debug("%s: %s", debug_prefix, report.entry_name)
@@ -71,17 +73,26 @@ def pack(
     output_path = Path(output_file)
 
     if not source_path.is_dir():
-        raise NotADirectoryError(f"Source directory '{source_path}' does not exist or is not a directory.")
+        raise NotADirectoryError(
+            f"Source directory '{source_path}' does not exist or is not a directory."
+        )
     if not output_path.parent.is_dir():
-        raise FileNotFoundError(f"Target output directory '{output_path.parent}' does not exist.")
+        raise FileNotFoundError(
+            f"Target output directory '{output_path.parent}' does not exist."
+        )
 
     on_progress = _make_progress_callback(logger, "Packed", progress_callback)
-    big.BigPacker.pack_from_directory(source_path, output_path, progress_callback=on_progress)
+    big.BigPacker.pack_from_directory(
+        source_path, output_path, progress_callback=on_progress
+    )
     logger.info("Finished packing into: %s", output_path.resolve())
 
 
 def pack_to_memory(
-    source: str | os.PathLike[str] | Mapping[str, Buffer] | Iterable[tuple[str, Buffer]],
+    source: str
+    | os.PathLike[str]
+    | Mapping[str, Buffer]
+    | Iterable[tuple[str, Buffer]],
     progress_callback: Callable[[big.ProgressReport], bool | None] | None = None,
 ) -> bytes:
     """
@@ -122,7 +133,9 @@ def pack_to_memory(
     if isinstance(source, (str, os.PathLike)):
         source_path = Path(source)
         if not source_path.is_dir():
-            raise NotADirectoryError(f"Source directory '{source_path}' does not exist or is not a directory.")
+            raise NotADirectoryError(
+                f"Source directory '{source_path}' does not exist or is not a directory."
+            )
 
         data = big.BigPacker.pack_to_memory(source_path, progress_callback=on_progress)
         logger.info("Finished packing directory into memory (%d bytes)", len(data))
@@ -130,5 +143,7 @@ def pack_to_memory(
 
     records = list(source.items()) if isinstance(source, Mapping) else list(source)
     data = big.BigPacker.pack_to_memory(records, progress_callback=on_progress)
-    logger.info("Finished packing %d records into memory (%d bytes)", len(records), len(data))
+    logger.info(
+        "Finished packing %d records into memory (%d bytes)", len(records), len(data)
+    )
     return data

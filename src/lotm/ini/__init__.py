@@ -10,7 +10,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 from lotm._core import ini
 
 LEVEL_INDENT = ini.LEVEL_INDENT
-INI_ENDS = ini.INI_ENDS
+DEFAULT_END = ini.DEFAULT_END
 MAX_INI_DEPTH = ini.MAX_INI_DEPTH
 MAX_INI_FILE_SIZE = ini.MAX_INI_FILE_SIZE
 SAGE_MAX_BLOCK_NAME_LEN = ini.SAGE_MAX_BLOCK_NAME_LEN
@@ -43,35 +43,35 @@ from .parser import (
 )
 
 __all__ = [
+    "DEFAULT_END",
     "LEVEL_INDENT",
-    "INI_ENDS",
     "MAX_INI_DEPTH",
     "MAX_INI_FILE_SIZE",
     "SAGE_MAX_BLOCK_NAME_LEN",
     "SAGE_MAX_IDENTIFIER_LEN",
     "SUPPORTED_EXTENSIONS",
-    "IniParseError",
-    "FormatOptions",
-    "CommentNode",
-    "StatementNode",
-    "IncludeNode",
-    "DefineNode",
-    "ScriptNode",
-    "ConstructLevel",
-    "StrEntry",
-    "StrDocument",
-    "StrParser",
-    "ConstructFile",
     "AstNode",
-    "RootItem",
+    "CommentNode",
+    "ConstructFile",
+    "ConstructLevel",
+    "DefineNode",
+    "FormatOptions",
+    "IncludeNode",
     "IniInspectionReport",
-    "recognize_structure",
-    "validate_include",
+    "IniParseError",
+    "RootItem",
+    "ScriptNode",
+    "StatementNode",
+    "StrDocument",
+    "StrEntry",
+    "StrParser",
+    "format_ini",
+    "inspect_ini",
     "load_file",
-    "scan_file_for_errors",
     "parse_ini",
     "parse_str",
-    "format_ini",
+    "recognize_structure",
+    "scan_file_for_errors",
     "scan_ini",
-    "inspect_ini",
+    "validate_include",
 ]

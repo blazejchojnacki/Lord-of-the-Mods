@@ -185,7 +185,7 @@ namespace lotm::ini {
             "AudioEvent", "Multisound", "StreamedSound", "AmbientStream", "Animation",
             "Armor", "AudioSettings", "AnimationSoundClientBehaviorGlobalSetting",
             "ModifierList", "BannerType", "ButtonSet", "CommandButton", "CommandMap",
-            "DebugCommandMap", "CommandSet", "ControlBarResizer", "SpecialPower",
+            "DebugCommandMap", "CommandSet", "ControlBarResizer",
             "DamageFX", "DrawGroupInfo", "EmotionNugget", "SkyboxTextureSet",
             "GlowEffect", "RingEffect", "FireEffect", "CloudEffect", "ShadowMap",
             "Fire", "FontDefaultSettings", "FontSubstitution", "GameData",

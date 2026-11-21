@@ -10,8 +10,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 import lotm
-import lotm._core as _core
-import lotm.ini as ini
+from lotm import _core, ini
 
 
 def test_core_ini_submodule_exists() -> None:
@@ -25,7 +24,7 @@ def test_public_ini_exports_all_symbols() -> None:
     """Verify that every symbol declared in lotm.ini.__all__ is present and bound."""
     expected_exports = {
         "LEVEL_INDENT",
-        "INI_ENDS",
+        "DEFAULT_END",
         "MAX_INI_DEPTH",
         "MAX_INI_FILE_SIZE",
         "SAGE_MAX_BLOCK_NAME_LEN",
@@ -64,7 +63,7 @@ def test_public_ini_exports_all_symbols() -> None:
 def test_constants_and_exception_inheritance() -> None:
     """Verify module constants and that IniParseError inherits from ValueError."""
     assert ini.LEVEL_INDENT == "    "
-    assert ini.INI_ENDS == ("End", "END", "end")
+    assert ini.DEFAULT_END == "End"
     assert ini.MAX_INI_DEPTH == 16
     assert ini.MAX_INI_FILE_SIZE == 64 * 1024 * 1024
     assert ini.SAGE_MAX_BLOCK_NAME_LEN == 256

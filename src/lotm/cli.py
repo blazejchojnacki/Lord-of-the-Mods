@@ -80,7 +80,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         handler: Callable[[argparse.Namespace], int] = args.handler
         return handler(args)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — top-level umbrella CLI converts runtime/native errors into EXIT_ERROR on stderr
         subcmd = getattr(args, "command", None)
         label = f"{args.domain} {subcmd}" if subcmd else str(args.domain)
         print(f"Command '{label}' failed: {exc}", file=sys.stderr)

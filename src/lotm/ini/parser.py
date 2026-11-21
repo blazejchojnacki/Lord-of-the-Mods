@@ -28,12 +28,7 @@ ConstructFile = _ini.ConstructFile
 IniParseError = _ini.IniParseError
 
 AstNode: TypeAlias = (
-    CommentNode
-    | StatementNode
-    | IncludeNode
-    | DefineNode
-    | ScriptNode
-    | ConstructLevel
+    CommentNode | StatementNode | IncludeNode | DefineNode | ScriptNode | ConstructLevel
 )
 RootItem: TypeAlias = AstNode | StrEntry
 

@@ -369,13 +369,14 @@ TEST_CASE("BigDiff Delta Patch Generation", "[big_diff][patch]") {
 
     SECTION("Positive scenario: ProgressReport objects safely outlive callback execution") {
         std::vector<ProgressReport> retained_reports;
-        BigDiff::create_patch_to_memory(
+        const auto patch_bytes = BigDiff::create_patch_to_memory(
             env.base_file, env.target_file, "", [&](const ProgressReport& report) -> bool {
                 retained_reports.push_back(report); // Copy the struct
                 return true;
             }
         );
 
+        REQUIRE_FALSE(patch_bytes.empty());
         REQUIRE(retained_reports.size() == 2);
         // Validates ownership fix: entry_name (std::string) persists safely after C++ transient vectors drop out of scope
         REQUIRE(retained_reports[0].entry_name == "art\\added.dds");

@@ -266,7 +266,13 @@ namespace lotm::big {
         }
         if (!chunk_cb) return;
 
-        if (static_cast<uintmax_t>(entry.offset) + entry.size > physical_size_) {
+        std::error_code ec;
+        const auto physical_size = std::filesystem::file_size(file_path_, ec);
+        if (ec) {
+            throw BigArchiveError("Cannot open file for reading: " + to_utf8(file_path_));
+        }
+
+        if (static_cast<uintmax_t>(entry.offset) + entry.size > physical_size) {
             throw BigFormatError("Extraction bounds exceeded for file: " + entry.name);
         }
 

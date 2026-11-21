@@ -10,10 +10,10 @@ SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 from pathlib import Path
+
 import pytest
 
-import lotm._core as _core
-import lotm.ini as ini
+from lotm import _core, ini
 
 
 def test_ast_leaf_nodes_properties_equality_and_repr() -> None:
@@ -149,7 +149,17 @@ def test_construct_level_container_operations_and_indexing() -> None:
 
     block.items = [ini.StatementNode("Side = Men")]
     assert len(block) == 1
-    assert block == block
+    expected_block = ini.ConstructLevel(
+        _class="ChildObject",
+        name="GondorRanger",
+        identifier="GondorArcher",
+        comment="; updated lead",
+        header_comment="; updated hdr",
+        end_token="END",
+        end_comment="; updated tail",
+    )
+    expected_block.items = [ini.StatementNode("Side = Men")]
+    assert block == expected_block
 
 
 def test_str_entry_and_str_document_bindings(sample_str_file: Path) -> None:
@@ -185,7 +195,20 @@ def test_str_entry_and_str_document_bindings(sample_str_file: Path) -> None:
     with pytest.raises(IndexError):
         _ = entry[10]
 
-    assert entry == entry
+    expected_entry = ini.StrEntry(
+        category="OBJECT",
+        identifier="GondorSoldier",
+        comment="; lead",
+        header_comment="; hdr",
+        end_token="End",
+        end_comment="; end",
+        items=[
+            ini.CommentNode("; c"),
+            ini.StatementNode('"Soldier"'),
+            ini.CommentNode("; replaced child"),
+        ],
+    )
+    assert entry == expected_entry
     assert "StrEntry" in repr(entry)
     assert "OBJECT:GondorSoldier" in entry.print()
 
@@ -201,7 +224,25 @@ def test_str_entry_and_str_document_bindings(sample_str_file: Path) -> None:
     assert doc[0].identifier == "GondorElite"
     doc[-1] = ini.CommentNode("; doc tail 2")
     assert len(list(doc)) == 2
-    assert doc == doc
+    modified_entry = ini.StrEntry(
+        category="OBJECT",
+        identifier="GondorElite",
+        comment="; lead",
+        header_comment="; hdr",
+        end_token="End",
+        end_comment="; end",
+        items=[
+            ini.CommentNode("; c"),
+            ini.StatementNode('"Soldier"'),
+            ini.CommentNode("; replaced child"),
+        ],
+    )
+    expected_doc = ini.StrDocument(
+        "custom2.str",
+        [modified_entry, ini.CommentNode("; doc tail 2")],
+        [],
+    )
+    assert doc == expected_doc
 
     with pytest.raises(IndexError):
         _ = doc[10]
@@ -221,22 +262,19 @@ def test_construct_file_overloads_and_sequence_protocol(sample_ini_file: Path) -
     assert len(empty_cf) == 0
     assert empty_cf.name == ""
 
-    # 6-argument metadata constructor with empty name (does not auto-construct)
+    # 5-argument metadata constructor with empty name (does not auto-construct)
     meta_empty = ini.ConstructFile(
         name="",
-        defines=["#define A 1"],
         delimiters=[["Weapon"], []],
         start_level=0,
         strict=False,
         file_content=None,
     )
-    assert meta_empty.defines == ["#define A 1"]
     assert len(meta_empty) == 0
 
-    # 6-argument metadata constructor with non-empty name and content (preserves metadata and auto-constructs)
+    # 5-argument metadata constructor with non-empty name and content (preserves metadata and auto-constructs)
     meta_parsed = ini.ConstructFile(
         name="inline.inc",
-        defines=["#define PRE_MACRO 1"],
         delimiters=[["CustomRoot"], ["CustomWeapon"], []],
         start_level=1,
         strict=True,
@@ -244,7 +282,6 @@ def test_construct_file_overloads_and_sequence_protocol(sample_ini_file: Path) -
     )
     assert len(meta_parsed) == 1
     assert meta_parsed.start_level == 1
-    assert meta_parsed.defines == ["#define PRE_MACRO 1"]
     assert "ConstructFile" in repr(meta_parsed)
 
     # Verify in-place reference semantics on ConstructFile indexing and iteration
@@ -259,19 +296,24 @@ def test_construct_file_overloads_and_sequence_protocol(sample_ini_file: Path) -
 
     # Property read/write accessors
     meta_parsed.name = "inline.ini"
-    meta_parsed.defines = ["#define RANGE 300"]
     meta_parsed.delimiters = [["Weapon"], []]
     meta_parsed.start_level = 0
     meta_parsed.strict = False
     meta_parsed.file_content = "Weapon GondorBow\nEnd\n"
     meta_parsed.current_level = 0
-    meta_parsed.last_comment = ""
     meta_parsed.errors = ["custom warning"]
     assert meta_parsed.errors == ["custom warning"]
 
     meta_parsed.construct()
     assert meta_parsed.errors == []
-    assert meta_parsed == meta_parsed
+    expected_cf = ini.ConstructFile(
+        name="inline.ini",
+        delimiters=[["Weapon"], []],
+        start_level=0,
+        strict=False,
+        file_content="Weapon GondorBow\nEnd\n",
+    )
+    assert meta_parsed == expected_cf
 
     # Indexing and iteration on ConstructFile
     meta_parsed.append(ini.CommentNode("; appended"))
@@ -295,7 +337,9 @@ def test_construct_file_overloads_and_sequence_protocol(sample_ini_file: Path) -
     # Standard disk parsing via ConstructFile
     disk_cf = ini.ConstructFile(sample_ini_file, strict=True)
     reconstructed = disk_cf.print()
-    reparsed = ini.ConstructFile(sample_ini_file, strict=True, file_content=reconstructed)
+    reparsed = ini.ConstructFile(
+        sample_ini_file, strict=True, file_content=reconstructed
+    )
     assert reparsed.print() == reconstructed
 
 

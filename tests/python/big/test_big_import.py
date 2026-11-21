@@ -1,4 +1,4 @@
-﻿"""
+"""
 @file tests/python/big/test_big_import.py
 @brief Sanity checks for package imports and public symbol exports.
 
@@ -18,7 +18,7 @@ def test_native_core_import():
 
 def test_big_subpackage_exports():
     """Verify that lotm.big exposes the unified C++ and Python public interface."""
-    import lotm.big as big
+    from lotm import big
 
     # Native classes
     assert hasattr(big, "BigArchive")
@@ -56,7 +56,7 @@ def test_big_subpackage_exports():
 
 def test_cli_modules_import():
     """Verify that CLI entry point handlers and __main__ module are discoverable."""
-    import lotm.big.cli as cli
+    from lotm.big import cli
 
     main_mod = importlib.import_module("lotm.big.__main__")
     assert hasattr(main_mod, "cli_entry")
