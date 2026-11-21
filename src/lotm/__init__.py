@@ -14,6 +14,6 @@ logging.getLogger("lotm").addHandler(logging.NullHandler())
 
 __version__ = "0.6.0"
 
-from . import big, ini
+from . import big, ini, pipeline
 
-__all__ = ["__version__", "big", "ini"]
+__all__ = ["__version__", "big", "ini", "pipeline"]
