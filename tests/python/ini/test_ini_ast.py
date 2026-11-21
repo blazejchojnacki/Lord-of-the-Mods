@@ -224,9 +224,22 @@ def test_str_entry_and_str_document_bindings(sample_str_file: Path) -> None:
     assert doc[0].identifier == "GondorElite"
     doc[-1] = ini.CommentNode("; doc tail 2")
     assert len(list(doc)) == 2
+    modified_entry = ini.StrEntry(
+        category="OBJECT",
+        identifier="GondorElite",
+        comment="; lead",
+        header_comment="; hdr",
+        end_token="End",
+        end_comment="; end",
+        items=[
+            ini.CommentNode("; c"),
+            ini.StatementNode('"Soldier"'),
+            ini.CommentNode("; replaced child"),
+        ],
+    )
     expected_doc = ini.StrDocument(
         "custom2.str",
-        [entry, ini.CommentNode("; doc tail 2")],
+        [modified_entry, ini.CommentNode("; doc tail 2")],
         [],
     )
     assert doc == expected_doc
@@ -249,22 +262,19 @@ def test_construct_file_overloads_and_sequence_protocol(sample_ini_file: Path) -
     assert len(empty_cf) == 0
     assert empty_cf.name == ""
 
-    # 6-argument metadata constructor with empty name (does not auto-construct)
+    # 5-argument metadata constructor with empty name (does not auto-construct)
     meta_empty = ini.ConstructFile(
         name="",
-        defines=["#define A 1"],
         delimiters=[["Weapon"], []],
         start_level=0,
         strict=False,
         file_content=None,
     )
-    assert meta_empty.defines == ["#define A 1"]
     assert len(meta_empty) == 0
 
-    # 6-argument metadata constructor with non-empty name and content (preserves metadata and auto-constructs)
+    # 5-argument metadata constructor with non-empty name and content (preserves metadata and auto-constructs)
     meta_parsed = ini.ConstructFile(
         name="inline.inc",
-        defines=["#define PRE_MACRO 1"],
         delimiters=[["CustomRoot"], ["CustomWeapon"], []],
         start_level=1,
         strict=True,
@@ -272,7 +282,6 @@ def test_construct_file_overloads_and_sequence_protocol(sample_ini_file: Path) -
     )
     assert len(meta_parsed) == 1
     assert meta_parsed.start_level == 1
-    assert meta_parsed.defines == ["#define PRE_MACRO 1"]
     assert "ConstructFile" in repr(meta_parsed)
 
     # Verify in-place reference semantics on ConstructFile indexing and iteration
@@ -287,13 +296,11 @@ def test_construct_file_overloads_and_sequence_protocol(sample_ini_file: Path) -
 
     # Property read/write accessors
     meta_parsed.name = "inline.ini"
-    meta_parsed.defines = ["#define RANGE 300"]
     meta_parsed.delimiters = [["Weapon"], []]
     meta_parsed.start_level = 0
     meta_parsed.strict = False
     meta_parsed.file_content = "Weapon GondorBow\nEnd\n"
     meta_parsed.current_level = 0
-    meta_parsed.last_comment = ""
     meta_parsed.errors = ["custom warning"]
     assert meta_parsed.errors == ["custom warning"]
 
@@ -301,7 +308,6 @@ def test_construct_file_overloads_and_sequence_protocol(sample_ini_file: Path) -
     assert meta_parsed.errors == []
     expected_cf = ini.ConstructFile(
         name="inline.ini",
-        defines=["#define RANGE 300"],
         delimiters=[["Weapon"], []],
         start_level=0,
         strict=False,

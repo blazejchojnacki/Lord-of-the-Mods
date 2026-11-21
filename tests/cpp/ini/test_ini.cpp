@@ -24,11 +24,11 @@ TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth secu
         CHECK(empty_cf.size() == 0);
 
         empty_cf.name = "virtual_buffer";
-        empty_cf.defines = { "#define LEGACY_DEF 1" };
+        empty_cf.append(AstNode{ DefineNode{ "#define LEGACY_DEF 1", "" } });
         empty_cf.append(AstNode{ ConstructLevel{ "Object", "GondorSoldier", "", "", "", "End", "" } });
         empty_cf.append(RootItem{ AstNode{ CommentNode{ "; cmt" } } });
         empty_cf.append(StrEntry{ "GUI", "Btn" });
-        REQUIRE(empty_cf.size() == 3);
+        REQUIRE(empty_cf.size() == 4);
         CHECK_FALSE(empty_cf.empty());
 
         const std::string printed_extless = empty_cf.print();
@@ -48,7 +48,7 @@ TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth secu
         for (auto it = empty_cf.begin(); it != empty_cf.end(); ++it) { ++cnt; }
         for (auto it = const_cf.begin(); it != const_cf.end(); ++it) { ++cnt; }
         for (auto it = const_cf.cbegin(); it != const_cf.cend(); ++it) { ++cnt; }
-        CHECK(cnt == 9);
+        CHECK(cnt == 12);
         CHECK_FALSE(empty_cf.print().empty());
 
         ConstructFile no_name{ "", false };
@@ -57,10 +57,9 @@ TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth secu
         CHECK_THROWS_AS(ConstructFile("bad.ext", false, ""), IniParseError);
     }
 
-    SECTION("construct_with_metadata preserves caller-supplied defines, delimiters, and start_level") {
+    SECTION("construct_with_metadata preserves caller-supplied delimiters and start_level") {
         ConstructFile meta_cf;
         meta_cf.name = "custom.inc";
-        meta_cf.defines = { "#define PREDEFINED_MACRO 1" };
         meta_cf.delimiters = { { "CustomRoot" },{ "CustomInner" },{} };
         meta_cf.start_level = 1;
         meta_cf.strict = true;
@@ -68,7 +67,6 @@ TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth secu
 
         meta_cf.construct_with_metadata();
         CHECK(meta_cf.start_level == 1);
-        REQUIRE(meta_cf.defines.size() == 1);
         REQUIRE(meta_cf.size() == 1);
         const auto& blk = std::get<ConstructLevel>(std::get<AstNode>(meta_cf[0]));
         CHECK(blk._class == "CustomInner");
@@ -152,8 +150,10 @@ TEST_CASE("ConstructFile INI/INC parser features, special blocks, and depth secu
 
         ConstructFile cf{ "hero.ini", true, ini_content };
         CHECK(cf.errors.empty());
-        REQUIRE(cf.defines.size() == 1);
-        CHECK(cf.defines[0] == "#define DAMAGE_MACRO 100 ; macro cmt");
+        REQUIRE(cf.size() >= 2);
+        const auto& def_node = std::get<DefineNode>(std::get<AstNode>(cf[1]));
+        CHECK(def_node.text == "#define DAMAGE_MACRO 100");
+        CHECK(def_node.comment == "; macro cmt");
 
         const std::string printed = cf.print();
         // Verify #include before #define stays before #define in serialized output
