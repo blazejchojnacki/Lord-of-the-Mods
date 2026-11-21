@@ -793,12 +793,10 @@ TEST_CASE("BigArchive In-Memory Single-File Extraction and Lifecycle", "[big_unp
             BigFormatError
         );
 
-        // Truncating the archive after construction must fail bounds validation in stream_entry too
-        std::filesystem::resize_file(env.test_file, 20);
-        BigArchive truncated_after_open(env.test_file);
-        std::filesystem::resize_file(env.test_file, 16);
+        // Truncate payload after construction (35 bytes keeps header intact while cutting off "test.txt" data)
+        std::filesystem::resize_file(env.test_file, 35);
         REQUIRE_THROWS_AS(
-            truncated_after_open.stream_entry("test.txt", [](std::span<const uint8_t>) { return true; }),
+            archive.stream_entry("test.txt", [](std::span<const uint8_t>) { return true; }),
             BigFormatError
         );
     }
