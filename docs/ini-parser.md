@@ -1,7 +1,7 @@
 # Lord-of-the-Mods
 # SAGE Engine INI Parser & AST Architecture
 
-The Lord of the Mods (`lotm.ini`) configuration engine provides a high-performance, structurally aware parser for SAGE engine `.ini`, `.inc`, and `.str` files. 
+The Lord of the Mods (`lotm.ini`) configuration engine provides a high-performance, structurally aware parser for SAGE engine `.ini`, `.inc`, and `.str` files.
 
 Because the SAGE engine utilizes a highly custom configuration format that standard INI parsers (like Python's `configparser`) cannot understand, `lotm` implements a bespoke Abstract Syntax Tree (AST) engine in C++20. This engine is designed to be completely lossless, highly secure, and seamlessly accessible from Python.
 
@@ -10,6 +10,7 @@ Because the SAGE engine utilizes a highly custom configuration format that stand
 *   **100% Lossless Roundtrip Fidelity:** The parser guarantees exact syntactical reconstruction of `.ini`, `.inc`, and `.str` files. Inline comments, standalone comments, `#define` macros, `#include` directives, key-value pairs, and exact block headers are perfectly preserved during serialization. If you parse a file and immediately print it, the output will match the original character-for-character.
 *   **Compile-Time Schema Delimiters:** Block starts are identified using compile-time `constexpr` lookup tables sorted by descending token count. This maps block headers exactly to known SAGE object hierarchies without the heavy performance overhead of regular expressions.
 *   **Iterative Serializer:** Serializing an AST back into text (`.print()`) is executed via a flat, non-recursive stack loop. This prevents stack overflow crashes (`RecursionError`) on deeply nested files.
+*   **Configurable Formatting & Query/Mutation:** Supports opt-in `FormatOptions` normalization rules alongside fluent block search and property query/mutation methods (`find_block`, `find_all`, `get_value`, `get_all_values`, `set_value`, `remove_value`, `remove_block`).
 
 ## 2. The Abstract Syntax Tree (AST)
 
@@ -20,6 +21,7 @@ When a file is parsed, it is converted into an object-oriented AST. You can inte
 *   **`ConstructLevel`**: Represents a nested block (e.g., `Object`, `Weapon`, `Armor`). It contains a `_class`, `name`, `identifier`, and a list of inner `items`.
 *   **`ScriptNode`**: An opaque container specifically for `BeginScript ... EndScript` blocks. It preserves raw Lua code lines (`content`) safely.
 *   **`IncludeNode`**: Represents a `#include` directive, preserving the raw path string while providing a normalized `.clean_path` property for resolution.
+*   **`DefineNode`**: Represents a `#define` preprocessor macro directive (`text` and optional `comment`) inside `AstNode`, preserving relative ordering with `#include` directives and blocks.
 *   **`StatementNode`**: A standard key-value assignment or property line (e.g., `Damage = 100`).
 *   **`CommentNode`**: A standalone comment line.
 
@@ -52,4 +54,4 @@ To protect tools and end-users from malicious mod files (e.g., Zip-bombs, path t
 
 *   **Zero-Copy Lexing & Encoding Fallbacks:** Files are memory-mapped into read-only pages via Win32 `CreateFileMappingW` using strict UTF-8 path conversions. The parser slices lines into `std::string_view` tokens directly over the contiguous buffer. It strips UTF-8 BOMs and validates UTF-8 in a single zero-allocation pass, transcoding to UTF-8 only when legacy Windows-1252 / Latin-1 bytes are detected.
 *   **Buffer Protocol Integration:** The Python API can parse `bytes`, `bytearray`, or `memoryview` objects zero-copy. This allows payloads retrieved directly from a `.big` archive to be parsed into an AST without intermediate string decoding or disk writes.
-*   **In-Place AST Mutation (`nanobind` Reference Semantics):** Container indexing (`node[i]`) and iteration (`for child in node:`) on AST structures return internal references (`nb::rv_policy::reference_internal`). This means modifying a node's property in Python mutates the underlying C++ object directly, ensuring changes are perfectly reflected when you call `.print()` or `format_ini`.
+*   **Pointer Stability & In-Place AST Mutation (`StableVector` + `nanobind` Reference Semantics):** Sequence containers use `StableVector<T>` with `retired_` element retention so pointers to AST nodes remain valid across reallocations, replacements, erasures, and re-parses while the parent container is alive. Container indexing (`node[i]`) and iteration (`for child in node:`) return internal references (`nb::rv_policy::reference_internal`), so modifying a node's property in Python mutates the underlying C++ object directly.
