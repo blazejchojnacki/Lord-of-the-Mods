@@ -130,7 +130,7 @@ class FormatConfigStage:
         lower = _normalize_entry_path(entry_name)
         opts = self.options if self.options is not None else FormatOptions()
         if lower.endswith(".str"):
-            doc = parse_str(entry_name, strict=strict, file_content=payload)
-        else:
-            doc = parse_ini(entry_name, strict=strict, file_content=payload)
-        return doc.print(opts).encode("utf-8")
+            str_doc = parse_str(entry_name, strict=strict, file_content=payload)
+            return str_doc.print(opts).encode("utf-8")
+        ini_doc = parse_ini(entry_name, strict=strict, file_content=payload)
+        return ini_doc.print(opts).encode("utf-8")

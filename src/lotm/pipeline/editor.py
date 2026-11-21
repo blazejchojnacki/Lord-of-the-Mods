@@ -283,12 +283,12 @@ class ArchiveEditor:
 
             lower = key
             if lower.endswith(".str"):
-                doc = self.open_str(entry.name, strict=strict)
-                self._str_asts[key] = (self._str_asts[key][0], doc, opts)
+                str_doc = self.open_str(entry.name, strict=strict)
+                self._str_asts[key] = (self._str_asts[key][0], str_doc, opts)
                 formatted_names.append(self._str_asts[key][0])
             elif lower.endswith((".ini", ".inc")):
-                doc = self.open_ini(entry.name, strict=strict)
-                self._ini_asts[key] = (self._ini_asts[key][0], doc, opts)
+                ini_doc = self.open_ini(entry.name, strict=strict)
+                self._ini_asts[key] = (self._ini_asts[key][0], ini_doc, opts)
                 formatted_names.append(self._ini_asts[key][0])
 
         return formatted_names
