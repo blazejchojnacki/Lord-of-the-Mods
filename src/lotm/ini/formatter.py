@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 from collections.abc import Buffer
 from pathlib import Path
+import tempfile
 
 from lotm._core import ini as _ini
 
@@ -98,11 +99,15 @@ def format_ini(
     if output_path is not None:
         dest = Path(output_path)
         dest.parent.mkdir(parents=True, exist_ok=True)
-        tmp_dest = dest.with_name(f".{dest.name}.lotm_tmp")
+        fd, tmp_name = tempfile.mkstemp(prefix=f".{dest.name}.", suffix=".lotm_tmp", dir=str(dest.parent))
+        tmp_path = Path(tmp_name)
         try:
-            tmp_dest.write_text(formatted, encoding="utf-8")
-            os.replace(tmp_dest, dest)
+            with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:
+                handle.write(formatted)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_path, dest)
         except BaseException:
-            tmp_dest.unlink(missing_ok=True)
+            tmp_path.unlink(missing_ok=True)
             raise
     return formatted
