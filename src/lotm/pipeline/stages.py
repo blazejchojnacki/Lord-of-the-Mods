@@ -20,6 +20,7 @@ from lotm.ini import (
     parse_ini,
     parse_str,
 )
+from lotm.big._paths import _normalize_entry_path
 
 
 @runtime_checkable
@@ -56,7 +57,7 @@ class IniAstStage:
 
     def matches(self, entry_name: str) -> bool:
         """Return True if `entry_name` ends with a configured `.ini`/`.inc` extension."""
-        lower = entry_name.replace("\\", "/").lower()
+        lower = _normalize_entry_path(entry_name)
         return any(lower.endswith(ext) for ext in self.extensions)
 
     def apply(self, entry_name: str, payload: Buffer, *, strict: bool = False) -> bytes:
@@ -85,7 +86,7 @@ class StrAstStage:
 
     def matches(self, entry_name: str) -> bool:
         """Return True if `entry_name` ends with `.str` (case-insensitive)."""
-        return entry_name.replace("\\", "/").lower().endswith(".str")
+        return _normalize_entry_path(entry_name).endswith(".str")
 
     def apply(self, entry_name: str, payload: Buffer, *, strict: bool = False) -> bytes:
         """Parse `payload` zero-copy into a `StrDocument`, mutate it, and return UTF-8 bytes."""
@@ -113,12 +114,12 @@ class FormatConfigStage:
 
     def matches(self, entry_name: str) -> bool:
         """Return True if `entry_name` has a supported configuration or localization extension."""
-        lower = entry_name.replace("\\", "/").lower()
+        lower = _normalize_entry_path(entry_name)
         return any(lower.endswith(ext) for ext in self.extensions)
 
     def apply(self, entry_name: str, payload: Buffer, *, strict: bool = False) -> bytes:
         """Parse `payload` zero-copy and serialize it with `options` into UTF-8 bytes."""
-        lower = entry_name.replace("\\", "/").lower()
+        lower = _normalize_entry_path(entry_name)
         opts = self.options if self.options is not None else FormatOptions()
         if lower.endswith(".str"):
             doc = parse_str(entry_name, strict=strict, file_content=payload)

@@ -13,3 +13,8 @@ from __future__ import annotations
 def _to_big_path(entry_name: str) -> str:
     """Normalize virtual archive directory separators to EA BIG4 backslashes."""
     return entry_name.replace("/", "\\")
+
+
+def _normalize_entry_path(entry_name: str) -> str:
+    """Normalize a virtual archive entry path for case-insensitive extension matching."""
+    return entry_name.replace("\\", "/").lower()
