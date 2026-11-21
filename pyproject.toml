@@ -14,7 +14,8 @@ name = "lord-of-the-mods"
 version = "0.6.0"
 description = "Modular Python library and modding toolkit for The Battle for Middle-earth game"
 readme = "README.md"
-license = { file = "LICENSE.md" }
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE.md"]
 requires-python = ">=3.12"
 authors = [
     { name = "Błażej Chojnacki", email = "blazej.chojnacki@outlook.com" }
