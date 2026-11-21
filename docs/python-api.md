@@ -194,7 +194,7 @@ The `lotm.ini` package provides a native C++20 AST parser, iterative serializer,
 
 ### Constants & Limits (`lotm.ini`)
 * **`LEVEL_INDENT`**: Default 4-space block indentation (`"    "`).
-* **`INI_ENDS`**: Recognized closing keyword variants (`("End", "END", "end")`).
+* **`DEFAULT_END`**: Canonical block and entry closing keyword (`"End"`).
 * **`MAX_INI_DEPTH`**: Maximum allowed nesting depth (`16`).
 * **`MAX_INI_FILE_SIZE`**: Maximum allowed input file/buffer size (`64 * 1024 * 1024`, i.e., 64 MiB).
 * **`SAGE_MAX_BLOCK_NAME_LEN`**: Legacy 32-bit SAGE block class/name byte limit (`256`).
