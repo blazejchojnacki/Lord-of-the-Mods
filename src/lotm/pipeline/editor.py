@@ -9,7 +9,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 from __future__ import annotations
 
-from collections.abc import Buffer, Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Buffer, Callable, Mapping, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 import fnmatch
@@ -21,6 +21,7 @@ from typing import TypeAlias
 
 from lotm._core import big as _big
 from lotm.big import pack_to_memory
+from lotm.big._paths import _to_big_path
 from lotm.ini import ConstructFile, FormatOptions, StrDocument, parse_ini, parse_str
 
 from .stages import EntryStage
@@ -55,11 +56,6 @@ class TransformResult:
     removed_entries: list[str] = field(default_factory=list)
     output_bytes: bytes | None = None
     output_path: Path | None = None
-
-
-def _normalize_archive_path(entry_name: str) -> str:
-    """Normalize virtual archive path separators to backslashes."""
-    return entry_name.replace("/", "\\")
 
 
 def _normalize_key(entry_name: str) -> str:
@@ -172,7 +168,7 @@ class ArchiveEditor:
         """Resolve and read zero-copy `bytes` from the underlying archive or overlay."""
         self._ensure_open()
         resolved = self._source_handle.resolve(entry_name)
-        canonical_name = _normalize_archive_path(resolved.name)
+        canonical_name = _to_big_path(resolved.name)
         payload = self._source_handle.read_entry(resolved.name)
         return canonical_name, payload
 
@@ -309,7 +305,7 @@ class ArchiveEditor:
         self._ensure_open()
         if not entry_name:
             raise ValueError("Entry path cannot be empty.")
-        canon_name = _normalize_archive_path(entry_name)
+        canon_name = _to_big_path(entry_name)
         key = _normalize_key(canon_name)
         self._ini_asts.pop(key, None)
         self._str_asts.pop(key, None)
@@ -364,7 +360,7 @@ class ArchiveEditor:
                 added.append(canon_name)
 
         removed = [
-            _normalize_archive_path(self._base_entries_by_key[k][0])
+            _to_big_path(self._base_entries_by_key[k][0])
             for k in sorted(self._removed_keys)
             if k in self._base_entries_by_key
         ]
@@ -412,7 +408,7 @@ class ArchiveEditor:
             if key in staged_map:
                 merged.append(staged_map.pop(key))
             else:
-                merged.append((_normalize_archive_path(entry.name), self._source_handle.read_entry(entry.name)))
+                merged.append((_to_big_path(entry.name), self._source_handle.read_entry(entry.name)))
 
         merged.extend(staged_map.values())
         return pack_to_memory(merged, progress_callback=progress_callback)
