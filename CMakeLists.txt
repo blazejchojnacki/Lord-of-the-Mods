@@ -6,7 +6,36 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 cmake_minimum_required(VERSION 3.20)
-project(Lord_of_the_Mods VERSION 0.5.0 LANGUAGES CXX)
+
+set(_lotm_fallback_version "0.6.0")
+set(_lotm_pyproject "${CMAKE_CURRENT_SOURCE_DIR}/pyproject.toml")
+
+if(EXISTS "${_lotm_pyproject}")
+    file(STRINGS "${_lotm_pyproject}" _lotm_ver_lines
+        REGEX "^[ \t]*version[ \t]*=[ \t]*\"[0-9]+\\.[0-9]+\\.[0-9]+([a-zA-Z0-9._-]*)?\""
+    )
+    if(_lotm_ver_lines)
+        list(GET _lotm_ver_lines 0 _lotm_ver_line)
+        string(REGEX REPLACE "^[^\"]*\"([^\"]+)\".*$" "\\1" _lotm_pkg_version "${_lotm_ver_line}")
+    endif()
+endif()
+
+if(NOT _lotm_pkg_version)
+    set(_lotm_pkg_version "${_lotm_fallback_version}")
+endif()
+
+# CMake project(...) requires numeric MAJOR.MINOR.PATCH
+string(REGEX MATCH "^[0-9]+\\.[0-9]+\\.[0-9]+" _lotm_cmake_version "${_lotm_pkg_version}")
+if(NOT _lotm_cmake_version)
+    set(_lotm_cmake_version "${_lotm_fallback_version}")
+endif()
+
+project(Lord_of_the_Mods
+    VERSION "${_lotm_cmake_version}"
+    LANGUAGES CXX
+)
+
+add_compile_definitions(LOTM_VERSION_STRING="${_lotm_pkg_version}")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -1,6 +1,6 @@
 """
 @file tests/python/ini/test_ini_parser.py
-@brief Unit tests for lotm.ini.parser (parse_ini, parse_str, Buffer protocol, and legacy encodings).
+@brief Unit tests for lotm.ini.parser (parse_ini, parse_str, recognize_structure, Buffer protocol, and legacy encodings).
 
 Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
 Part of the Lord of the Mods (lotm) project.
@@ -10,9 +10,10 @@ SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 from pathlib import Path
+
 import pytest
 
-import lotm.ini as ini
+from lotm import ini
 
 
 def test_parse_ini_and_parse_str_from_disk_and_strings(
@@ -50,8 +51,17 @@ def test_parse_ini_and_parse_str_from_disk_and_strings(
 
 
 def test_buffer_protocol_ingestion() -> None:
-    """Verify parse_ini and parse_str correctly process zero-copy Buffer objects."""
+    """Verify recognize_structure, parse_ini, and parse_str correctly process zero-copy Buffer objects."""
     ini_content = b"Object GondorFighter\n  Side = Men\nEnd\n"
+
+    # Test recognize_structure with str, bytes, and memoryview
+    delims_str, lvl_str = ini.recognize_structure(
+        "dummy.ini", "Object GondorFighter\nEnd\n"
+    )
+    delims_bytes, lvl_bytes = ini.recognize_structure("dummy.ini", ini_content)
+    delims_mv, lvl_mv = ini.recognize_structure("dummy.ini", memoryview(ini_content))
+    assert lvl_str == lvl_bytes == lvl_mv == 0
+    assert delims_str == delims_bytes == delims_mv
 
     # Test bytes, bytearray, memoryview, and empty b"" ingestion for parse_ini (ConstructFile)
     doc_bytes = ini.parse_ini("dummy.ini", file_content=ini_content)
@@ -90,9 +100,7 @@ def test_utf8_bom_and_cp1252_encoding_fallback(tmp_path: Path) -> None:
     # Windows-1252 encoded .ini and .str payloads (smart quotes 0x93/0x94, Euro 0x80, é 0xE9)
     # Passed correctly as raw byte strings
     cp1252_ini_bytes = (
-        b"Object Rohirrim ; \x93\xc9omer's Guard \x80\x94\n"
-        b"    Side = Men\n"
-        b"End\n"
+        b"Object Rohirrim ; \x93\xc9omer's Guard \x80\x94\n    Side = Men\nEnd\n"
     )
     cp1252_ini_path = tmp_path / "cp1252_unit.ini"
     cp1252_ini_path.write_bytes(cp1252_ini_bytes)
@@ -101,7 +109,9 @@ def test_utf8_bom_and_cp1252_encoding_fallback(tmp_path: Path) -> None:
     assert len(disk_ini_doc) == 1
     assert "“Éomer's Guard €”" in disk_ini_doc.print()
 
-    buf_ini_doc = ini.parse_ini("memory_cp1252.ini", strict=True, file_content=cp1252_ini_bytes)
+    buf_ini_doc = ini.parse_ini(
+        "memory_cp1252.ini", strict=True, file_content=cp1252_ini_bytes
+    )
     assert "“Éomer's Guard €”" in buf_ini_doc.print()
 
     cp1252_str_bytes = b'OBJECT:Rohirrim\n    "Cavalier d\'\xc9lite \x80"\nEnd\n'

@@ -8,14 +8,16 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+
 #include <big/big_archive.hpp>
 #include <big/exceptions.hpp>
 #include <core/endian.hpp>
+
 #include <filesystem>
 #include <fstream>
 #include <vector>
 #include <string>
-#include <stdio.h>
+#include <cstdio>
 
 using namespace lotm::big;
 
@@ -786,6 +788,17 @@ TEST_CASE("BigArchive In-Memory Single-File Extraction and Lifecycle", "[big_unp
         BigArchive archive(env.test_file);
         BigEntry out_of_bounds_entry{ 999999u, 10u, "test.txt" };
         REQUIRE_THROWS_AS(archive.read_entry(out_of_bounds_entry), BigFormatError);
+        REQUIRE_THROWS_AS(
+            archive.stream_entry(out_of_bounds_entry, [](std::span<const uint8_t>) { return true; }),
+            BigFormatError
+        );
+
+        // Truncate payload after construction (35 bytes keeps header intact while cutting off "test.txt" data)
+        std::filesystem::resize_file(env.test_file, 35);
+        REQUIRE_THROWS_AS(
+            archive.stream_entry("test.txt", [](std::span<const uint8_t>) { return true; }),
+            BigFormatError
+        );
     }
 
     SECTION("Negative scenario: Missing or locked archive file during read_entry throws BigArchiveError") {
@@ -794,10 +807,10 @@ TEST_CASE("BigArchive In-Memory Single-File Extraction and Lifecycle", "[big_unp
         const auto entry = archive.get_entries().front();
 
         // Exclusive lock (_SH_DENYRW = 0x10) allows file_size() metadata check but blocks ifstream::open()
-        FILE* locked_file = _fsopen(env.test_file.string().c_str(), "rb", 0x10);
+        std::FILE* locked_file = _fsopen(env.test_file.string().c_str(), "rb", 0x10);
         if (locked_file) {
             REQUIRE_THROWS_AS(archive.read_entry(entry), BigArchiveError);
-            fclose(locked_file);
+            std::fclose(locked_file);
         }
 
         // Removing the file triggers the file_size(ec) error branch
@@ -877,4 +890,23 @@ TEST_CASE("BigArchive Selective Glob Extraction", "[big_unpack][filter]") {
         std::filesystem::path missing_out = env.root_dir / "missing_strict";
         REQUIRE_THROWS_AS(archive.extract_all(missing_out, {}, "", false), std::invalid_argument);
     }
+}
+
+TEST_CASE("BigArchive O(1) resolve metadata lookup", "[big_unpack][resolve]") {
+    ScopedTempEnv env;
+
+    env.write_big_file("BIG4", {
+        { "data\\ini\\weapon.ini", "Damage=50" }
+        });
+
+    BigArchive archive(env.test_file);
+
+    const auto& resolved = archive.resolve("DATA/INI/WEAPON.INI");
+    REQUIRE(resolved.size == 9);
+    REQUIRE(resolved.name == std::string("data") + static_cast<char>(std::filesystem::path::preferred_separator) + "ini" + static_cast<char>(std::filesystem::path::preferred_separator) + "weapon.ini");
+
+    REQUIRE_THROWS_AS(archive.resolve("data/ini/missing.ini"), BigArchiveError);
+
+    archive.close();
+    REQUIRE_THROWS_AS(archive.resolve("data/ini/weapon.ini"), BigArchiveError);
 }

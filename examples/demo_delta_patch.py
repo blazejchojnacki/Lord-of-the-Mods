@@ -1,4 +1,11 @@
-# demo_delta_patch.py
+"""
+@file examples/demo_delta_patch.py
+@brief Demonstration of standalone BIG4 delta patch generation to memory and disk.
+
+Copyright (c) 2026 Błażej Chojnacki <blazej.chojnacki@outlook.com>
+Part of the Lord of the Mods (lotm) project.
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
 from pathlib import Path
 import lotm.big as big
 

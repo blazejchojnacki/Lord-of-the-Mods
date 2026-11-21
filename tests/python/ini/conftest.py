@@ -10,6 +10,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 from pathlib import Path
+
 import pytest
 
 
@@ -64,10 +65,7 @@ def sample_inc_file(tmp_path: Path) -> Path:
     """Create a temporary valid .inc file starting at an inner schema depth."""
     inc_path = tmp_path / "lod_options.inc"
     inc_path.write_text(
-        "; INC header\n"
-        "LodOptions\n"
-        "    AllowMultipleModels = YES\n"
-        "End\n",
+        "; INC header\nLodOptions\n    AllowMultipleModels = YES\nEnd\n",
         encoding="utf-8",
     )
     return inc_path

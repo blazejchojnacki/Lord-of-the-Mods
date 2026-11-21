@@ -10,52 +10,68 @@ SPDX-License-Identifier: GPL-3.0-or-later
 from lotm._core import ini
 
 LEVEL_INDENT = ini.LEVEL_INDENT
-INI_ENDS = ini.INI_ENDS
+DEFAULT_END = ini.DEFAULT_END
 MAX_INI_DEPTH = ini.MAX_INI_DEPTH
+MAX_INI_FILE_SIZE = ini.MAX_INI_FILE_SIZE
+SAGE_MAX_BLOCK_NAME_LEN = ini.SAGE_MAX_BLOCK_NAME_LEN
+SAGE_MAX_IDENTIFIER_LEN = ini.SAGE_MAX_IDENTIFIER_LEN
 IniParseError = ini.IniParseError
+FormatOptions = ini.FormatOptions
 CommentNode = ini.CommentNode
 StatementNode = ini.StatementNode
 IncludeNode = ini.IncludeNode
+DefineNode = ini.DefineNode
 ScriptNode = ini.ScriptNode
 ConstructLevel = ini.ConstructLevel
 StrEntry = ini.StrEntry
 StrDocument = ini.StrDocument
 StrParser = ini.StrParser
 ConstructFile = ini.ConstructFile
-recognize_structure = ini.recognize_structure
 validate_include = ini.validate_include
 load_file = ini.load_file
 scan_file_for_errors = ini.scan_file_for_errors
 
 from .diagnostics import IniInspectionReport, inspect_ini, scan_ini
 from .formatter import format_ini
-from .parser import SUPPORTED_EXTENSIONS, AstNode, RootItem, parse_ini, parse_str
+from .parser import (
+    SUPPORTED_EXTENSIONS,
+    AstNode,
+    RootItem,
+    parse_ini,
+    parse_str,
+    recognize_structure,
+)
 
 __all__ = [
+    "DEFAULT_END",
     "LEVEL_INDENT",
-    "INI_ENDS",
     "MAX_INI_DEPTH",
+    "MAX_INI_FILE_SIZE",
+    "SAGE_MAX_BLOCK_NAME_LEN",
+    "SAGE_MAX_IDENTIFIER_LEN",
     "SUPPORTED_EXTENSIONS",
-    "IniParseError",
-    "CommentNode",
-    "StatementNode",
-    "IncludeNode",
-    "ScriptNode",
-    "ConstructLevel",
-    "StrEntry",
-    "StrDocument",
-    "StrParser",
-    "ConstructFile",
     "AstNode",
-    "RootItem",
+    "CommentNode",
+    "ConstructFile",
+    "ConstructLevel",
+    "DefineNode",
+    "FormatOptions",
+    "IncludeNode",
     "IniInspectionReport",
-    "recognize_structure",
-    "validate_include",
+    "IniParseError",
+    "RootItem",
+    "ScriptNode",
+    "StatementNode",
+    "StrDocument",
+    "StrEntry",
+    "StrParser",
+    "format_ini",
+    "inspect_ini",
     "load_file",
-    "scan_file_for_errors",
     "parse_ini",
     "parse_str",
-    "format_ini",
+    "recognize_structure",
+    "scan_file_for_errors",
     "scan_ini",
-    "inspect_ini",
+    "validate_include",
 ]

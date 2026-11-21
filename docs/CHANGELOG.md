@@ -6,6 +6,26 @@ All notable changes to the Lord of the Mods (`lotm`) project will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-11-21
+
+### Added
+- Fluent AST query and mutation methods (`find_block`, `find_all`, `get_value`, `get_all_values`, `set_value`, `remove_value`, and `remove_block`) on `ConstructFile` and `ConstructLevel`, with key/value and 32-bit SAGE bounds validation.
+- `DefineNode` AST representation for `#define` directives inside `AstNode`, preserving relative ordering with `#include` directives and blocks.
+- `FormatOptions` and formatting normalization options (`enforce_equals`, `normalize_end_tokens`, `normalize_header_spacing`, `normalize_statement_equals`, `normalize_comments`, `coalesce_blank_lines`) in `lotm.ini`, `format_ini`, and `lotm ini format` (including `--canonical`).
+- `lotm.pipeline` archive-to-AST and multi-format stage pipeline (`ArchiveEditor`, `EntryStage`, `IniAstStage`, `StrAstStage`, `FormatConfigStage`, `TransformResult`, `transform_archive`) with zero-copy buffer ingestion, in-memory repacking, delta patch generation, and atomic writes.
+- `BigArchive::resolve()` metadata lookup method in C++ and Python bindings.
+- Constants `DEFAULT_END`, `MAX_INI_FILE_SIZE`, `SAGE_MAX_BLOCK_NAME_LEN`, and `SAGE_MAX_IDENTIFIER_LEN` exported in `lotm.ini`, plus `Buffer` input routing in `recognize_structure` (`recognize_structure_buffer`).
+- `ConstructFile::construct(bool preserve_metadata = false)` and `construct_with_metadata()`.
+- Shared core utilities in `include/core/path_utils.hpp` and `include/core/string_utils.hpp`, plus `ScopedPyBuffer` in `src/bindings/py_utils.hpp`.
+- Version synchronization test (`tests/python/test_version_sync.py`), `ruff` checks, sdist validation, isolated wheel verification, and Python `3.13` / `3.14` `abi3` smoke tests in CI.
+
+### Changed
+- Replaced internal AST node storage with `StableVector<T>` (`retired_` retention) so node references remain valid across mutations and re-parses.
+- Replaced `INI_ENDS` with `DEFAULT_END` (`"End"`) in `lotm.ini` / `lotm._core.ini` (closing token matching remains case-insensitive).
+- Deduplicated `BigOverlay::get_entries()` over `index_map_` and shared layout/atomic writer helpers (`ArchiveLayout`, `AtomicArchiveWriter`) between `BigPacker` and `BigDiff`.
+- Synced `CMakeLists.txt` version resolution and `lotm.__version__` (`importlib.metadata`) with `pyproject.toml`, updated license metadata to PEP 639 (`GPL-3.0-or-later`), and added Python `3.13`/`3.14` classifiers.
+- Updated `format_ini` and pipeline atomic file writes to use `tempfile.mkstemp` and `os.fsync` prior to `os.replace`, and updated comment/statement scanning to respect escaped quotes (`\"`).
+
 ## [0.5.0] - 2026-11-14
 
 ### Added

@@ -1,4 +1,4 @@
-﻿"""
+"""
 @file tests/python/big/conftest.py
 @brief Global pytest configuration and shared fixtures for lotm integration tests.
 
@@ -7,8 +7,9 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
-import pytest
 import pathlib
+
+import pytest
 
 
 @pytest.fixture

@@ -8,14 +8,17 @@ SPDX-License-Identifier: GPL-3.0-or-later
 """
 
 import sys
-import pytest
 from pathlib import Path
 
-import lotm.big.cli as cli
-import lotm.big as big
+import pytest
+
+from lotm import big
+from lotm.big import cli
 
 
-def test_cli_pack_successful_execution(standard_mod_directory: Path, tmp_path: Path, capsys):
+def test_cli_pack_successful_execution(
+    standard_mod_directory: Path, tmp_path: Path, capsys
+):
     """Verify standard packing CLI command executes successfully and creates the archive."""
     out_big = tmp_path / "cli_test.big"
     argv = ["pack", str(standard_mod_directory), "-o", str(out_big)]
@@ -38,7 +41,9 @@ def test_cli_pack_invalid_source_exits_with_error(tmp_path: Path, capsys):
     assert "failed:" in stderr
 
 
-def test_cli_unpack_successful_execution(standard_mod_directory: Path, tmp_path: Path, capsys):
+def test_cli_unpack_successful_execution(
+    standard_mod_directory: Path, tmp_path: Path, capsys
+):
     """Verify standard unpacking CLI command executes successfully and extracts files."""
     archive = tmp_path / "ready.big"
     extract_dir = tmp_path / "extracted"
@@ -127,7 +132,7 @@ def test_cli_overlay_successful_and_verbose_execution(tmp_path: Path, capsys):
     assert "Resolved 2 effective entries across 2 archives" in stdout_quiet
 
     argv = ["overlay", str(tmp_path), "-f", "*.ini", "-v"]
-    
+
     assert cli.main(argv) == cli.EXIT_SUCCESS
     stdout_verbose, _ = capsys.readouterr()
     assert "a.ini -> 02_patch.big (overrides=1)" in stdout_verbose
@@ -144,13 +149,29 @@ def test_cli_overlay_missing_source_exits_with_error(tmp_path: Path, capsys):
     assert "failed:" in stderr
 
 
-def test_cli_entry_invokes_sys_exit(standard_mod_directory: Path, tmp_path: Path, monkeypatch):
+def test_cli_entry_invokes_sys_exit(
+    standard_mod_directory: Path, tmp_path: Path, monkeypatch
+):
     """Verify cli_entry() parses sys.argv and exits with the returned status code."""
     out_big = tmp_path / "entry.big"
-    monkeypatch.setattr(sys, "argv", ["lotm-big", "pack", str(standard_mod_directory), "-o", str(out_big)])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["lotm-big", "pack", str(standard_mod_directory), "-o", str(out_big)],
+    )
 
     with pytest.raises(SystemExit) as exc_info:
         cli.cli_entry()
 
     assert exc_info.value.code == cli.EXIT_SUCCESS
     assert out_big.is_file()
+
+
+def test_cli_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
+    """Verify that lotm-big reports its version and exits with code 0."""
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["--version"])
+
+    assert exc_info.value.code == 0
+    stdout, _ = capsys.readouterr()
+    assert "lotm-big" in stdout

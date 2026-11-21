@@ -7,10 +7,11 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
-from collections.abc import Iterable
 import logging
 import os
+from collections.abc import Iterable
 from pathlib import Path
+
 from lotm._core import big
 
 logger = logging.getLogger("lotm.big.overlay")
@@ -20,24 +21,40 @@ def load_overlay(
     source: str | os.PathLike[str] | Iterable[str | os.PathLike[str]],
 ) -> big.BigOverlay:
     """
-    Constructs a SAGE load-order overlay from a directory or an explicit sequence of .big archives.
+    Construct a SAGE load-order overlay from a directory or an explicit sequence of `.big` archives.
 
-    Args:
-        source: Path to a directory containing .big files (mounted in alphabetical order),
-                or an iterable of .big archive file paths mounted in the given sequence.
+    Parameters
+    ----------
+    source : str | os.PathLike[str] | Iterable[str | os.PathLike[str]]
+        Path to a directory containing `.big` files (mounted in alphabetical order),
+        or an iterable of `.big` archive file paths mounted in the given sequence.
 
-    Returns:
-        A populated BigOverlay instance representing the effective virtual file tree.
+    Returns
+    -------
+    big.BigOverlay
+        Populated overlay instance representing the effective virtual file tree.
 
-    Raises:
-        NotADirectoryError: If a single path is provided and it is not an existing directory.
-        FileNotFoundError: If an archive path in an iterable does not exist.
-        RuntimeError: If any mounted archive is corrupted or unreadable.
+    Raises
+    ------
+    NotADirectoryError
+        If a single path is provided and it is not an existing directory.
+    FileNotFoundError
+        If an archive path in `source` does not exist.
+    lotm.big.BigFormatError
+        If any mounted archive header or index table is corrupted.
+    lotm.big.BigArchiveError
+        If any archive cannot be opened or read from disk.
+
+    Examples
+    --------
+    >>> overlay = load_overlay(["01_base.big", "02_patch.big"])  # doctest: +SKIP
     """
     if isinstance(source, (str, os.PathLike)):
         dir_path = Path(source)
         if not dir_path.is_dir():
-            raise NotADirectoryError(f"Overlay directory '{dir_path}' does not exist or is not a directory.")
+            raise NotADirectoryError(
+                f"Overlay directory '{dir_path}' does not exist or is not a directory."
+            )
 
         overlay = big.BigOverlay.from_directory(dir_path)
         logger.info(
@@ -55,5 +72,7 @@ def load_overlay(
         archive_paths.append(p)
 
     overlay = big.BigOverlay.from_archives(archive_paths)
-    logger.info("Mounted %d archives in explicit load order", len(overlay.mounted_archives))
+    logger.info(
+        "Mounted %d archives in explicit load order", len(overlay.mounted_archives)
+    )
     return overlay

@@ -125,7 +125,7 @@ The resulting package is stored inside the `dist/` directory.
 ## 6. Architecture & Targets
 
 The build system is organized into decoupled CMake targets:
-- `lotm_core`: Header-only interface library containing endian-swapping utilities (`endian.hpp`).
+- `lotm_core`: Header-only interface library containing endian-swapping utilities (`endian.hpp`), UTF-8/glob/NTFS path utilities (`path_utils.hpp`), and locale-independent ASCII helpers (`string_utils.hpp`).
 - `lotm_big`: Static C++ library implementing `BigArchive`, `BigPacker`, `BigDiff`, and `BigOverlay`.
 - `lotm_ini`: Static C++ library implementing the zero-copy SAGE `.ini`, `.inc`, and `.str` lexer, schema tables, AST parser, iterative serializer, and `#include` virtual chroot validator.
 - `_core`: The native Python extension module (`.pyd`) exported via `nanobind` under `lotm._core` (`src/bindings/`).

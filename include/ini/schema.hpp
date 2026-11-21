@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <core/string_utils.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -23,12 +25,17 @@ namespace lotm::ini {
 
     /**
      * @brief Pre-tokenized delimiter rule isomorphic to a constexpr table entry.
+     *
+     * '=' characters in a rule specification are treated as optional separator tokens
+     * during matching so both 'Draw = Foo' and 'Draw Foo' match, while `expects_equals`
+     * records whether '=' is canonically expected for style warnings and `enforce_equals`.
      */
     struct DelimiterRule {
         std::string_view raw{};
         std::array<std::string_view, MAX_RULE_TOKENS> match_tokens{};
         std::size_t token_count{ 0 };
         std::size_t word_count{ 0 };
+        bool expects_equals{ false };
 
         [[nodiscard]] constexpr std::span<const std::string_view> tokens() const noexcept {
             return std::span<const std::string_view>{match_tokens.data(), token_count};
@@ -37,8 +44,10 @@ namespace lotm::ini {
 
     namespace detail {
 
+        using lotm::core::iequals_ascii;
+
         [[nodiscard]] constexpr bool is_delim_space(char c) noexcept {
-            return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f';
+            return lotm::core::is_ascii_space(c);
         }
 
     } // namespace detail
@@ -64,9 +73,7 @@ namespace lotm::ini {
             }
 
             if (delim[pos] == '=') {
-                if (rule.token_count < MAX_RULE_TOKENS) {
-                    rule.match_tokens[rule.token_count++] = "=";
-                }
+                rule.expects_equals = true;
                 ++pos;
             }
             else if (delim[pos] == ':') {
@@ -137,6 +144,9 @@ namespace lotm::ini {
 
     /**
      * @brief Matches a tokenized line against pre-compiled delimiter rules without allocation.
+     *
+     * Optional '=' separators in the input line are skipped during token comparison so rules
+     * match both with and without '=' present.
      */
     [[nodiscard]] constexpr const DelimiterRule* match_delimiter_rule(
         std::span<const std::string_view> line_tokens,
@@ -145,17 +155,24 @@ namespace lotm::ini {
         const std::size_t token_count = line_tokens.size();
         for (const auto& rule : rules) {
             const std::size_t k = rule.token_count;
-            if (k > 0 && token_count >= k) {
-                bool matched = true;
-                for (std::size_t i = 0; i < k; ++i) {
-                    if (!detail::iequals_ascii(line_tokens[i], rule.match_tokens[i])) {
-                        matched = false;
-                        break;
-                    }
+            if (k == 0) {
+                continue;
+            }
+            std::size_t rule_idx = 0;
+            std::size_t line_idx = 0;
+            while (rule_idx < k && line_idx < token_count) {
+                if (line_tokens[line_idx] == "=") {
+                    ++line_idx;
+                    continue;
                 }
-                if (matched) {
-                    return &rule;
+                if (!detail::iequals_ascii(line_tokens[line_idx], rule.match_tokens[rule_idx])) {
+                    break;
                 }
+                ++rule_idx;
+                ++line_idx;
+            }
+            if (rule_idx == k) {
+                return &rule;
             }
         }
         return nullptr;
@@ -168,7 +185,7 @@ namespace lotm::ini {
             "AudioEvent", "Multisound", "StreamedSound", "AmbientStream", "Animation",
             "Armor", "AudioSettings", "AnimationSoundClientBehaviorGlobalSetting",
             "ModifierList", "BannerType", "ButtonSet", "CommandButton", "CommandMap",
-            "DebugCommandMap", "CommandSet", "ControlBarResizer", "SpecialPower",
+            "DebugCommandMap", "CommandSet", "ControlBarResizer",
             "DamageFX", "DrawGroupInfo", "EmotionNugget", "SkyboxTextureSet",
             "GlowEffect", "RingEffect", "FireEffect", "CloudEffect", "ShadowMap",
             "Fire", "FontDefaultSettings", "FontSubstitution", "GameData",
@@ -224,19 +241,19 @@ namespace lotm::ini {
             "Object", "ChildObject", "ObjectReskin", "CrateData", "FormationAssistant", "FXParticleSystem", "FXList"
             });
         inline constexpr auto G4_L1 = std::to_array<std::string_view>({
-            "Draw", "Body", "ArmorSet", "WeaponSet", "LocomotorSet", "UnitSpecificSounds", "Flammability",
-            "ThreatBreakdown", "ClientUpdate", "ClientBehavior", "Behavior", "AutoResolveArmor", "AutoResolveWeapon",
+            "Draw =", "Body =", "ArmorSet", "WeaponSet", "LocomotorSet", "UnitSpecificSounds", "Flammability",
+            "ThreatBreakdown", "ClientUpdate =", "ClientBehavior =", "Behavior =", "AutoResolveArmor =", "AutoResolveWeapon =",
             "AddModule", "ReplaceModule", "InheritableModule", "FormationPreviewDecal", "FormationPreviewItemDecal",
-            "UnitDefinition", "FormationTemplate", "FormationSelection", "Alpha", "Update", "Physics", "EmissionVelocity",
-            "EmissionVolume", "Event", "Emitter", "Wind", "System", "Color", "Sound", "ParticleSystem", "DynamicDecal",
-            "TerrainScorch", "BuffNugget", "ViewShake", "CameraShakerVolume", "TintDrawable", "FXListAtBonePos",
-            "LightPulse", "EvaEvent", "AttachedModel"
+            "UnitDefinition", "FormationTemplate", "FormationSelection", "Alpha =", "Update =", "Physics =", "EmissionVelocity =",
+            "EmissionVolume =", "Event =", "Emitter =", "Wind =", "System =", "Color =", "Sound =", "ParticleSystem =", "DynamicDecal =",
+            "TerrainScorch =", "BuffNugget =", "ViewShake =", "CameraShakerVolume =", "TintDrawable =", "FXListAtBonePos =",
+            "LightPulse =", "EvaEvent =", "AttachedModel ="
             });
         inline constexpr auto G4_L2 = std::to_array<std::string_view>({
-            "LodOptions", "DefaultModelConditionState", "ModelConditionState", "IdleAnimationState", "AnimationState",
-            "TransitionState", "SoundState", "ProductionModifier", "FireWeaponNugget", "InvisibilityNugget", "FloodMember",
-            "SoundUpgrade", "Turret", "ReplaceObject", "DecalTemplate", "GridDecalTemplate", "MeleeBehavior", "Behavior",
-            "Body", "ClientBehavior", "Rows", "AddEmotion = OVERRIDE"
+            "LodOptions", "DefaultModelConditionState", "ModelConditionState =", "IdleAnimationState =", "AnimationState =",
+            "TransitionState =", "SoundState =", "ProductionModifier =", "FireWeaponNugget =", "InvisibilityNugget =", "FloodMember =",
+            "SoundUpgrade =", "Turret =", "ReplaceObject =", "DecalTemplate =", "GridDecalTemplate =", "MeleeBehavior =", "Behavior =",
+            "Body =", "ClientBehavior =", "Rows", "AddEmotion = OVERRIDE"
             });
         inline constexpr auto G4_L3 = std::to_array<std::string_view>({
             "Animation", "BeginScript", "MeleeBehavior", "UnitSpecificSounds"

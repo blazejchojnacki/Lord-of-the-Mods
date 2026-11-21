@@ -8,6 +8,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 """
 
 import difflib
+import shutil
 import sys
 from pathlib import Path
 
@@ -75,55 +76,59 @@ def main() -> int:
 
     print(f"--- lotm.ini Roundtrip Demo ---")
 
-    # 1. Prepare
-    original_text = setup_dummy_file(original_path)
-    print(f"Created messy input file: {original_path.relative_to(workspace.parent)}")
-
-    # 2. Deconstruct (Parse to AST)
-    print("Parsing AST...")
     try:
-        ast_doc = ini.parse_ini(original_path, strict=True)
-    except ini.IniParseError as e:
-        print(f"Fatal parsing error: {e}", file=sys.stderr)
-        return 1
+        # Prepare
+        original_text = setup_dummy_file(original_path)
+        print(f"Created messy input file: {original_path.relative_to(workspace.parent)}")
 
-    print(f"Successfully deconstructed {len(ast_doc)} top-level item(s).")
+        # Deconstruct (Parse to AST)
+        print("Parsing AST...")
+        try:
+            ast_doc = ini.parse_ini(original_path, strict=True)
+        except ini.IniParseError as e:
+            print(f"Fatal parsing error: {e}", file=sys.stderr)
+            return 1
 
-    # 3. Serialize and Save
-    print(f"Serializing AST to {formatted_path.relative_to(workspace.parent)}...")
-    formatted_text = ast_doc.print()
-    formatted_path.write_text(formatted_text, encoding="utf-8")
+        print(f"Successfully deconstructed {len(ast_doc)} top-level item(s).")
 
-    # 4. Compare and Log Changes
-    print("\n--- Change Log (Unified Diff) ---")
+        # Serialize and Save
+        print(f"Serializing AST to {formatted_path.relative_to(workspace.parent)}...")
+        formatted_text = ast_doc.print()
+        formatted_path.write_text(formatted_text, encoding="utf-8")
 
-    original_lines = original_text.splitlines(keepends=True)
-    formatted_lines = formatted_text.splitlines(keepends=True)
+        # Compare and Log Changes
+        print("\n--- Change Log (Unified Diff) ---")
 
-    diff = list(difflib.unified_diff(
-        original_lines,
-        formatted_lines,
-        fromfile="Original (Messy)",
-        tofile="Formatted (lotm AST)",
-        n=1  # Number of context lines to show around changes
-    ))
+        original_lines = original_text.splitlines(keepends=True)
+        formatted_lines = formatted_text.splitlines(keepends=True)
 
-    if not diff:
-        print("No changes detected. The file was already perfectly formatted.")
-    else:
-        for line in diff:
-            # Colorize output slightly for PyCharm console readability
-            clean_line = line.rstrip('\n')
-            if clean_line.startswith('+') and not clean_line.startswith('+++'):
-                print(f"\033[92m{clean_line}\033[0m")  # Green for additions
-            elif clean_line.startswith('-') and not clean_line.startswith('---'):
-                print(f"\033[91m{clean_line}\033[0m")  # Red for removals
-            elif clean_line.startswith('@'):
-                print(f"\033[96m{clean_line}\033[0m")  # Cyan for chunks
-            else:
-                print(clean_line)
+        diff = list(difflib.unified_diff(
+            original_lines,
+            formatted_lines,
+            fromfile="Original (Messy)",
+            tofile="Formatted (lotm AST)",
+            n=1  # Number of context lines to show around changes
+        ))
 
-    return 0
+        if not diff:
+            print("No changes detected. The file was already perfectly formatted.")
+        else:
+            for line in diff:
+                # Colorize output slightly for PyCharm console readability
+                clean_line = line.rstrip('\n')
+                if clean_line.startswith('+') and not clean_line.startswith('+++'):
+                    print(f"\033[92m{clean_line}\033[0m")  # Green for additions
+                elif clean_line.startswith('-') and not clean_line.startswith('---'):
+                    print(f"\033[91m{clean_line}\033[0m")  # Red for removals
+                elif clean_line.startswith('@'):
+                    print(f"\033[96m{clean_line}\033[0m")  # Cyan for chunks
+                else:
+                    print(clean_line)
+
+        return 0
+    finally:
+        shutil.rmtree(workspace, ignore_errors=True)
+        print("\nCleaned up INI roundtrip demo artifacts.")
 
 
 if __name__ == "__main__":

@@ -7,15 +7,18 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
+import struct
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
 import pytest
-import struct
 
-import lotm.big as big
+from lotm import big
 
 
-def test_programmatic_packing_and_unpacking_roundtrip(standard_mod_directory: Path, tmp_path: Path):
+def test_programmatic_packing_and_unpacking_roundtrip(
+    standard_mod_directory: Path, tmp_path: Path
+):
     """Verify that packing and unpacking a directory maintains structural and byte fidelity."""
     archive_path = tmp_path / "mod_test.big"
     extract_dir = tmp_path / "output_dir"
@@ -53,7 +56,9 @@ def test_programmatic_packing_and_unpacking_roundtrip(standard_mod_directory: Pa
     assert extracted_ini.read_text(encoding="utf-8") == "Damage=50"
 
 
-def test_pack_invalid_source_directory_raises_error(standard_mod_directory: Path, tmp_path: Path):
+def test_pack_invalid_source_directory_raises_error(
+    standard_mod_directory: Path, tmp_path: Path
+):
     """Verify that pack() raises NotADirectoryError or FileNotFoundError for missing paths."""
     missing_dir = tmp_path / "does_not_exist"
     out_file = tmp_path / "out.big"
@@ -83,7 +88,9 @@ def test_unpack_missing_archive_raises_error(tmp_path: Path):
         big.unpack(missing_file, out_dir)
 
 
-def test_unpack_missing_output_dir_strict_mode(standard_mod_directory: Path, tmp_path: Path):
+def test_unpack_missing_output_dir_strict_mode(
+    standard_mod_directory: Path, tmp_path: Path
+):
     """Verify that unpack() respects create_directories=False."""
     archive_path = tmp_path / "mod.big"
     big.pack(standard_mod_directory, archive_path)
@@ -93,11 +100,14 @@ def test_unpack_missing_output_dir_strict_mode(standard_mod_directory: Path, tmp
         big.unpack(archive_path, missing_out, create_directories=False)
 
 
-def test_progress_report_lifetime_retention(standard_mod_directory: Path, tmp_path: Path):
+def test_progress_report_lifetime_retention(
+    standard_mod_directory: Path, tmp_path: Path
+):
     """Verify ProgressReport objects can be safely retained and accessed after operations."""
     archive_path = tmp_path / "retention.big"
 
     reports: list[big.ProgressReport] = []
+
     def pack_cb(report: big.ProgressReport) -> bool:
         reports.append(report)
         return True
@@ -189,16 +199,21 @@ def test_cpp_api_raises_big_security_error_on_zip_slip(tmp_path: Path):
         archive.extract_all(out_dir)
 
 
-@pytest.mark.parametrize("malicious_path", [
-    b"\\\\?\\C:\\Windows\\System32\\cmd.exe\x00",
-    b"\\??\\malicious.exe\x00",
-    b"C:../escaped.txt\x00",
-    b"folder .\\payload.txt\x00",
-    b"data\\file<invalid>.txt\x00",
-    b"data\\COM\xC2\xB9.ini\x00",
-    b"data\\CLOCK$.txt\x00",
-])
-def test_cpp_api_raises_big_security_error_on_ntfs_evasion(tmp_path: Path, malicious_path: bytes):
+@pytest.mark.parametrize(
+    "malicious_path",
+    [
+        b"\\\\?\\C:\\Windows\\System32\\cmd.exe\x00",
+        b"\\??\\malicious.exe\x00",
+        b"C:../escaped.txt\x00",
+        b"folder .\\payload.txt\x00",
+        b"data\\file<invalid>.txt\x00",
+        b"data\\COM\xc2\xb9.ini\x00",
+        b"data\\CLOCK$.txt\x00",
+    ],
+)
+def test_cpp_api_raises_big_security_error_on_ntfs_evasion(
+    tmp_path: Path, malicious_path: bytes
+):
     """Verify that the C++ bindings propagate BigSecurityError for extended NTFS path evasions."""
     bad_archive = tmp_path / "ntfs_evasion.big"
 
@@ -224,8 +239,11 @@ def test_cpp_api_raises_big_security_error_on_ntfs_evasion(tmp_path: Path, malic
         archive.extract_all(out_dir)
 
 
-def test_concurrent_pack_and_unpack_releases_gil(standard_mod_directory: Path, tmp_path: Path):
+def test_concurrent_pack_and_unpack_releases_gil(
+    standard_mod_directory: Path, tmp_path: Path
+):
     """Verify multi-threaded packing and extraction execute concurrently without GIL deadlocks."""
+
     def worker(worker_id: int) -> int:
         archive_path = tmp_path / f"concurrent_{worker_id}.big"
         extract_dir = tmp_path / f"extract_{worker_id}"
@@ -239,12 +257,15 @@ def test_concurrent_pack_and_unpack_releases_gil(standard_mod_directory: Path, t
     assert results == [3, 3, 3, 3]
 
 
-def test_cpp_api_progress_callbacks_propagate(standard_mod_directory: Path, tmp_path: Path):
+def test_cpp_api_progress_callbacks_propagate(
+    standard_mod_directory: Path, tmp_path: Path
+):
     """Verify that C++ progress callbacks correctly invoke Python callables with ProgressReport."""
     archive_path = tmp_path / "callback.big"
     out_dir = tmp_path / "out"
 
     packed: list[str] = []
+
     def pack_cb(report: big.ProgressReport) -> bool:
         assert report.bytes_transferred == report.file_size
         assert report.total_bytes_transferred <= report.total_archive_size
@@ -252,13 +273,16 @@ def test_cpp_api_progress_callbacks_propagate(standard_mod_directory: Path, tmp_
         packed.append(report.entry_name)
         return True
 
-    big.BigPacker.pack_from_directory(standard_mod_directory, archive_path, progress_callback=pack_cb)
+    big.BigPacker.pack_from_directory(
+        standard_mod_directory, archive_path, progress_callback=pack_cb
+    )
 
     assert len(packed) == 3
     assert any("weapon.ini" in p for p in packed)
 
     archive = big.BigArchive(archive_path)
     extracted: list[str] = []
+
     def extract_cb(report: big.ProgressReport) -> None:
         extracted.append(report.entry_name)
 
@@ -268,11 +292,15 @@ def test_cpp_api_progress_callbacks_propagate(standard_mod_directory: Path, tmp_
     assert any("texture.dds" in e for e in extracted)
 
 
-def test_cooperative_cancellation_across_python_api(standard_mod_directory: Path, tmp_path: Path):
+def test_cooperative_cancellation_across_python_api(
+    standard_mod_directory: Path, tmp_path: Path
+):
     """Verify returning False from progress_callback cancels operations cleanly."""
     archive_path = tmp_path / "cancel_pack.big"
     with pytest.raises(big.BigArchiveError, match="cancelled"):
-        big.pack(standard_mod_directory, archive_path, progress_callback=lambda _: False)
+        big.pack(
+            standard_mod_directory, archive_path, progress_callback=lambda _: False
+        )
     assert not archive_path.exists()
 
     with pytest.raises(big.BigArchiveError, match="cancelled"):
@@ -284,10 +312,14 @@ def test_cooperative_cancellation_across_python_api(standard_mod_directory: Path
     valid_arc = tmp_path / "valid.big"
     big.pack(standard_mod_directory, valid_arc)
     with pytest.raises(big.BigArchiveError, match="cancelled"):
-        big.unpack(valid_arc, tmp_path / "cancel_out", progress_callback=lambda _: False)
+        big.unpack(
+            valid_arc, tmp_path / "cancel_out", progress_callback=lambda _: False
+        )
 
 
-def test_pack_exception_in_callback_cleans_up_partial_file(standard_mod_directory: Path, tmp_path: Path):
+def test_pack_exception_in_callback_cleans_up_partial_file(
+    standard_mod_directory: Path, tmp_path: Path
+):
     """Verify that Python exceptions inside the C++ callback clean up temp files and preserve existing targets."""
     archive_path = tmp_path / "failed_pack.big"
 
@@ -297,19 +329,27 @@ def test_pack_exception_in_callback_cleans_up_partial_file(standard_mod_director
         return True
 
     with pytest.raises(RuntimeError, match="Simulated user interrupt"):
-        big.BigPacker.pack_from_directory(standard_mod_directory, archive_path, progress_callback=raising_cb)
+        big.BigPacker.pack_from_directory(
+            standard_mod_directory, archive_path, progress_callback=raising_cb
+        )
 
-    assert not archive_path.exists(), "The partial .big file was not deleted by the RAII guard"
+    assert not archive_path.exists(), (
+        "The partial .big file was not deleted by the RAII guard"
+    )
 
     # Pre-existing target file must remain intact if an overwrite pack is interrupted
     archive_path.write_bytes(b"ORIGINAL_ARCHIVE_BYTES")
     with pytest.raises(RuntimeError, match="Simulated user interrupt"):
-        big.BigPacker.pack_from_directory(standard_mod_directory, archive_path, progress_callback=raising_cb)
+        big.BigPacker.pack_from_directory(
+            standard_mod_directory, archive_path, progress_callback=raising_cb
+        )
 
     assert archive_path.read_bytes() == b"ORIGINAL_ARCHIVE_BYTES"
 
 
-def test_unpack_exception_in_callback_aborts_safely(standard_mod_directory: Path, tmp_path: Path):
+def test_unpack_exception_in_callback_aborts_safely(
+    standard_mod_directory: Path, tmp_path: Path
+):
     """Verify GIL safe exception unwinding during extraction."""
     archive = tmp_path / "valid.big"
     out_dir = tmp_path / "aborted_extract"
@@ -323,7 +363,9 @@ def test_unpack_exception_in_callback_aborts_safely(standard_mod_directory: Path
         archive_obj.extract_all(out_dir, progress_callback=raising_cb)
 
 
-def test_in_memory_read_entry_and_buffer_protocol(standard_mod_directory: Path, tmp_path: Path):
+def test_in_memory_read_entry_and_buffer_protocol(
+    standard_mod_directory: Path, tmp_path: Path
+):
     """Verify single-file in-memory extraction via path string, BigEntry, and memoryview."""
     archive_path = tmp_path / "in_memory.big"
     big.pack(standard_mod_directory, archive_path)
@@ -355,26 +397,34 @@ def test_in_memory_read_entry_and_buffer_protocol(standard_mod_directory: Path, 
 
         # Verify streaming entry
         streamed_chunks = []
+
         def chunk_cb(mv: memoryview) -> bool:
             streamed_chunks.append(mv.tobytes())
             return True
+
         arc.stream_entry("DATA/weapon.ini", chunk_cb)
         assert b"".join(streamed_chunks) == b"Damage=50"
 
     assert arc.closed
 
 
-def test_read_entry_missing_file_raises_big_archive_error(standard_mod_directory: Path, tmp_path: Path):
+def test_read_entry_missing_file_raises_big_archive_error(
+    standard_mod_directory: Path, tmp_path: Path
+):
     """Verify that requesting a non-existent entry raises BigArchiveError."""
     archive_path = tmp_path / "missing_entry.big"
     big.pack(standard_mod_directory, archive_path)
 
-    with big.BigArchive(archive_path) as arc:
-        with pytest.raises(big.BigArchiveError, match="Entry not found"):
-            arc.read_entry("data/missing_unit.ini")
+    with (
+        big.BigArchive(archive_path) as arc,
+        pytest.raises(big.BigArchiveError, match="Entry not found"),
+    ):
+        arc.read_entry("data/missing_unit.ini")
 
 
-def test_closed_archive_rejects_operations_and_context_reentry(standard_mod_directory: Path, tmp_path: Path):
+def test_closed_archive_rejects_operations_and_context_reentry(
+    standard_mod_directory: Path, tmp_path: Path
+):
     """Verify that closing an archive blocks further operations and context manager re-entry."""
     archive_path = tmp_path / "lifecycle.big"
     big.pack(standard_mod_directory, archive_path)
@@ -397,18 +447,19 @@ def test_closed_archive_rejects_operations_and_context_reentry(standard_mod_dire
     with pytest.raises(big.BigArchiveError, match="closed archive"):
         arc.extract_all(tmp_path / "out")
 
-    with pytest.raises(big.BigArchiveError, match="closed archive"):
-        with arc:
-            pass
+    with pytest.raises(big.BigArchiveError, match="closed archive"), arc:
+        pass
 
 
-def test_pack_to_memory_from_directory_and_records(standard_mod_directory: Path, tmp_path: Path):
+def test_pack_to_memory_from_directory_and_records(
+    standard_mod_directory: Path, tmp_path: Path
+):
     """Verify in-memory archive packing from a directory, a mapping, and buffer-protocol objects."""
     disk_archive = tmp_path / "disk_reference.big"
     big.pack(standard_mod_directory, disk_archive)
     expected_bytes = disk_archive.read_bytes()
 
-    # 1. Pack from directory path
+    # Pack from directory path
     dir_reports: list[str] = []
     mem_from_dir = big.pack_to_memory(
         standard_mod_directory,
@@ -418,7 +469,7 @@ def test_pack_to_memory_from_directory_and_records(standard_mod_directory: Path,
     assert mem_from_dir == expected_bytes
     assert len(dir_reports) == 3
 
-    # 2. Pack from Mapping[str, bytes]
+    # Pack from Mapping[str, bytes]
     mapping_input = {
         "data/weapon.ini": b"Damage=50",
         "art/texture.dds": b"DDS_HEADER_DATA",
@@ -432,12 +483,12 @@ def test_pack_to_memory_from_directory_and_records(standard_mod_directory: Path,
     assert mem_from_dict == expected_bytes
     assert len(dict_reports) == 3
 
-    # 3. Pack from sequence of (path, bytes) tuples
+    # Pack from sequence of (path, bytes) tuples
     sequence_input = list(mapping_input.items())
     mem_from_seq = big.pack_to_memory(sequence_input)
     assert mem_from_seq == expected_bytes
 
-    # 4. Pack zero-copy from bytearray and memoryview slices
+    # Pack zero-copy from bytearray and memoryview slices
     raw_padded = bytearray(b"__Damage=50__")
     with memoryview(raw_padded)[2:11] as ini_slice:
         buffer_input = [
@@ -467,7 +518,7 @@ def test_pack_to_memory_validation_and_callbacks(tmp_path: Path):
     reported: list[str] = []
     raw_bytes = big.BigPacker.pack_to_memory(
         [("b.txt", b"B"), ("a.txt", b"A")],
-        progress_callback=lambda r: (reported.append(r.entry_name), True)[1]
+        progress_callback=lambda r: (reported.append(r.entry_name), True)[1],
     )
     assert len(raw_bytes) > 0
     assert reported == ["a.txt", "b.txt"]
@@ -483,7 +534,9 @@ def test_pack_to_memory_path_injection():
         big.pack_to_memory([("COM1", b"payload")])
 
 
-def test_selective_unpack_with_glob_filter(standard_mod_directory: Path, tmp_path: Path):
+def test_selective_unpack_with_glob_filter(
+    standard_mod_directory: Path, tmp_path: Path
+):
     """Verify that unpack() with filter_pattern extracts and returns only matching entries."""
     archive_path = tmp_path / "selective.big"
     extract_dir = tmp_path / "selective_out"
@@ -503,16 +556,24 @@ def test_diff_archives_and_error_handling(tmp_path: Path):
     base_path = tmp_path / "base.big"
     target_path = tmp_path / "target.big"
 
-    base_path.write_bytes(big.pack_to_memory({
-        "data/weapon.ini": b"Damage=50",
-        "data/armor.ini": b"Armor=100",
-        "readme.txt": b"v1.0",
-    }))
-    target_path.write_bytes(big.pack_to_memory({
-        "data/weapon.ini": b"Damage=75",
-        "data/armor.ini": b"Armor=100",
-        "data/new_unit.ini": b"Cost=200",
-    }))
+    base_path.write_bytes(
+        big.pack_to_memory(
+            {
+                "data/weapon.ini": b"Damage=50",
+                "data/armor.ini": b"Armor=100",
+                "readme.txt": b"v1.0",
+            }
+        )
+    )
+    target_path.write_bytes(
+        big.pack_to_memory(
+            {
+                "data/weapon.ini": b"Damage=75",
+                "data/armor.ini": b"Armor=100",
+                "data/new_unit.ini": b"Cost=200",
+            }
+        )
+    )
 
     result = big.diff(base_path, target_path)
     assert result.has_differences
@@ -522,8 +583,13 @@ def test_diff_archives_and_error_handling(tmp_path: Path):
     assert [e.name for e in result.modified] == ["data\\weapon.ini"]
     assert [e.name for e in result.unchanged] == ["data\\armor.ini"]
 
-    # Compare open BigArchive instances directly
+    # Compare open BigArchive instances directly via high-level big.diff() and BigDiff.compare()
     with big.BigArchive(base_path) as b_arc, big.BigArchive(target_path) as t_arc:
+        high_level_res = big.diff(b_arc, t_arc, filter_pattern="*armor.ini")
+        assert not high_level_res.has_differences
+        assert not b_arc.closed
+        assert not t_arc.closed
+
         filtered_res = big.BigDiff.compare(b_arc, t_arc, filter_pattern="*armor.ini")
         assert not filtered_res.has_differences
 
@@ -571,15 +637,23 @@ def test_create_patch_and_create_patch_to_memory(tmp_path: Path):
     target_path = tmp_path / "target.big"
     patch_path = tmp_path / "delta_patch.big"
 
-    base_path.write_bytes(big.pack_to_memory({
-        "data/weapon.ini": b"Damage=50",
-        "data/armor.ini": b"Armor=100",
-    }))
-    target_path.write_bytes(big.pack_to_memory({
-        "data/weapon.ini": b"Damage=75",
-        "data/armor.ini": b"Armor=100",
-        "data/new_unit.ini": b"Cost=200",
-    }))
+    base_path.write_bytes(
+        big.pack_to_memory(
+            {
+                "data/weapon.ini": b"Damage=50",
+                "data/armor.ini": b"Armor=100",
+            }
+        )
+    )
+    target_path.write_bytes(
+        big.pack_to_memory(
+            {
+                "data/weapon.ini": b"Damage=75",
+                "data/armor.ini": b"Armor=100",
+                "data/new_unit.ini": b"Cost=200",
+            }
+        )
+    )
 
     patch_cb_names: list[str] = []
     big.create_patch(
@@ -602,27 +676,47 @@ def test_create_patch_and_create_patch_to_memory(tmp_path: Path):
 
     # Cooperative cancellation in create_patch and create_patch_to_memory
     with pytest.raises(big.BigArchiveError, match="cancelled"):
-        big.create_patch(base_path, target_path, tmp_path / "cancelled_patch.big", progress_callback=lambda _: False)
+        big.create_patch(
+            base_path,
+            target_path,
+            tmp_path / "cancelled_patch.big",
+            progress_callback=lambda _: False,
+        )
 
     with pytest.raises(big.BigArchiveError, match="cancelled"):
-        big.create_patch_to_memory(base_path, target_path, progress_callback=lambda _: False)
+        big.create_patch_to_memory(
+            base_path, target_path, progress_callback=lambda _: False
+        )
 
     with big.BigArchive(patch_path) as patch_arc:
         names = [e.name for e in patch_arc.get_entries()]
         assert names == ["data\\new_unit.ini", "data\\weapon.ini"]
         assert patch_arc.read_entry("data/weapon.ini") == b"Damage=75"
 
-    # Exercise BigArchive overloads and progress callbacks directly
+    # Exercise BigArchive overloads and progress callbacks via high-level and low-level APIs
     cb_mem: list[str] = []
     cb_disk: list[str] = []
     direct_patch_path = tmp_path / "direct_patch.big"
+    hl_patch_path = tmp_path / "hl_patch.big"
     with big.BigArchive(base_path) as b_arc, big.BigArchive(target_path) as t_arc:
+        hl_raw = big.create_patch_to_memory(b_arc, t_arc)
+        assert hl_raw == mem_patch
+        big.create_patch(b_arc, t_arc, hl_patch_path)
+        assert hl_patch_path.read_bytes() == mem_patch
+        assert not b_arc.closed
+        assert not t_arc.closed
+
         raw = big.BigDiff.create_patch_to_memory(
-            b_arc, t_arc, progress_callback=lambda r: (cb_mem.append(r.entry_name), True)[1]
+            b_arc,
+            t_arc,
+            progress_callback=lambda r: (cb_mem.append(r.entry_name), True)[1],
         )
         assert raw == mem_patch
         big.BigDiff.create_patch(
-            b_arc, t_arc, direct_patch_path, progress_callback=lambda r: (cb_disk.append(r.entry_name), True)[1]
+            b_arc,
+            t_arc,
+            direct_patch_path,
+            progress_callback=lambda r: (cb_disk.append(r.entry_name), True)[1],
         )
 
     assert cb_mem == ["data\\new_unit.ini", "data\\weapon.ini"]
@@ -633,7 +727,9 @@ def test_create_patch_and_create_patch_to_memory(tmp_path: Path):
         big.create_patch(base_path, target_path, base_path)
 
     with pytest.raises(FileNotFoundError, match="does not exist"):
-        big.create_patch(base_path, target_path, tmp_path / "missing_parent" / "patch.big")
+        big.create_patch(
+            base_path, target_path, tmp_path / "missing_parent" / "patch.big"
+        )
 
     missing = tmp_path / "missing.big"
     with pytest.raises(FileNotFoundError, match="Base archive not found"):
@@ -654,14 +750,22 @@ def test_load_overlay_from_directory_and_archive_sequence(tmp_path: Path):
     arc1 = tmp_path / "01_ini.big"
     arc2 = tmp_path / "02_patch.big"
 
-    arc1.write_bytes(big.pack_to_memory({
-        "data/weapon.ini": b"Damage=50",
-        "readme.txt": b"v1.0",
-    }))
-    arc2.write_bytes(big.pack_to_memory({
-        "data/weapon.ini": b"Damage=99",
-        "art/icon.dds": b"DDS_PAYLOAD",
-    }))
+    arc1.write_bytes(
+        big.pack_to_memory(
+            {
+                "data/weapon.ini": b"Damage=50",
+                "readme.txt": b"v1.0",
+            }
+        )
+    )
+    arc2.write_bytes(
+        big.pack_to_memory(
+            {
+                "data/weapon.ini": b"Damage=99",
+                "art/icon.dds": b"DDS_PAYLOAD",
+            }
+        )
+    )
 
     # 1. Load from directory (alphabetical order: 01_ini.big -> 02_patch.big)
     overlay_dir = big.load_overlay(tmp_path)
@@ -677,7 +781,7 @@ def test_load_overlay_from_directory_and_archive_sequence(tmp_path: Path):
     assert "overrides=1" in repr(resolved)
     assert overlay_dir.read_entry("data/weapon.ini") == b"Damage=99"
 
-# 2. Load from explicit sequence in reverse order (02_patch.big -> 01_ini.big)
+    # 2. Load from explicit sequence in reverse order (02_patch.big -> 01_ini.big)
     with big.load_overlay([arc2, arc1]) as overlay_seq:
         assert overlay_seq.read_entry("data/weapon.ini") == b"Damage=50"
         assert overlay_seq.resolve("data/weapon.ini").source_archive == arc1
@@ -699,3 +803,22 @@ def test_load_overlay_from_directory_and_archive_sequence(tmp_path: Path):
 
     with pytest.raises(FileNotFoundError, match="Archive not found"):
         big.load_overlay([arc1, tmp_path / "missing_arc.big"])
+
+
+def test_big_archive_resolve_entry(
+    standard_mod_directory: Path, tmp_path: Path
+) -> None:
+    """Verify O(1) BigArchive.resolve metadata lookup and error handling."""
+    archive_path = tmp_path / "resolve_test.big"
+    big.pack(standard_mod_directory, archive_path)
+
+    with big.BigArchive(archive_path) as arc:
+        entry = arc.resolve("DATA/WEAPON.INI")
+        assert entry.name == "data\\weapon.ini"
+        assert entry.size == 9
+
+        with pytest.raises(big.BigArchiveError, match="Entry not found"):
+            arc.resolve("data/missing.ini")
+
+    with pytest.raises(big.BigArchiveError, match="closed archive"):
+        arc.resolve("data/weapon.ini")

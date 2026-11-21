@@ -33,6 +33,9 @@ namespace lotm::big {
             bool create_directories = true
         ) const;
 
+        // Resolves the metadata record for a single archive entry by its internal path in O(1)
+        [[nodiscard]] const BigEntry& resolve(std::string_view entry_name) const;
+
         // Reads a single archive entry into memory by its internal path
         [[nodiscard]] std::vector<uint8_t> read_entry(std::string_view entry_name) const;
 

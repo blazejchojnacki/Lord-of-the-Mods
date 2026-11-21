@@ -9,11 +9,13 @@
 
 #pragma once
 
+#include <core/string_utils.hpp>
+
 #include <algorithm>
-#include <cctype>
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 namespace lotm::ini {
@@ -33,42 +35,13 @@ namespace lotm::ini {
 
     namespace detail {
 
+        using lotm::core::lstrip_view;
+        using lotm::core::rstrip_view;
+        using lotm::core::trim_view;
+        using lotm::core::iequals_ascii;
+
         [[nodiscard]] constexpr bool is_lex_space(char c) noexcept {
-            return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f';
-        }
-
-        [[nodiscard]] constexpr std::string_view lstrip_view(std::string_view sv) noexcept {
-            std::size_t pos = 0;
-            while (pos < sv.size() && is_lex_space(sv[pos])) {
-                ++pos;
-            }
-            return sv.substr(pos);
-        }
-
-        [[nodiscard]] constexpr std::string_view rstrip_view(std::string_view sv) noexcept {
-            std::size_t end = sv.size();
-            while (end > 0 && is_lex_space(sv[end - 1])) {
-                --end;
-            }
-            return sv.substr(0, end);
-        }
-
-        [[nodiscard]] constexpr std::string_view trim_view(std::string_view sv) noexcept {
-            return rstrip_view(lstrip_view(sv));
-        }
-
-        [[nodiscard]] constexpr bool iequals_ascii(std::string_view a, std::string_view b) noexcept {
-            if (a.size() != b.size()) {
-                return false;
-            }
-            for (std::size_t i = 0; i < a.size(); ++i) {
-                const char ca = (a[i] >= 'A' && a[i] <= 'Z') ? static_cast<char>(a[i] + ('a' - 'A')) : a[i];
-                const char cb = (b[i] >= 'A' && b[i] <= 'Z') ? static_cast<char>(b[i] + ('a' - 'A')) : b[i];
-                if (ca != cb) {
-                    return false;
-                }
-            }
-            return true;
+            return lotm::core::is_ascii_space(c);
         }
 
         [[nodiscard]] inline std::string collapse_whitespace(std::string_view sv) {
@@ -98,7 +71,7 @@ namespace lotm::ini {
 
         /**
          * @brief Finds the starting index of a comment (';' or '//') outside of double quotes
-         *        while ignoring '//' immediately preceded by ':' (such as 'http://').
+         *        while ignoring escaped quotes ('\"') and '//' immediately preceded by ':' (such as 'http://').
          */
         [[nodiscard]] constexpr std::size_t find_comment_start(std::string_view raw_line) noexcept {
             bool in_quotes = false;
@@ -106,6 +79,10 @@ namespace lotm::ini {
 
             for (std::size_t i = 0; i < len; ++i) {
                 const char c = raw_line[i];
+                if (c == '\\' && in_quotes && (i + 1) < len && raw_line[i + 1] == '"') {
+                    ++i;
+                    continue;
+                }
                 if (c == '"') {
                     in_quotes = !in_quotes;
                 }
@@ -144,7 +121,7 @@ namespace lotm::ini {
 
         const std::size_t len = code_part.size();
 
-        // 1. Populate words_signs (whitespace-delimited slices)
+        // Populate words_signs (whitespace-delimited slices)
         {
             std::size_t pos = 0;
             while (pos < len) {
@@ -162,7 +139,7 @@ namespace lotm::ini {
             }
         }
 
-        // 2. Populate words and line_tokens in a single zero-copy pass without mutating '=' or ':'
+        // Populate words and line_tokens in a single zero-copy pass without mutating '=' or ':'
         {
             std::size_t pos = 0;
             while (pos < len) {
