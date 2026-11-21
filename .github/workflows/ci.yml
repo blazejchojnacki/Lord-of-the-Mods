@@ -141,6 +141,7 @@ jobs:
             & $venvLotmBig --help | Out-Null
             & $venvPython -m lotm --help | Out-Null
             & $venvPython -c "import lotm, lotm.big, lotm.ini, lotm.pipeline; assert lotm.__version__"
+            & $venvPython -m pip install mypy pytest
             & $venvPython -m mypy (Join-Path "${{ github.workspace }}" "src\lotm")
             & $venvPython -m pytest --doctest-modules --pyargs lotm
           }
