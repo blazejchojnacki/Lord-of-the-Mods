@@ -417,7 +417,7 @@ def test_read_entry_missing_file_raises_big_archive_error(
 
     with (
         big.BigArchive(archive_path) as arc,
-        pytest.raises(big.BigArchiveError, match="Entry not found")
+        pytest.raises(big.BigArchiveError, match="Entry not found"),
     ):
         arc.read_entry("data/missing_unit.ini")
 
