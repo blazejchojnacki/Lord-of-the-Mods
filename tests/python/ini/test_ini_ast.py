@@ -10,10 +10,10 @@ SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 from pathlib import Path
+
 import pytest
 
-import lotm._core as _core
-import lotm.ini as ini
+from lotm import _core, ini
 
 
 def test_ast_leaf_nodes_properties_equality_and_repr() -> None:
@@ -295,7 +295,9 @@ def test_construct_file_overloads_and_sequence_protocol(sample_ini_file: Path) -
     # Standard disk parsing via ConstructFile
     disk_cf = ini.ConstructFile(sample_ini_file, strict=True)
     reconstructed = disk_cf.print()
-    reparsed = ini.ConstructFile(sample_ini_file, strict=True, file_content=reconstructed)
+    reparsed = ini.ConstructFile(
+        sample_ini_file, strict=True, file_content=reconstructed
+    )
     assert reparsed.print() == reconstructed
 
 

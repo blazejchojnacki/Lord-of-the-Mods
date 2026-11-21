@@ -13,6 +13,7 @@ from collections.abc import Buffer, Callable
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
+from lotm.big._paths import _normalize_entry_path
 from lotm.ini import (
     ConstructFile,
     FormatOptions,
@@ -20,7 +21,6 @@ from lotm.ini import (
     parse_ini,
     parse_str,
 )
-from lotm.big._paths import _normalize_entry_path
 
 
 @runtime_checkable
@@ -64,7 +64,11 @@ class IniAstStage:
         """Parse `payload` zero-copy into a `ConstructFile`, mutate it, and return UTF-8 bytes."""
         doc = parse_ini(entry_name, strict=strict, file_content=payload)
         self.mutator(doc)
-        rendered = doc.print() if self.format_options is None else doc.print(self.format_options)
+        rendered = (
+            doc.print()
+            if self.format_options is None
+            else doc.print(self.format_options)
+        )
         return rendered.encode("utf-8")
 
 
@@ -92,7 +96,11 @@ class StrAstStage:
         """Parse `payload` zero-copy into a `StrDocument`, mutate it, and return UTF-8 bytes."""
         doc = parse_str(entry_name, strict=strict, file_content=payload)
         self.mutator(doc)
-        rendered = doc.print() if self.format_options is None else doc.print(self.format_options)
+        rendered = (
+            doc.print()
+            if self.format_options is None
+            else doc.print(self.format_options)
+        )
         return rendered.encode("utf-8")
 
 

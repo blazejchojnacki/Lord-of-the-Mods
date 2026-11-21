@@ -10,8 +10,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 import lotm
-import lotm._core as _core
-import lotm.ini as ini
+from lotm import _core, ini
 
 
 def test_core_ini_submodule_exists() -> None:

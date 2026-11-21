@@ -7,8 +7,8 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
-from importlib.metadata import PackageNotFoundError, version
 import logging
+from importlib.metadata import PackageNotFoundError, version
 
 # Prevent "No handler found" warnings for users who don't configure logging
 logging.getLogger("lotm").addHandler(logging.NullHandler())

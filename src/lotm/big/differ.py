@@ -7,13 +7,15 @@ Part of the Lord of the Mods (lotm) project.
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
 import logging
 import os
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TypeAlias
+
 from lotm._core import big
+
 from .packer import _make_progress_callback
 
 logger = logging.getLogger("lotm.big.differ")
@@ -73,7 +75,10 @@ def diff(
     """
     pattern = filter_pattern or ""
 
-    with _open_archive(base_archive, "Base") as base_arc, _open_archive(target_archive, "Target") as target_arc:
+    with (
+        _open_archive(base_archive, "Base") as base_arc,
+        _open_archive(target_archive, "Target") as target_arc,
+    ):
         result = big.BigDiff.compare(base_arc, target_arc, filter_pattern=pattern)
         logger.info(
             "Diff complete (%s vs %s): +%d added, -%d removed, ~%d modified, =%d unchanged",
@@ -130,15 +135,28 @@ def create_patch(
     output_path = Path(output_file)
     pattern = filter_pattern or ""
 
-    with _open_archive(base_archive, "Base") as base_arc, _open_archive(target_archive, "Target") as target_arc:
+    with (
+        _open_archive(base_archive, "Base") as base_arc,
+        _open_archive(target_archive, "Target") as target_arc,
+    ):
         if not output_path.parent.is_dir():
-            raise FileNotFoundError(f"Target output directory '{output_path.parent}' does not exist.")
+            raise FileNotFoundError(
+                f"Target output directory '{output_path.parent}' does not exist."
+            )
 
-        on_progress = _make_progress_callback(logger, "Packed patch entry", progress_callback)
-        big.BigDiff.create_patch(
-            base_arc, target_arc, output_path, filter_pattern=pattern, progress_callback=on_progress
+        on_progress = _make_progress_callback(
+            logger, "Packed patch entry", progress_callback
         )
-        logger.info("Finished generating delta patch archive: %s", output_path.resolve())
+        big.BigDiff.create_patch(
+            base_arc,
+            target_arc,
+            output_path,
+            filter_pattern=pattern,
+            progress_callback=on_progress,
+        )
+        logger.info(
+            "Finished generating delta patch archive: %s", output_path.resolve()
+        )
 
 
 def create_patch_to_memory(
@@ -183,8 +201,13 @@ def create_patch_to_memory(
     """
     pattern = filter_pattern or ""
 
-    with _open_archive(base_archive, "Base") as base_arc, _open_archive(target_archive, "Target") as target_arc:
-        on_progress = _make_progress_callback(logger, "Packed patch entry to memory", progress_callback)
+    with (
+        _open_archive(base_archive, "Base") as base_arc,
+        _open_archive(target_archive, "Target") as target_arc,
+    ):
+        on_progress = _make_progress_callback(
+            logger, "Packed patch entry to memory", progress_callback
+        )
         data = big.BigDiff.create_patch_to_memory(
             base_arc, target_arc, filter_pattern=pattern, progress_callback=on_progress
         )

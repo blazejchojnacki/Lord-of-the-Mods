@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from lotm._core import ini as _ini
+
 from .parser import SUPPORTED_EXTENSIONS, RootItem
 
 ConstructFile = _ini.ConstructFile

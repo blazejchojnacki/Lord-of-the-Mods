@@ -10,9 +10,9 @@ SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 import os
+import tempfile
 from collections.abc import Buffer
 from pathlib import Path
-import tempfile
 
 from lotm._core import ini as _ini
 
@@ -87,19 +87,37 @@ def format_ini(
     doc = ConstructFile(os.fspath(file_path), strict, file_content)
     effective_opts = FormatOptions(
         indent=options.indent if options is not None else _ini.LEVEL_INDENT,
-        enforce_equals=bool(options.enforce_equals if options is not None else False) or enforce_equals,
-        normalize_end_tokens=bool(options.normalize_end_tokens if options is not None else False) or normalize_end_tokens,
-        normalize_header_spacing=bool(options.normalize_header_spacing if options is not None else False) or normalize_header_spacing,
-        normalize_statement_equals=bool(options.normalize_statement_equals if options is not None else False) or normalize_statement_equals,
-        normalize_comments=bool(options.normalize_comments if options is not None else False) or normalize_comments,
-        coalesce_blank_lines=bool(options.coalesce_blank_lines if options is not None else False) or coalesce_blank_lines,
+        enforce_equals=bool(options.enforce_equals if options is not None else False)
+        or enforce_equals,
+        normalize_end_tokens=bool(
+            options.normalize_end_tokens if options is not None else False
+        )
+        or normalize_end_tokens,
+        normalize_header_spacing=bool(
+            options.normalize_header_spacing if options is not None else False
+        )
+        or normalize_header_spacing,
+        normalize_statement_equals=bool(
+            options.normalize_statement_equals if options is not None else False
+        )
+        or normalize_statement_equals,
+        normalize_comments=bool(
+            options.normalize_comments if options is not None else False
+        )
+        or normalize_comments,
+        coalesce_blank_lines=bool(
+            options.coalesce_blank_lines if options is not None else False
+        )
+        or coalesce_blank_lines,
     )
     formatted = doc.print(effective_opts)
 
     if output_path is not None:
         dest = Path(output_path)
         dest.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp_name = tempfile.mkstemp(prefix=f".{dest.name}.", suffix=".lotm_tmp", dir=str(dest.parent))
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{dest.name}.", suffix=".lotm_tmp", dir=str(dest.parent)
+        )
         tmp_path = Path(tmp_name)
         try:
             with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:

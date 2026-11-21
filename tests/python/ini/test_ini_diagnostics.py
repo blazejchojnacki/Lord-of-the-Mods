@@ -10,9 +10,10 @@ SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 from pathlib import Path
+
 import pytest
 
-import lotm.ini as ini
+from lotm import ini
 
 
 def test_scan_ini_across_files_and_directories(

@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+
 import pytest
 
-import lotm.ini as ini
+from lotm import ini
 
 
 def test_format_ini_in_memory_string_and_buffer() -> None:
@@ -80,7 +81,9 @@ def test_format_options_object_and_ast_print_overloads() -> None:
 
     block = doc[0]
     assert isinstance(block, ini.ConstructLevel)
-    assert "  Draw = W3DScriptedModelDraw ModuleTag_01\n" in block.print(options=custom_opts)
+    assert "  Draw = W3DScriptedModelDraw ModuleTag_01\n" in block.print(
+        options=custom_opts
+    )
 
     script = block[1]
     assert isinstance(script, ini.ScriptNode)
@@ -150,11 +153,7 @@ def test_format_ini_normalization_toggles_and_options_merging() -> None:
     assert "  Damage = 30\n" in merged
     assert merged.endswith("End\n\n")
 
-    messy_str = (
-        "OBJECT:GondorFighter\n"
-        '    "Gondor Fighter"\n'
-        "end\n"
-    )
+    messy_str = 'OBJECT:GondorFighter\n    "Gondor Fighter"\nend\n'
     normalized_str = ini.format_ini(
         "messy.str",
         file_content=messy_str,

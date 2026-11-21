@@ -10,6 +10,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 from pathlib import Path
+
 import pytest
 
 import lotm.cli as umbrella_cli
@@ -44,7 +45,9 @@ def test_ini_cli_scan_with_errors_non_strict_and_strict(
 
     # Non-strict scan with -o / --output writes report to disk
     report_file = tmp_path / "reports" / "scan_report.txt"
-    rc_out = umbrella_cli.main(["ini", "scan", str(malformed_ini_file), "-o", str(report_file)])
+    rc_out = umbrella_cli.main(
+        ["ini", "scan", str(malformed_ini_file), "-o", str(report_file)]
+    )
     assert rc_out == umbrella_cli.EXIT_SUCCESS
     assert report_file.is_file()
     assert "negative level reached" in report_file.read_text(encoding="utf-8")
@@ -73,7 +76,15 @@ def test_ini_cli_format_to_output_in_place_and_canonical_flags(
 
     # Format to separate output file
     rc_out = umbrella_cli.main(
-        ["ini", "format", str(unformatted), "-o", str(formatted_dest), "--strict", "--canonical"]
+        [
+            "ini",
+            "format",
+            str(unformatted),
+            "-o",
+            str(formatted_dest),
+            "--strict",
+            "--canonical",
+        ]
     )
     assert rc_out == umbrella_cli.EXIT_SUCCESS
     assert formatted_dest.is_file()
@@ -86,7 +97,16 @@ def test_ini_cli_format_to_output_in_place_and_canonical_flags(
     assert "->" in stdout_out
 
     # Format in-place
-    rc_inplace = umbrella_cli.main(["ini", "format", str(unformatted), "--enforce-equals", "--normalize-ends", "--normalize-equals"])
+    rc_inplace = umbrella_cli.main(
+        [
+            "ini",
+            "format",
+            str(unformatted),
+            "--enforce-equals",
+            "--normalize-ends",
+            "--normalize-equals",
+        ]
+    )
     assert rc_inplace == umbrella_cli.EXIT_SUCCESS
     inplace_text = unformatted.read_text(encoding="utf-8")
     assert "  Draw = W3DScriptedModelDraw ModuleTag_01\n" in inplace_text
@@ -135,7 +155,9 @@ def test_ini_cli_inspect_clean_empty_and_malformed_files(
     assert "Errors (2):" in stderr_malformed
 
     # Malformed file in strict mode returns EXIT_ERROR
-    rc_strict_err = umbrella_cli.main(["ini", "inspect", str(malformed_ini_file), "--strict"])
+    rc_strict_err = umbrella_cli.main(
+        ["ini", "inspect", str(malformed_ini_file), "--strict"]
+    )
     assert rc_strict_err == umbrella_cli.EXIT_ERROR
     _, stderr_strict = capsys.readouterr()
     assert "Command 'ini inspect' failed:" in stderr_strict

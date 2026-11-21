@@ -9,9 +9,9 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 from __future__ import annotations
 
-from pathlib import Path
 import re
 import tomllib
+from pathlib import Path
 
 import pytest
 
@@ -54,7 +54,11 @@ def test_version_consistency_across_project_files() -> None:
     # CHANGELOG (latest heading matches expected_version using numeric tuple comparison)
     changelog_path = _find_doc_file(("CHANGELOG.md", "docs/CHANGELOG.md"))
     changelog_text = changelog_path.read_text(encoding="utf-8")
-    headings = re.findall(r"^##\s+\[?v?(\d+\.\d+\.\d+(?:[a-zA-Z0-9._-]*)?)\]?", changelog_text, re.MULTILINE)
+    headings = re.findall(
+        r"^##\s+\[?v?(\d+\.\d+\.\d+(?:[a-zA-Z0-9._-]*)?)\]?",
+        changelog_text,
+        re.MULTILINE,
+    )
     assert headings, f"No versioned release heading found in {changelog_path.name}"
     parsed_headings = [_parse_version_tuple(h) for h in headings]
     assert headings[0] == expected_version, (
@@ -72,7 +76,9 @@ def test_version_consistency_across_project_files() -> None:
     )
 
     # coverage-log (latest entry mentions expected_version)
-    coverage_path = _find_doc_file(("coverage-log.md", "coverage-log.txt", "coverage-log", "docs/coverage-log.md"))
+    coverage_path = _find_doc_file(
+        ("coverage-log.md", "coverage-log.txt", "coverage-log", "docs/coverage-log.md")
+    )
     coverage_text = coverage_path.read_text(encoding="utf-8")
     assert expected_version in coverage_text, (
         f"{coverage_path.name} does not contain current version {expected_version}"

@@ -9,36 +9,26 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 from __future__ import annotations
 
-from collections.abc import Buffer
 import os
+from collections.abc import Buffer
 from pathlib import Path
+
 import pytest
 
 import lotm
-import lotm.big as big
-import lotm.ini as ini
-import lotm.pipeline as pipeline
+from lotm import big, ini, pipeline
 
 
 def _build_sample_archive(path: Path) -> Path:
     """Create a sample BIG4 archive containing .ini, .inc, .str, and binary .dds entries."""
     payloads = {
         "data/ini/weapon.ini": (
-            b"Weapon   GondorSword // header\n"
-            b"    Damage=50 // slash\n"
-            b"END\n"
+            b"Weapon   GondorSword // header\n    Damage=50 // slash\nEND\n"
         ),
         "data/ini/includes/armor.inc": (
-            b"ArmorSet\n"
-            b"    Conditions = NONE\n"
-            b"    Armor = DEFAULT 25%\n"
-            b"End\n"
+            b"ArmorSet\n    Conditions = NONE\n    Armor = DEFAULT 25%\nEnd\n"
         ),
-        "lang/lotr.str": (
-            b'OBJECT:GondorSword // hdr\n'
-            b'    "Gondor Sword"\n'
-            b"end\n"
-        ),
+        "lang/lotr.str": (b'OBJECT:GondorSword // hdr\n    "Gondor Sword"\nend\n'),
         "art/textures/sword.dds": b"DDS_RAW_BINARY_PAYLOAD",
     }
     path.write_bytes(big.pack_to_memory(payloads))
@@ -68,6 +58,7 @@ def test_pipeline_public_exports() -> None:
 
 def test_entry_stages_matching_and_application() -> None:
     """Verify IniAstStage, StrAstStage, FormatConfigStage, and custom EntryStage protocol compliance."""
+
     def bump_damage(doc: ini.ConstructFile) -> None:
         wpn = doc.find_block("Weapon", "GondorSword")
         assert wpn is not None
@@ -82,7 +73,11 @@ def test_entry_stages_matching_and_application() -> None:
     assert ini_stage.matches("data/ini/macros.inc")
     assert not ini_stage.matches("lang/lotr.str")
 
-    out_ini = ini_stage.apply("data/ini/weapon.ini", b"Weapon GondorSword\n    Damage = 50\nEND\n", strict=True)
+    out_ini = ini_stage.apply(
+        "data/ini/weapon.ini",
+        b"Weapon GondorSword\n    Damage = 50\nEND\n",
+        strict=True,
+    )
     assert b"Damage = 99" in out_ini
     assert out_ini.endswith(b"End\n\n")
 
@@ -99,7 +94,9 @@ def test_entry_stages_matching_and_application() -> None:
     assert str_stage.matches("LANG\\LOTR.STR")
     assert not str_stage.matches("data/ini/weapon.ini")
 
-    out_str = str_stage.apply("lang/lotr.str", b'OBJECT:GondorSword\n    "Old"\nend\n', strict=True)
+    out_str = str_stage.apply(
+        "lang/lotr.str", b'OBJECT:GondorSword\n    "Old"\nend\n', strict=True
+    )
     assert b'"Forged Gondor Sword"' in out_str
     assert out_str.endswith(b"End\n\n")
 
@@ -117,17 +114,23 @@ def test_entry_stages_matching_and_application() -> None:
     assert fmt_stage.matches("lotr.str")
     assert not fmt_stage.matches("hero.dds")
 
-    formatted_ini = fmt_stage.apply("weapon.ini", b"Weapon   Sword // hdr\n  Damage=10 // cmt\nEND\n", strict=True)
+    formatted_ini = fmt_stage.apply(
+        "weapon.ini", b"Weapon   Sword // hdr\n  Damage=10 // cmt\nEND\n", strict=True
+    )
     assert b"Weapon Sword ; hdr\n" in formatted_ini
     assert b"    Damage = 10 ; cmt\n" in formatted_ini
     assert formatted_ini.endswith(b"End\n\n")
 
-    formatted_str = fmt_stage.apply("lotr.str", b'OBJECT:Sword // hdr\n  "Sword"\nend\n', strict=True)
+    formatted_str = fmt_stage.apply(
+        "lotr.str", b'OBJECT:Sword // hdr\n  "Sword"\nend\n', strict=True
+    )
     assert b"OBJECT:Sword ; hdr\n" in formatted_str
     assert formatted_str.endswith(b"End\n\n")
 
 
-def test_archive_editor_ast_caching_deduplication_and_full_repack(tmp_path: Path) -> None:
+def test_archive_editor_ast_caching_deduplication_and_full_repack(
+    tmp_path: Path,
+) -> None:
     """Verify ArchiveEditor caches ASTs case-insensitively and repacks full archives cleanly."""
     src_big = _build_sample_archive(tmp_path / "base.big")
     out_big = tmp_path / "repacked.big"
@@ -147,7 +150,9 @@ def test_archive_editor_ast_caching_deduplication_and_full_repack(tmp_path: Path
         )
         editor.edit_ini(
             "DATA\\INI\\WEAPON.INI",
-            lambda d: d.find_block("Weapon", "GondorSword").set_value("AttackRange", "25"),  # type: ignore[union-attr]
+            lambda d: d.find_block("Weapon", "GondorSword").set_value(
+                "AttackRange", "25"
+            ),  # type: ignore[union-attr]
             format_options=ini.FormatOptions(normalize_end_tokens=True),
         )
 
@@ -157,7 +162,9 @@ def test_archive_editor_ast_caching_deduplication_and_full_repack(tmp_path: Path
         assert str_doc1 is str_doc2
         editor.edit_str(
             "lang/lotr.str",
-            lambda d: d.append(ini.StrEntry("GUI", "NewButton", items=[ini.StatementNode('"Click"')])),
+            lambda d: d.append(
+                ini.StrEntry("GUI", "NewButton", items=[ini.StatementNode('"Click"')])
+            ),
             format_options=ini.FormatOptions(normalize_end_tokens=True),
         )
 
@@ -201,7 +208,9 @@ def test_archive_editor_delta_patch_and_raw_override_precedence(tmp_path: Path) 
     with big.BigArchive(src_big) as open_arc:
         with pipeline.ArchiveEditor(open_arc) as editor:
             # Stage raw bytes first, then parse via open_ini to verify staged raw override pickup
-            editor.put_bytes("data/ini/staged_unit.ini", b"Object StagedHero\n    Side = Men\nEnd\n")
+            editor.put_bytes(
+                "data/ini/staged_unit.ini", b"Object StagedHero\n    Side = Men\nEnd\n"
+            )
             staged_doc = editor.open_ini("data/ini/staged_unit.ini", strict=True)
             hero = staged_doc.find_block("Object", "StagedHero")
             assert hero is not None
@@ -215,13 +224,21 @@ def test_archive_editor_delta_patch_and_raw_override_precedence(tmp_path: Path) 
             # Modify one existing file and replace an existing binary file with raw bytes
             editor.edit_ini(
                 "data/ini/weapon.ini",
-                lambda d: d.find_block("Weapon", "GondorSword").set_value("Damage", "85"),  # type: ignore[union-attr]
+                lambda d: d.find_block("Weapon", "GondorSword").set_value(
+                    "Damage", "85"
+                ),  # type: ignore[union-attr]
             )
             editor.put_bytes("art/textures/sword.dds", b"UPDATED_DDS_BYTES")
 
             patch_res = editor.save_patch(patch_big)
-            assert patch_res.modified_entries == ["art\\textures\\sword.dds", "data\\ini\\weapon.ini"]
-            assert patch_res.added_entries == ["data\\ini\\staged_unit.ini", "lang\\extra.str"]
+            assert patch_res.modified_entries == [
+                "art\\textures\\sword.dds",
+                "data\\ini\\weapon.ini",
+            ]
+            assert patch_res.added_entries == [
+                "data\\ini\\staged_unit.ini",
+                "lang\\extra.str",
+            ]
 
         # Borrowed BigArchive must remain open after ArchiveEditor exits
         assert not open_arc.closed
@@ -245,14 +262,22 @@ def test_archive_editor_format_entries_and_overlay_source(tmp_path: Path) -> Non
     arc1 = tmp_path / "01_base.big"
     arc2 = tmp_path / "02_mod.big"
 
-    arc1.write_bytes(big.pack_to_memory({
-        "data/ini/weapon.ini": b"Weapon Sword\n    Damage=10\nEND\n",
-        "data/ini/armor.ini": b"Armor Plate\n    Armor = DEFAULT 20%\nEND\n",
-    }))
-    arc2.write_bytes(big.pack_to_memory({
-        "data/ini/weapon.ini": b"Weapon Sword\n    Damage=50\nEND\n",
-        "lang/mod.str": b'OBJECT:Sword\n    "Mod Sword"\nend\n',
-    }))
+    arc1.write_bytes(
+        big.pack_to_memory(
+            {
+                "data/ini/weapon.ini": b"Weapon Sword\n    Damage=10\nEND\n",
+                "data/ini/armor.ini": b"Armor Plate\n    Armor = DEFAULT 20%\nEND\n",
+            }
+        )
+    )
+    arc2.write_bytes(
+        big.pack_to_memory(
+            {
+                "data/ini/weapon.ini": b"Weapon Sword\n    Damage=50\nEND\n",
+                "lang/mod.str": b'OBJECT:Sword\n    "Mod Sword"\nend\n',
+            }
+        )
+    )
 
     fmt_opts = ini.FormatOptions(
         normalize_end_tokens=True,
@@ -303,16 +328,22 @@ def test_transform_archive_one_shot_and_custom_stage(tmp_path: Path) -> None:
         def matches(self, entry_name: str) -> bool:
             return entry_name.lower().endswith(".dds")
 
-        def apply(self, entry_name: str, payload: Buffer, *, strict: bool = False) -> bytes:
+        def apply(
+            self, entry_name: str, payload: Buffer, *, strict: bool = False
+        ) -> bytes:
             return bytes(payload) + b"_V2"
 
     # In-memory transform with INI mutator + FormatOptions
     mem_res = pipeline.transform_archive(
         src_big,
         transforms={
-            "data/ini/weapon.ini": lambda doc: doc.find_block("Weapon", "GondorSword").set_value("Damage", "200"),  # type: ignore[union-attr]
+            "data/ini/weapon.ini": lambda doc: doc.find_block(
+                "Weapon", "GondorSword"
+            ).set_value("Damage", "200"),  # type: ignore[union-attr]
         },
-        format_options=ini.FormatOptions(normalize_end_tokens=True, normalize_statement_equals=True),
+        format_options=ini.FormatOptions(
+            normalize_end_tokens=True, normalize_statement_equals=True
+        ),
         strict=True,
         patch_only=True,
     )
@@ -326,7 +357,9 @@ def test_transform_archive_one_shot_and_custom_stage(tmp_path: Path) -> None:
         output_file=out_patch,
         stages=[
             BinaryMarkerStage(),
-            pipeline.FormatConfigStage(options=ini.FormatOptions(normalize_end_tokens=True)),
+            pipeline.FormatConfigStage(
+                options=ini.FormatOptions(normalize_end_tokens=True)
+            ),
         ],
         filter_pattern="*",
         patch_only=True,
@@ -336,7 +369,10 @@ def test_transform_archive_one_shot_and_custom_stage(tmp_path: Path) -> None:
     assert "art\\textures\\sword.dds" in disk_res.modified_entries
 
     with big.BigArchive(out_patch) as patch_arc:
-        assert patch_arc.read_entry("art/textures/sword.dds") == b"DDS_RAW_BINARY_PAYLOAD_V2"
+        assert (
+            patch_arc.read_entry("art/textures/sword.dds")
+            == b"DDS_RAW_BINARY_PAYLOAD_V2"
+        )
         assert patch_arc.read_entry("lang/lotr.str").decode("utf-8").endswith("End\n\n")
 
     # Full archive save (patch_only=False) with format_options across all config entries
@@ -354,7 +390,11 @@ def test_transform_archive_one_shot_and_custom_stage(tmp_path: Path) -> None:
     ]
     with big.BigArchive(out_full) as full_arc:
         assert len(full_arc.get_entries()) == 4
-        assert full_arc.read_entry("data/ini/weapon.ini").decode("utf-8").endswith("End\n\n")
+        assert (
+            full_arc.read_entry("data/ini/weapon.ini")
+            .decode("utf-8")
+            .endswith("End\n\n")
+        )
 
     # filter_pattern alone formats matching entries
     filtered_res = pipeline.transform_archive(
@@ -417,9 +457,8 @@ def test_pipeline_error_handling_and_atomic_cleanup(
     # Closed editor rejects context re-entry and operations
     editor.close()
     assert editor.closed
-    with pytest.raises(big.BigArchiveError, match="closed ArchiveEditor"):
-        with editor:
-            pass
+    with pytest.raises(big.BigArchiveError, match="closed ArchiveEditor"), editor:
+        pass
     with pytest.raises(big.BigArchiveError, match="closed ArchiveEditor"):
         editor.open_ini("data/ini/weapon.ini")
 
@@ -427,5 +466,7 @@ def test_pipeline_error_handling_and_atomic_cleanup(
     live_arc = big.BigArchive(src_big)
     with pipeline.ArchiveEditor(live_arc) as borrowed_editor:
         live_arc.close()
-        with pytest.raises(big.BigArchiveError, match="Underlying archive or overlay has been closed"):
+        with pytest.raises(
+            big.BigArchiveError, match="Underlying archive or overlay has been closed"
+        ):
             borrowed_editor.open_ini("data/ini/weapon.ini")
