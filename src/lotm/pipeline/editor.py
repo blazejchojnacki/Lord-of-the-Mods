@@ -57,6 +57,11 @@ class TransformResult:
     output_path: Path | None = None
 
 
+def _normalize_archive_path(entry_name: str) -> str:
+    """Normalize virtual archive path separators to backslashes."""
+    return entry_name.replace("/", "\\")
+
+
 def _normalize_key(entry_name: str) -> str:
     """Normalize a virtual archive entry path for case-insensitive lookups."""
     return entry_name.replace("\\", "/").lower()
@@ -167,8 +172,8 @@ class ArchiveEditor:
         """Resolve and read zero-copy `bytes` from the underlying archive or overlay."""
         self._ensure_open()
         resolved = self._source_handle.resolve(entry_name)
-        canonical_name = resolved.name if isinstance(resolved, _big.BigEntry) else resolved.name
-        payload = self._source_handle.read_entry(canonical_name)
+        canonical_name = _normalize_archive_path(resolved.name)
+        payload = self._source_handle.read_entry(resolved.name)
         return canonical_name, payload
 
     def open_ini(self, entry_name: str, *, strict: bool = False) -> ConstructFile:
@@ -304,11 +309,12 @@ class ArchiveEditor:
         self._ensure_open()
         if not entry_name:
             raise ValueError("Entry path cannot be empty.")
-        key = _normalize_key(entry_name)
+        canon_name = _normalize_archive_path(entry_name)
+        key = _normalize_key(canon_name)
         self._ini_asts.pop(key, None)
         self._str_asts.pop(key, None)
         self._removed_keys.discard(key)
-        self._raw_overrides[key] = (entry_name, bytes(data))
+        self._raw_overrides[key] = (canon_name, bytes(data))
 
     def remove(self, entry_name: str) -> bool:
         """Mark `entry_name` as removed from the staged output."""
@@ -358,7 +364,7 @@ class ArchiveEditor:
                 added.append(canon_name)
 
         removed = [
-            self._base_entries_by_key[k][0]
+            _normalize_archive_path(self._base_entries_by_key[k][0])
             for k in sorted(self._removed_keys)
             if k in self._base_entries_by_key
         ]
@@ -406,7 +412,7 @@ class ArchiveEditor:
             if key in staged_map:
                 merged.append(staged_map.pop(key))
             else:
-                merged.append((entry.name, self._source_handle.read_entry(entry.name)))
+                merged.append((_normalize_archive_path(entry.name), self._source_handle.read_entry(entry.name)))
 
         merged.extend(staged_map.values())
         return pack_to_memory(merged, progress_callback=progress_callback)
@@ -480,8 +486,10 @@ def transform_archive(
         if stages:
             for stage in stages:
                 editor.apply_stage(stage, filter_pattern=filter_pattern or "*", strict=strict)
-        elif format_options is not None or filter_pattern is not None:
-            editor.format_entries(filter_pattern or "*", strict=strict, options=format_options)
+        elif filter_pattern is not None:
+            editor.format_entries(filter_pattern, strict=strict, options=format_options)
+        elif format_options is not None and not transforms:
+            editor.format_entries("*", strict=strict, options=format_options)
 
         _, modified, added, removed = editor._collect_staged_payloads()
 
