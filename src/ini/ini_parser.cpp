@@ -277,7 +277,8 @@ namespace lotm::ini {
         int shift = 0;
         for (const auto& ctx : context_stack_) {
             if (const auto* lvl_ptr = std::get_if<ConstructLevel*>(&ctx)) {
-                if ((*lvl_ptr)->_class == "ReplaceModule" || (*lvl_ptr)->_class == "ReplaceModule =") {
+                if (detail::iequals_ascii((*lvl_ptr)->_class, "ReplaceModule") ||
+                    detail::iequals_ascii((*lvl_ptr)->_class, "ReplaceModule =")) {
                     ++shift;
                 }
             }
