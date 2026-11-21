@@ -31,7 +31,7 @@ namespace lotm::ini {
         }
 
         [[nodiscard]] constexpr const AstNode* as_ast_node(const RootItem& item) noexcept {
-            return std::get_if<RootItem>(&item) ? std::get_if<AstNode>(&item) : nullptr;
+            return std::get_if<AstNode>(&item);
         }
 
         [[nodiscard]] std::vector<std::string_view> tokenize_class_spec(std::string_view spec) {
