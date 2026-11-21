@@ -71,3 +71,7 @@ sdist.exclude = [".github", "_prototype", "tools"]
 python_version = "3.12"
 mypy_path = "src"
 strict = true
+
+[tool.pytest.ini_options]
+addopts = "--doctest-modules"
+testpaths = ["tests/python"]
