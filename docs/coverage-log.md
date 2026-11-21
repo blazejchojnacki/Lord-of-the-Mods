@@ -1,8 +1,69 @@
 # Lord-of-the-Mods
 # coverage-log
 
-## 0.6.0 - 2026-11
+## 0.6.0 - 2026-11-21
+
 ```text
+================================= tests coverage ==================================
+_________________ coverage: platform win32, python 3.12.3-final-0 _________________
+
+Name                            Stmts   Miss  Cover   Missing
+-------------------------------------------------------------
+src\lotm\__init__.py                6      0   100%
+src\lotm\__main__.py                1      0   100%
+src\lotm\big\__init__.py           17      0   100%
+src\lotm\big\__main__.py            1      0   100%
+src\lotm\big\_paths.py              5      0   100%
+src\lotm\big\cli.py               104      0   100%
+src\lotm\big\differ.py             41      0   100%
+src\lotm\big\overlay.py            23      0   100%
+src\lotm\big\packer.py             37      0   100%
+src\lotm\big\unpacker.py           22      0   100%
+src\lotm\cli.py                    30      0   100%
+src\lotm\ini\__init__.py           26      0   100%
+src\lotm\ini\cli.py                82      0   100%
+src\lotm\ini\diagnostics.py        62      0   100%
+src\lotm\ini\formatter.py          28      0   100%
+src\lotm\ini\parser.py             29      0   100%
+src\lotm\pipeline\__init__.py       3      0   100%
+src\lotm\pipeline\editor.py       260      0   100%
+src\lotm\pipeline\stages.py        48      0   100%
+-------------------------------------------------------------
+TOTAL                             825      0   100%
+```
+
+```text
+Cpp coverage at 95%.
+Name                                               Total lines    Coverage    Missing
+--------------------------------------------------------------------------------------
+Lord-of-the-Mods\build\tests\lotm_big_tests.exe           1112         94%
+Lord-of-the-Mods\build\tests\lotm_ini_tests.exe           1924         95%
+Lord-of-the-Mods\src\ini\file_io.cpp                       173         82%    60, 100, 110, 124, 184, 215-216, 219-220, 234-235, 247-249, 262-266, 268-269, 271-273, 275-278, 280-281, 320
+Lord-of-the-Mods\src\big\big_diff.cpp                      246         88%    149, 197-199, 223, 225-231, 246, 256, 267, 283, 288, 290-294, 296-297, 299, 355, 366, 376, 394
+Lord-of-the-Mods\include\ini\schema.hpp                     72         93%    80-81, 83-84, 159
+Lord-of-the-Mods\src\big\big_archive.cpp                   288         93%    46, 55, 85, 107, 127, 242, 247, 256, 265, 272, 293, 296, 302, 308, 393, 403, 439, 451, 456, 483
+Lord-of-the-Mods\src\ini\include_resolver.cpp               38         95%    66, 92
+Lord-of-the-Mods\src\big\big_overlay.cpp                   101         96%    170-173
+Lord-of-the-Mods\src\ini\ini_parser.cpp                    359         96%    51, 470, 502-509, 511-512, 520, 618
+Lord-of-the-Mods\src\ini\serializer.cpp                    324         96%    61, 72, 120-122, 124-126, 139-140, 143-144, 186
+Lord-of-the-Mods\include\ini\ast.hpp                       233         97%    148-149, 151, 225, 229, 239-240, 242
+Lord-of-the-Mods\include\core\string_utils.hpp              50         98%    95
+Lord-of-the-Mods\src\big\big_packer.cpp                    302         98%    222, 271, 278, 285, 359, 417, 472
+Lord-of-the-Mods\src\ini\ast.cpp                           317         98%    47, 72, 118-119, 121
+Lord-of-the-Mods\include\core\path_utils.hpp                94         99%    158
+Lord-of-the-Mods\src\ini\str_parser.cpp                    115         99%    144
+Lord-of-the-Mods\include\big\big_archive.hpp                 4        100%
+Lord-of-the-Mods\include\big\big_diff.hpp                    3        100%
+Lord-of-the-Mods\include\big\big_overlay.hpp                 2        100%
+Lord-of-the-Mods\include\big\big_packer.hpp                  1        100%
+Lord-of-the-Mods\include\core\endian.hpp                    21        100%
+Lord-of-the-Mods\include\ini\lexer.hpp                     120        100%
+Lord-of-the-Mods\include\ini\parser.hpp                     19        100%
+Lord-of-the-Mods\src\ini\parser_utils.hpp                   10        100%
+--------------------------------------------------------------------------------------
+TOTAL                                                     2892         95%
+
+Remaining 5% C++ consists of unmockable OS/hardware I/O faults (e.g., sudden disk space exhaustion during `out_file.write()`, physical read truncations) which are exempt from unit testing.
 ```
 
 ## 0.5.0 - 2026-11-13
