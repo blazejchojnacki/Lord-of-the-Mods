@@ -98,11 +98,13 @@ jobs:
       - name: Run Python Integration Tests (Pytest)
         run: python -m pytest --cov=lotm --cov-report=xml tests/python -v
 
-      - name: Build and Validate Wheel
+      - name: Build and Validate Distributions (sdist & wheel)
+        shell: pwsh
         run: |
           pip install build twine
-          python -m build --wheel
-          twine check dist/*
+          python -m build --sdist --wheel
+          twine check --strict dist/*
+          python -c "import glob, tarfile; tf = tarfile.open(glob.glob('dist/*.tar.gz')[0]); names = tf.getnames(); assert any(n.endswith('/LICENSE.md') for n in names); assert any('/docs/' in n for n in names); assert any('/examples/' in n for n in names); assert any('/tests/' in n for n in names); assert not any('/.github/' in n or '/tools/' in n for n in names)"
 
       - name: Upload Built Wheel Artifact
         uses: actions/upload-artifact@v4
