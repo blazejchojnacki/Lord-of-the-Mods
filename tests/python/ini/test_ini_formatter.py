@@ -198,3 +198,7 @@ def test_format_ini_atomic_file_output_and_cleanup_on_failure(
 
     assert not tmp_sibling.exists()
     assert not fail_dest.exists()
+
+    # Ensure no leftover .lotm_tmp artifacts remain after a successful atomic write
+    leftovers = list((tmp_path / "formatted_out").glob("*.lotm_tmp"))
+    assert leftovers == []

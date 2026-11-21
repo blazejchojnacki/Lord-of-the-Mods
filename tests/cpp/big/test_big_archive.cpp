@@ -788,6 +788,19 @@ TEST_CASE("BigArchive In-Memory Single-File Extraction and Lifecycle", "[big_unp
         BigArchive archive(env.test_file);
         BigEntry out_of_bounds_entry{ 999999u, 10u, "test.txt" };
         REQUIRE_THROWS_AS(archive.read_entry(out_of_bounds_entry), BigFormatError);
+        REQUIRE_THROWS_AS(
+            archive.stream_entry(out_of_bounds_entry, [](std::span<const uint8_t>) { return true; }),
+            BigFormatError
+        );
+
+        // Truncating the archive after construction must fail bounds validation in stream_entry too
+        std::filesystem::resize_file(env.test_file, 20);
+        BigArchive truncated_after_open(env.test_file);
+        std::filesystem::resize_file(env.test_file, 16);
+        REQUIRE_THROWS_AS(
+            truncated_after_open.stream_entry("test.txt", [](std::span<const uint8_t>) { return true; }),
+            BigFormatError
+        );
     }
 
     SECTION("Negative scenario: Missing or locked archive file during read_entry throws BigArchiveError") {
