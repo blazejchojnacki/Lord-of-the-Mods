@@ -31,7 +31,7 @@ namespace lotm::ini {
         }
 
         [[nodiscard]] constexpr const AstNode* as_ast_node(const RootItem& item) noexcept {
-            return std::get_if<AstNode>(&item);
+            return std::get_if<RootItem>(&item) ? std::get_if<AstNode>(&item) : nullptr;
         }
 
         [[nodiscard]] std::vector<std::string_view> tokenize_class_spec(std::string_view spec) {
@@ -195,25 +195,28 @@ namespace lotm::ini {
             }
         }
 
-        template <typename ItemT>
-        [[nodiscard]] ConstructLevel* find_block_impl(
+        template <typename ItemT, typename OnMatchFn>
+        void traverse_matching_blocks(
             StableVector<ItemT>& items,
             std::string_view block_class,
             std::optional<std::string_view> block_name,
             std::optional<std::string_view> block_identifier,
-            bool recursive
+            bool recursive,
+            OnMatchFn&& on_match
         ) {
             if (!recursive) {
                 for (auto& item : items) {
                     if (auto* ast = as_ast_node(item)) {
                         if (auto* lvl = std::get_if<ConstructLevel>(ast)) {
                             if (matches_block_criteria(*lvl, block_class, block_name, block_identifier)) {
-                                return lvl;
+                                if (!on_match(lvl)) {
+                                    return;
+                                }
                             }
                         }
                     }
                 }
-                return nullptr;
+                return;
             }
 
             std::vector<ConstructLevel*> stack;
@@ -230,7 +233,9 @@ namespace lotm::ini {
                 stack.pop_back();
 
                 if (matches_block_criteria(*current, block_class, block_name, block_identifier)) {
-                    return current;
+                    if (!on_match(current)) {
+                        return;
+                    }
                 }
 
                 for (auto it = current->items.rbegin(); it != current->items.rend(); ++it) {
@@ -239,7 +244,23 @@ namespace lotm::ini {
                     }
                 }
             }
-            return nullptr;
+        }
+
+        template <typename ItemT>
+        [[nodiscard]] ConstructLevel* find_block_impl(
+            StableVector<ItemT>& items,
+            std::string_view block_class,
+            std::optional<std::string_view> block_name,
+            std::optional<std::string_view> block_identifier,
+            bool recursive
+        ) {
+            ConstructLevel* found = nullptr;
+            traverse_matching_blocks(items, block_class, block_name, block_identifier, recursive,
+                [&](ConstructLevel* match) noexcept {
+                    found = match;
+                    return false;
+                });
+            return found;
         }
 
         template <typename ItemT>
@@ -251,42 +272,11 @@ namespace lotm::ini {
             bool recursive
         ) {
             std::vector<ConstructLevel*> matches;
-            if (!recursive) {
-                for (auto& item : items) {
-                    if (auto* ast = as_ast_node(item)) {
-                        if (auto* lvl = std::get_if<ConstructLevel>(ast)) {
-                            if (matches_block_criteria(*lvl, block_class, block_name, block_identifier)) {
-                                matches.push_back(lvl);
-                            }
-                        }
-                    }
-                }
-                return matches;
-            }
-
-            std::vector<ConstructLevel*> stack;
-            for (auto it = items.rbegin(); it != items.rend(); ++it) {
-                if (auto* ast = as_ast_node(*it)) {
-                    if (auto* lvl = std::get_if<ConstructLevel>(ast)) {
-                        stack.push_back(lvl);
-                    }
-                }
-            }
-
-            while (!stack.empty()) {
-                ConstructLevel* current = stack.back();
-                stack.pop_back();
-
-                if (matches_block_criteria(*current, block_class, block_name, block_identifier)) {
-                    matches.push_back(current);
-                }
-
-                for (auto it = current->items.rbegin(); it != current->items.rend(); ++it) {
-                    if (auto* child_lvl = std::get_if<ConstructLevel>(&(*it))) {
-                        stack.push_back(child_lvl);
-                    }
-                }
-            }
+            traverse_matching_blocks(items, block_class, block_name, block_identifier, recursive,
+                [&](ConstructLevel* match) {
+                    matches.push_back(match);
+                    return true;
+                });
             return matches;
         }
 
