@@ -87,17 +87,50 @@ TEST_CASE("Iterative serialization covers all AST and STR node variations", "[in
     }
 }
 
-TEST_CASE("FormatOptions rules normalize indentation, headers, equals, comments, ends, and blank lines", "[ini][serializer][format_options]") {
+TEST_CASE("FormatOptions rules normalize indentation, equals, headers, comments, ends, and blank lines", "[ini][serializer][format_options]") {
     SECTION("Default FormatOptions equals lossless serialization") {
         const FormatOptions defaults{};
         const FormatOptions copy = defaults;
         CHECK(defaults == copy);
         CHECK(defaults.indent == LEVEL_INDENT);
+        CHECK_FALSE(defaults.enforce_equals);
         CHECK_FALSE(defaults.normalize_end_tokens);
         CHECK_FALSE(defaults.normalize_header_spacing);
         CHECK_FALSE(defaults.normalize_statement_equals);
         CHECK_FALSE(defaults.normalize_comments);
         CHECK_FALSE(defaults.coalesce_blank_lines);
+    }
+
+    SECTION("Optional '=' records warnings, preserves lossless output by default, and enforces '=' when requested") {
+        const std::string raw_ini =
+            "Object GondorHero\n"
+            "    Draw W3DScriptedModelDraw ModuleTag_Draw\n"
+            "        AnimationState MOVING\n"
+            "        End\n"
+            "    End\n"
+            "    Behavior = AIUpdateInterface ModuleTag_AI\n"
+            "        AddEmotion OVERRIDE\n"
+            "    End\n"
+            "End\n";
+
+        ConstructFile doc{ "optional_eq.ini", true, raw_ini };
+        CHECK(doc.errors.empty());
+        CHECK(doc.warnings.size() == 3);
+
+        // Lossless default print preserves omitted '='
+        const std::string lossless = doc.print();
+        CHECK(lossless.find("    Draw W3DScriptedModelDraw ModuleTag_Draw\n") != std::string::npos);
+        CHECK(lossless.find("        AnimationState MOVING\n") != std::string::npos);
+        CHECK(lossless.find("        AddEmotion OVERRIDE\n") != std::string::npos);
+
+        // enforce_equals=true restores canonical '=' on Draw, AnimationState, and AddEmotion OVERRIDE
+        FormatOptions eq_opts;
+        eq_opts.enforce_equals = true;
+        const std::string enforced = doc.print(eq_opts);
+        CHECK(enforced.find("    Draw = W3DScriptedModelDraw ModuleTag_Draw\n") != std::string::npos);
+        CHECK(enforced.find("        AnimationState = MOVING\n") != std::string::npos);
+        CHECK(enforced.find("        AddEmotion = OVERRIDE\n") != std::string::npos);
+        CHECK(enforced.find("    Behavior = AIUpdateInterface ModuleTag_AI\n") != std::string::npos);
     }
 
     SECTION("Full canonical FormatOptions across ConstructFile, ConstructLevel, ScriptNode, and statements") {
@@ -122,6 +155,7 @@ TEST_CASE("FormatOptions rules normalize indentation, headers, equals, comments,
 
         FormatOptions opts;
         opts.indent = "\t";
+        opts.enforce_equals = true;
         opts.normalize_end_tokens = true;
         opts.normalize_header_spacing = true;
         opts.normalize_statement_equals = true;

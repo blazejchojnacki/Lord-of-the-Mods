@@ -26,25 +26,28 @@ TEST_CASE("Helpers") {
 TEST_CASE("Compile-time and runtime delimiter schema rules", "[ini][schema]") {
     SECTION("compile_delimiter_rule handles operators, whitespace, and MAX_RULE_TOKENS cap") {
         constexpr auto eq_rule = compile_delimiter_rule("AddEmotion = OVERRIDE");
-        STATIC_REQUIRE(eq_rule.token_count == 3);
+        STATIC_REQUIRE(eq_rule.token_count == 2);
         STATIC_REQUIRE(eq_rule.word_count == 2);
-        STATIC_REQUIRE(eq_rule.tokens().size() == 3);
+        STATIC_REQUIRE(eq_rule.expects_equals);
+        STATIC_REQUIRE(eq_rule.tokens().size() == 2);
         STATIC_REQUIRE(eq_rule.tokens()[0] == "AddEmotion");
-        STATIC_REQUIRE(eq_rule.tokens()[1] == "=");
-        STATIC_REQUIRE(eq_rule.tokens()[2] == "OVERRIDE");
+        STATIC_REQUIRE(eq_rule.tokens()[1] == "OVERRIDE");
 
         constexpr auto colon_rule = compile_delimiter_rule("  CONTROLBAR : Button  ");
         STATIC_REQUIRE(colon_rule.token_count == 3);
         STATIC_REQUIRE(colon_rule.word_count == 2);
+        STATIC_REQUIRE_FALSE(colon_rule.expects_equals);
         STATIC_REQUIRE(colon_rule.tokens()[1] == ":");
 
         constexpr auto empty_rule = compile_delimiter_rule("   \t\r\n ");
         STATIC_REQUIRE(empty_rule.token_count == 0);
         STATIC_REQUIRE(empty_rule.word_count == 0);
+        STATIC_REQUIRE_FALSE(empty_rule.expects_equals);
 
         constexpr auto overflow_rule = compile_delimiter_rule("A = B : C = D : E = F");
         STATIC_REQUIRE(overflow_rule.token_count == MAX_RULE_TOKENS);
         STATIC_REQUIRE(overflow_rule.word_count == 6);
+        STATIC_REQUIRE(overflow_rule.expects_equals);
     }
 
     SECTION("compile_delimiter_rules sorts descending by token count and skips empty rules") {
@@ -61,14 +64,25 @@ TEST_CASE("Compile-time and runtime delimiter schema rules", "[ini][schema]") {
         CHECK(compiled[2].raw == "SingleToken");
     }
 
-    SECTION("match_delimiter_rule matches case-insensitively and rejects partial tokens") {
-        const std::vector<std::string> raw_list = { "AddEmotion = OVERRIDE", "Behavior" };
+    SECTION("match_delimiter_rule matches with or without optional '=' and rejects non-matching tokens") {
+        const std::vector<std::string> raw_list = { "AddEmotion = OVERRIDE", "Draw =", "Behavior" };
         const auto rules = compile_delimiter_rules(raw_list);
 
         const auto lex1 = lex_line("addemotion = override ModuleTag_01");
         const DelimiterRule* m1 = match_delimiter_rule(lex1.line_tokens, rules);
         REQUIRE(m1 != nullptr);
         CHECK(m1->raw == "AddEmotion = OVERRIDE");
+
+        const auto lex1_no_eq = lex_line("AddEmotion OVERRIDE ModuleTag_01");
+        const DelimiterRule* m1_no_eq = match_delimiter_rule(lex1_no_eq.line_tokens, rules);
+        REQUIRE(m1_no_eq != nullptr);
+        CHECK(m1_no_eq->raw == "AddEmotion = OVERRIDE");
+
+        const auto lex_draw_no_eq = lex_line("Draw W3DScriptedModelDraw ModuleTag_01");
+        const DelimiterRule* m_draw = match_delimiter_rule(lex_draw_no_eq.line_tokens, rules);
+        REQUIRE(m_draw != nullptr);
+        CHECK(m_draw->raw == "Draw =");
+        CHECK(m_draw->expects_equals);
 
         const auto lex2 = lex_line("AddEmotion = DIFFERENT");
         CHECK(match_delimiter_rule(lex2.line_tokens, rules) == nullptr);

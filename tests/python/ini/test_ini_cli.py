@@ -63,10 +63,10 @@ def test_ini_cli_format_to_output_in_place_and_canonical_flags(
     malformed_ini_file: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Verify `lotm ini format` with -o, in-place overwriting, and --canonical / individual normalization flags."""
+    """Verify `lotm ini format` with -o, in-place overwriting, and --enforce-equals / --canonical flags."""
     unformatted = tmp_path / "unformatted.ini"
     unformatted.write_text(
-        "Weapon   GondorSword // header\nDamage=25 // slash\nEND\n",
+        "Object   GondorSoldier // header\n  Draw W3DScriptedModelDraw ModuleTag_01\n    Damage=25 // slash\n  End\nEND\n",
         encoding="utf-8",
     )
     formatted_dest = tmp_path / "out" / "formatted.ini"
@@ -78,16 +78,18 @@ def test_ini_cli_format_to_output_in_place_and_canonical_flags(
     assert rc_out == umbrella_cli.EXIT_SUCCESS
     assert formatted_dest.is_file()
     rendered = formatted_dest.read_text(encoding="utf-8")
-    assert "Weapon GondorSword ; header\n" in rendered
-    assert "    Damage = 25 ; slash\n" in rendered
+    assert "Object GondorSoldier ; header\n" in rendered
+    assert "    Draw = W3DScriptedModelDraw ModuleTag_01\n" in rendered
+    assert "        Damage = 25 ; slash\n" in rendered
     assert rendered.endswith("End\n\n")
     stdout_out, _ = capsys.readouterr()
     assert "->" in stdout_out
 
     # Format in-place
-    rc_inplace = umbrella_cli.main(["ini", "format", str(unformatted), "--normalize-ends", "--normalize-equals"])
+    rc_inplace = umbrella_cli.main(["ini", "format", str(unformatted), "--enforce-equals", "--normalize-ends", "--normalize-equals"])
     assert rc_inplace == umbrella_cli.EXIT_SUCCESS
     inplace_text = unformatted.read_text(encoding="utf-8")
+    assert "  Draw = W3DScriptedModelDraw ModuleTag_01\n" in inplace_text
     assert "    Damage = 25 // slash\n" in inplace_text
     assert inplace_text.endswith("End\n\n")
     stdout_inplace, _ = capsys.readouterr()
