@@ -185,7 +185,7 @@ class ArchiveEditor:
             return self._ini_asts[key][1]
 
         if key in self._raw_overrides:
-            canon_name, raw_buf = self._raw_overrides[key]
+            canon_name, raw_buf = self._raw_overrides.pop(key)
             doc = parse_ini(canon_name, strict=strict, file_content=raw_buf)
         else:
             canon_name, raw_buf = self._read_source_bytes(entry_name)
@@ -208,7 +208,7 @@ class ArchiveEditor:
             return self._str_asts[key][1]
 
         if key in self._raw_overrides:
-            canon_name, raw_buf = self._raw_overrides[key]
+            canon_name, raw_buf = self._raw_overrides.pop(key)
             doc = parse_str(canon_name, strict=strict, file_content=raw_buf)
         else:
             canon_name, raw_buf = self._read_source_bytes(entry_name)
