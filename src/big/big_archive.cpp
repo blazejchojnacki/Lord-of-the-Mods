@@ -400,10 +400,6 @@ namespace lotm::big {
             total_archive_size += entry.size;
         }
 
-        if (!std::filesystem::exists(output_dir)) {
-            std::filesystem::create_directories(output_dir);
-        }
-
         std::ifstream file(file_path_, std::ios::binary);
         if (!file.is_open()) {
             throw BigArchiveError("Cannot open file for extraction.");
